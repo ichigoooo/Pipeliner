@@ -82,7 +82,11 @@ class WorkflowService:
             for dep in node.depends_on:
                 if dep not in node_map:
                     issues.append(
-                        WorkflowLintIssue("error", "unknown_dependency", f"节点 {node.node_id} 依赖了未知节点 {dep}")
+                        WorkflowLintIssue(
+                            "error",
+                            "unknown_dependency",
+                            f"节点 {node.node_id} 依赖了未知节点 {dep}",
+                        )
                     )
             for input_spec in node.inputs:
                 source = input_spec.source
@@ -102,7 +106,10 @@ class WorkflowService:
                             WorkflowLintIssue(
                                 "error",
                                 "missing_depends_on",
-                                f"节点 {node.node_id} 的输入引用了 {source.node_id}，但 depends_on 未声明",
+                                (
+                                    f"节点 {node.node_id} 的输入引用了 "
+                                    f"{source.node_id}，但 depends_on 未声明"
+                                ),
                             )
                         )
                     upstream = node_map.get(source.node_id or "")
@@ -119,7 +126,10 @@ class WorkflowService:
                             WorkflowLintIssue(
                                 "error",
                                 "unknown_upstream_output",
-                                f"节点 {node.node_id} 引用了 {source.node_id}.{source.output}，但该 output 不存在",
+                                (
+                                    f"节点 {node.node_id} 引用了 "
+                                    f"{source.node_id}.{source.output}，但该 output 不存在"
+                                ),
                             )
                         )
             extra_deps = sorted(declared_deps - referenced_upstreams)
@@ -137,7 +147,13 @@ class WorkflowService:
 
         def dfs(node_id: str) -> None:
             if node_id in visiting:
-                issues.append(WorkflowLintIssue("error", "cycle_detected", f"检测到循环依赖，起点 {node_id}"))
+                issues.append(
+                    WorkflowLintIssue(
+                        "error",
+                        "cycle_detected",
+                        f"检测到循环依赖，起点 {node_id}",
+                    )
+                )
                 return
             if node_id in visited:
                 return

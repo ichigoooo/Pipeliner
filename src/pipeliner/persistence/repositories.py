@@ -19,7 +19,9 @@ class WorkflowRepository:
 
     def get_definition(self, workflow_id: str) -> WorkflowDefinitionModel | None:
         return self.session.scalar(
-            select(WorkflowDefinitionModel).where(WorkflowDefinitionModel.workflow_id == workflow_id)
+            select(WorkflowDefinitionModel).where(
+                WorkflowDefinitionModel.workflow_id == workflow_id
+            )
         )
 
     def get_version(self, workflow_id: str, version: str) -> WorkflowVersionModel | None:
@@ -31,10 +33,19 @@ class WorkflowRepository:
         )
         return self.session.scalar(stmt)
 
-    def create_or_update_definition(self, workflow_id: str, title: str, purpose: str) -> WorkflowDefinitionModel:
+    def create_or_update_definition(
+        self,
+        workflow_id: str,
+        title: str,
+        purpose: str,
+    ) -> WorkflowDefinitionModel:
         definition = self.get_definition(workflow_id)
         if definition is None:
-            definition = WorkflowDefinitionModel(workflow_id=workflow_id, title=title, purpose=purpose)
+            definition = WorkflowDefinitionModel(
+                workflow_id=workflow_id,
+                title=title,
+                purpose=purpose,
+            )
             self.session.add(definition)
             self.session.flush()
             return definition
@@ -94,7 +105,11 @@ class RunRepository:
         return list(self.session.scalars(stmt))
 
     def list_runs_requiring_attention(self) -> list[RunModel]:
-        stmt = select(RunModel).where(RunModel.status == "needs_attention").order_by(RunModel.created_at.desc())
+        stmt = (
+            select(RunModel)
+            .where(RunModel.status == "needs_attention")
+            .order_by(RunModel.created_at.desc())
+        )
         return list(self.session.scalars(stmt))
 
     def create_node_run(self, node_run: NodeRunModel) -> NodeRunModel:
@@ -102,7 +117,12 @@ class RunRepository:
         self.session.flush()
         return node_run
 
-    def get_node_run(self, run_id: str, node_id: str, round_no: int) -> NodeRunModel | None:
+    def get_node_run(
+        self,
+        run_id: str,
+        node_id: str,
+        round_no: int,
+    ) -> NodeRunModel | None:
         stmt = (
             select(NodeRunModel)
             .where(NodeRunModel.run_id == run_id)
@@ -148,7 +168,12 @@ class CallbackRepository:
         self.session.flush()
         return event
 
-    def list_node_round_events(self, run_id: str, node_id: str, round_no: int) -> list[CallbackEventModel]:
+    def list_node_round_events(
+        self,
+        run_id: str,
+        node_id: str,
+        round_no: int,
+    ) -> list[CallbackEventModel]:
         stmt = (
             select(CallbackEventModel)
             .where(CallbackEventModel.run_id == run_id)
@@ -187,7 +212,12 @@ class ArtifactRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def get_artifact(self, run_id: str, artifact_id: str, version: str) -> ArtifactModel | None:
+    def get_artifact(
+        self,
+        run_id: str,
+        artifact_id: str,
+        version: str,
+    ) -> ArtifactModel | None:
         stmt = (
             select(ArtifactModel)
             .where(ArtifactModel.run_id == run_id)

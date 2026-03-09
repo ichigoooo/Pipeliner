@@ -4,7 +4,12 @@ import sys
 from pathlib import Path
 
 from pipeliner.executor import ClaudeExecutorDispatcher
-from pipeliner.persistence.repositories import ArtifactRepository, CallbackRepository, RunRepository, WorkflowRepository
+from pipeliner.persistence.repositories import (
+    ArtifactRepository,
+    CallbackRepository,
+    RunRepository,
+    WorkflowRepository,
+)
 
 
 def _register_workflow(client, workflow_fixture) -> None:
@@ -15,7 +20,11 @@ def _register_workflow(client, workflow_fixture) -> None:
 def _start_run(client, workflow_id: str, version: str) -> dict:
     response = client.post(
         "/api/runs",
-        json={"workflow_id": workflow_id, "version": version, "inputs": {"topic": "claude executor test"}},
+        json={
+            "workflow_id": workflow_id,
+            "version": version,
+            "inputs": {"topic": "claude executor test"},
+        },
     )
     assert response.status_code == 200
     return response.json()
@@ -35,7 +44,11 @@ def test_dispatch_executor_success(client, workflow_fixture, settings) -> None:
             ArtifactRepository(session),
             settings,
         )
-        result = dispatcher.dispatch(run_id=run["run_id"], node_id="draft_article", command_template=command)
+        result = dispatcher.dispatch(
+            run_id=run["run_id"],
+            node_id="draft_article",
+            command_template=command,
+        )
         assert result["status"] == "completed"
         assert result["runtime"]["duplicate"] is False
 
@@ -78,7 +91,11 @@ def test_dispatch_executor_failure_marks_attention(client, workflow_fixture, set
     assert node["status"] == "failed"
 
 
-def test_dispatch_executor_default_command_reads_prompt_stdin(client, workflow_fixture, settings) -> None:
+def test_dispatch_executor_default_command_reads_prompt_stdin(
+    client,
+    workflow_fixture,
+    settings,
+) -> None:
     _register_workflow(client, workflow_fixture)
     run = _start_run(client, "mvp-review-loop", "0.1.0")
     script = Path("tests/fixtures/mock_claude_executor_stdin.py").resolve()
@@ -102,7 +119,11 @@ def test_dispatch_executor_default_command_reads_prompt_stdin(client, workflow_f
     assert node["status"] == "waiting_validator"
 
 
-def test_dispatch_executor_missing_artifact_marks_attention(client, workflow_fixture, settings) -> None:
+def test_dispatch_executor_missing_artifact_marks_attention(
+    client,
+    workflow_fixture,
+    settings,
+) -> None:
     _register_workflow(client, workflow_fixture)
     run = _start_run(client, "mvp-review-loop", "0.1.0")
     script = Path("tests/fixtures/mock_claude_executor_no_output.py").resolve()
@@ -116,7 +137,11 @@ def test_dispatch_executor_missing_artifact_marks_attention(client, workflow_fix
             ArtifactRepository(session),
             settings,
         )
-        result = dispatcher.dispatch(run_id=run["run_id"], node_id="draft_article", command_template=command)
+        result = dispatcher.dispatch(
+            run_id=run["run_id"],
+            node_id="draft_article",
+            command_template=command,
+        )
         assert result["status"] == "failed"
         assert result["runtime"]["duplicate"] is False
 

@@ -61,14 +61,22 @@ class WorkspaceManager:
 
     def write_json(self, path: Path, payload: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     def write_workflow_inputs(self, workspace: RunWorkspace, inputs: dict[str, Any]) -> Path:
         path = workspace.inputs_dir / "workflow_inputs.json"
         self.write_json(path, inputs)
         return path
 
-    def ensure_node_round_dirs(self, workspace: RunWorkspace, node_id: str, round_no: int) -> dict[str, Path]:
+    def ensure_node_round_dirs(
+        self,
+        workspace: RunWorkspace,
+        node_id: str,
+        round_no: int,
+    ) -> dict[str, Path]:
         round_dir = workspace.nodes_dir / node_id / "rounds" / str(round_no)
         executor_dir = round_dir / "executor"
         validators_dir = round_dir / "validators"
@@ -80,7 +88,13 @@ class WorkspaceManager:
             "validators_dir": validators_dir,
         }
 
-    def write_executor_context(self, workspace: RunWorkspace, node_id: str, round_no: int, payload: dict[str, Any]) -> Path:
+    def write_executor_context(
+        self,
+        workspace: RunWorkspace,
+        node_id: str,
+        round_no: int,
+        payload: dict[str, Any],
+    ) -> Path:
         dirs = self.ensure_node_round_dirs(workspace, node_id, round_no)
         path = dirs["executor_dir"] / "context.json"
         self.write_json(path, payload)
@@ -99,12 +113,22 @@ class WorkspaceManager:
         self.write_json(path, payload)
         return path
 
-    def write_callback_archive(self, workspace: RunWorkspace, event_id: str, payload: dict[str, Any]) -> Path:
+    def write_callback_archive(
+        self,
+        workspace: RunWorkspace,
+        event_id: str,
+        payload: dict[str, Any],
+    ) -> Path:
         path = workspace.callbacks_dir / f"{event_id}.json"
         self.write_json(path, payload)
         return path
 
-    def artifact_manifest_path(self, workspace: RunWorkspace, artifact_id: str, version: str) -> Path:
+    def artifact_manifest_path(
+        self,
+        workspace: RunWorkspace,
+        artifact_id: str,
+        version: str,
+    ) -> Path:
         return workspace.artifacts_dir / f"{artifact_id}@{version}" / "manifest.json"
 
     def resolve_storage_path(self, manifest_uri: str) -> Path:

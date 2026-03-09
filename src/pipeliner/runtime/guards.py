@@ -20,6 +20,10 @@ def parse_duration(value: str) -> timedelta:
     raise ValueError(f"不支持的 duration 单位: {value}")
 
 
-def is_timeout_exceeded(updated_at: datetime, guards: RuntimeGuards, now: datetime | None = None) -> bool:
+def is_timeout_exceeded(
+    updated_at: datetime,
+    guards: RuntimeGuards,
+    now: datetime | None = None,
+) -> bool:
     current = now or datetime.now(timezone.utc)
     return current - updated_at >= parse_duration(guards.timeout)

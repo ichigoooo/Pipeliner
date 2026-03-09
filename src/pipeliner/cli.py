@@ -9,7 +9,12 @@ import typer
 from pipeliner.config import get_settings
 from pipeliner.db import Database
 from pipeliner.executor import ClaudeExecutorDispatcher, ClaudeValidatorDispatcher
-from pipeliner.persistence.repositories import ArtifactRepository, CallbackRepository, RunRepository, WorkflowRepository
+from pipeliner.persistence.repositories import (
+    ArtifactRepository,
+    CallbackRepository,
+    RunRepository,
+    WorkflowRepository,
+)
 from pipeliner.protocols.artifact import ArtifactManifest
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.artifact_service import ArtifactService
@@ -32,6 +37,33 @@ app.add_typer(validator_app, name="validator")
 
 def _db() -> Database:
     return Database(get_settings())
+
+
+def _run_service(session) -> RunService:
+    return RunService(
+        RunRepository(session),
+        WorkflowRepository(session),
+        ArtifactRepository(session),
+        get_settings(),
+    )
+
+
+def _runtime_coordinator(session) -> RuntimeCoordinator:
+    return RuntimeCoordinator(
+        RunRepository(session),
+        WorkflowRepository(session),
+        CallbackRepository(session),
+        ArtifactRepository(session),
+        get_settings(),
+    )
+
+
+def _artifact_service(session) -> ArtifactService:
+    return ArtifactService(
+        ArtifactRepository(session),
+        RunRepository(session),
+        get_settings(),
+    )
 
 
 def _print(payload: Any) -> None:
@@ -74,17 +106,23 @@ def workflow_show(workflow_id: str, version: str) -> None:
 def run_start(workflow_id: str, version: str, inputs_file: Path) -> None:
     db = _db()
     with db.session() as session:
-        service = RunService(RunRepository(session), WorkflowRepository(session), ArtifactRepository(session), get_settings())
+        service = _run_service(session)
         inputs = json.loads(inputs_file.read_text(encoding="utf-8")) if inputs_file.exists() else {}
         run = service.start_run(workflow_id, version, inputs)
-        _print({"run_id": run.id, "status": run.status, "workspace_root": run.workspace_root})
+        _print(
+            {
+                "run_id": run.id,
+                "status": run.status,
+                "workspace_root": run.workspace_root,
+            }
+        )
 
 
 @run_app.command("show")
 def run_show(run_id: str) -> None:
     db = _db()
     with db.session() as session:
-        service = RunService(RunRepository(session), WorkflowRepository(session), ArtifactRepository(session), get_settings())
+        service = _run_service(session)
         detail = service.get_run_detail(run_id)
         _print(
             {
@@ -122,7 +160,7 @@ def run_show(run_id: str) -> None:
 def run_stop(run_id: str, reason: str = "manual_stop") -> None:
     db = _db()
     with db.session() as session:
-        service = RunService(RunRepository(session), WorkflowRepository(session), ArtifactRepository(session), get_settings())
+        service = _run_service(session)
         run = service.stop_run(run_id, reason)
         _print({"run_id": run.id, "status": run.status, "stop_reason": run.stop_reason})
 
@@ -131,7 +169,7 @@ def run_stop(run_id: str, reason: str = "manual_stop") -> None:
 def run_attention() -> None:
     db = _db()
     with db.session() as session:
-        service = RunService(RunRepository(session), WorkflowRepository(session), ArtifactRepository(session), get_settings())
+        service = _run_service(session)
         _print(
             [
                 {
@@ -150,13 +188,7 @@ def run_attention() -> None:
 def run_reconcile_timeouts() -> None:
     db = _db()
     with db.session() as session:
-        coordinator = RuntimeCoordinator(
-            RunRepository(session),
-            WorkflowRepository(session),
-            CallbackRepository(session),
-            ArtifactRepository(session),
-            get_settings(),
-        )
+        coordinator = _runtime_coordinator(session)
         _print(coordinator.reconcile_timeouts())
 
 
@@ -171,7 +203,11 @@ def run_drive(
         default=None,
         help="Override validator command template for this drive session",
     ),
-    max_steps: int = typer.Option(default=100, min=1, help="Maximum dispatch actions to execute"),
+    max_steps: int = typer.Option(
+        default=100,
+        min=1,
+        help="Maximum dispatch actions to execute",
+    ),
 ) -> None:
     db = _db()
     with db.session() as session:
@@ -196,9 +232,15 @@ def artifact_publish(manifest_file: Path) -> None:
     db = _db()
     manifest = ArtifactManifest.model_validate_json(manifest_file.read_text(encoding="utf-8"))
     with db.session() as session:
-        service = ArtifactService(ArtifactRepository(session), RunRepository(session), get_settings())
+        service = _artifact_service(session)
         artifact, created = service.publish_manifest(manifest)
-        _print({"created": created, "artifact_id": artifact.artifact_id, "version": artifact.version})
+        _print(
+            {
+                "created": created,
+                "artifact_id": artifact.artifact_id,
+                "version": artifact.version,
+            }
+        )
 
 
 @executor_app.command("dispatch")
@@ -208,7 +250,10 @@ def executor_dispatch(
     round_no: int | None = typer.Option(default=None, help="Optional node round number"),
     command_template: str | None = typer.Option(
         default=None,
-        help="Override executor command template, e.g. 'claude -p --permission-mode bypassPermissions'",
+        help=(
+            "Override executor command template, "
+            "e.g. 'claude -p --permission-mode bypassPermissions'"
+        ),
     ),
 ) -> None:
     db = _db()
@@ -237,7 +282,10 @@ def validator_dispatch(
     round_no: int | None = typer.Option(default=None, help="Optional node round number"),
     command_template: str | None = typer.Option(
         default=None,
-        help="Override validator command template, e.g. 'claude -p --permission-mode bypassPermissions'",
+        help=(
+            "Override validator command template, "
+            "e.g. 'claude -p --permission-mode bypassPermissions'"
+        ),
     ),
 ) -> None:
     db = _db()

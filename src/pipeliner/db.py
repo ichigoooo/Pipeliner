@@ -16,8 +16,16 @@ class Base(DeclarativeBase):
 class Database:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
-        connect_args = {"check_same_thread": False} if self.settings.database_url.startswith("sqlite") else {}
-        self.engine = create_engine(self.settings.database_url, future=True, connect_args=connect_args)
+        connect_args = (
+            {"check_same_thread": False}
+            if self.settings.database_url.startswith("sqlite")
+            else {}
+        )
+        self.engine = create_engine(
+            self.settings.database_url,
+            future=True,
+            connect_args=connect_args,
+        )
         self.session_factory = sessionmaker(
             bind=self.engine,
             autoflush=False,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -10,12 +10,22 @@ from sqlalchemy.orm import Session
 
 from pipeliner.db import Database
 from pipeliner.executor import ClaudeExecutorDispatcher, ClaudeValidatorDispatcher
-from pipeliner.persistence.repositories import ArtifactRepository, CallbackRepository, RunRepository, WorkflowRepository
+from pipeliner.persistence.repositories import (
+    ArtifactRepository,
+    CallbackRepository,
+    RunRepository,
+    WorkflowRepository,
+)
 from pipeliner.protocols.artifact import ArtifactManifest
 from pipeliner.protocols.callback import NodeCallbackPayload
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.artifact_service import ArtifactService
-from pipeliner.services.errors import ConflictError, InvalidStateError, NotFoundError, ValidationError
+from pipeliner.services.errors import (
+    ConflictError,
+    InvalidStateError,
+    NotFoundError,
+    ValidationError,
+)
 from pipeliner.services.run_service import RunService
 from pipeliner.services.workflow_service import WorkflowService
 from pipeliner.ui.views import render_index, render_run_view, render_workflow_view
@@ -51,9 +61,15 @@ def get_database(request: Request) -> Database:
     return request.app.state.db
 
 
-def get_session(db: Database = Depends(get_database)):
+DatabaseDep = Annotated[Database, Depends(get_database)]
+
+
+def get_session(db: DatabaseDep):
     with db.session() as session:
         yield session
+
+
+SessionDep = Annotated[Session, Depends(get_session)]
 
 
 def _workflow_service(session: Session) -> WorkflowService:
@@ -79,13 +95,47 @@ def _runtime_coordinator(session: Session, request: Request) -> RuntimeCoordinat
     )
 
 
+def _artifact_service(session: Session, request: Request) -> ArtifactService:
+    return ArtifactService(
+        ArtifactRepository(session),
+        RunRepository(session),
+        request.app.state.settings,
+    )
+
+
+def _executor_dispatcher(
+    session: Session,
+    request: Request,
+) -> ClaudeExecutorDispatcher:
+    return ClaudeExecutorDispatcher(
+        RunRepository(session),
+        WorkflowRepository(session),
+        CallbackRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+
+
+def _validator_dispatcher(
+    session: Session,
+    request: Request,
+) -> ClaudeValidatorDispatcher:
+    return ClaudeValidatorDispatcher(
+        RunRepository(session),
+        WorkflowRepository(session),
+        CallbackRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+
+
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @router.get("/", response_class=HTMLResponse)
-def ui_index(request: Request, session: Session = Depends(get_session)) -> str:
+def ui_index(request: Request, session: SessionDep) -> str:
     run_service = _run_service(session, request)
     attention_runs = [
         {
@@ -100,7 +150,10 @@ def ui_index(request: Request, session: Session = Depends(get_session)) -> str:
 
 
 @router.post("/api/workflows/register")
-def register_workflow(request_body: WorkflowRegisterRequest, session: Session = Depends(get_session)) -> dict[str, Any]:
+def register_workflow(
+    request_body: WorkflowRegisterRequest,
+    session: SessionDep,
+) -> dict[str, Any]:
     service = _workflow_service(session)
     version = service.register_spec(request_body.spec)
     return {
@@ -112,7 +165,11 @@ def register_workflow(request_body: WorkflowRegisterRequest, session: Session = 
 
 
 @router.get("/api/workflows/{workflow_id}/versions/{version}")
-def get_workflow(workflow_id: str, version: str, session: Session = Depends(get_session)) -> dict[str, Any]:
+def get_workflow(
+    workflow_id: str,
+    version: str,
+    session: SessionDep,
+) -> dict[str, Any]:
     service = _workflow_service(session)
     workflow_version = service.get_version(workflow_id, version)
     return {
@@ -125,16 +182,28 @@ def get_workflow(workflow_id: str, version: str, session: Session = Depends(get_
 
 
 @router.get("/ui/workflows/{workflow_id}/versions/{version}", response_class=HTMLResponse)
-def workflow_view(workflow_id: str, version: str, session: Session = Depends(get_session)) -> str:
+def workflow_view(
+    workflow_id: str,
+    version: str,
+    session: SessionDep,
+) -> str:
     payload = get_workflow(workflow_id, version, session)
     payload["warnings"] = json.dumps(payload["warnings"], ensure_ascii=False, indent=2)
     return render_workflow_view(payload)
 
 
 @router.post("/api/runs")
-def create_run(request_body: RunCreateRequest, request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def create_run(
+    request_body: RunCreateRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
     service = _run_service(session, request)
-    run = service.start_run(request_body.workflow_id, request_body.version, request_body.inputs)
+    run = service.start_run(
+        request_body.workflow_id,
+        request_body.version,
+        request_body.inputs,
+    )
     return {
         "run_id": run.id,
         "status": run.status,
@@ -143,14 +212,20 @@ def create_run(request_body: RunCreateRequest, request: Request, session: Sessio
 
 
 @router.post("/api/runs/reconcile-timeouts")
-def reconcile_timeouts(request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def reconcile_timeouts(
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
     coordinator = _runtime_coordinator(session, request)
     items = coordinator.reconcile_timeouts()
     return {"timed_out": items, "count": len(items)}
 
 
 @router.get("/api/runs/attention")
-def list_attention_runs(request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def list_attention_runs(
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
     service = _run_service(session, request)
     runs = service.run_repo.list_runs_requiring_attention()
     return {
@@ -168,7 +243,11 @@ def list_attention_runs(request: Request, session: Session = Depends(get_session
 
 
 @router.get("/api/runs/{run_id}")
-def get_run(run_id: str, request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def get_run(
+    run_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
     service = _run_service(session, request)
     detail = service.get_run_detail(run_id)
     return {
@@ -202,7 +281,7 @@ def get_run(run_id: str, request: Request, session: Session = Depends(get_sessio
 
 
 @router.get("/api/runs/{run_id}/callbacks")
-def get_run_callbacks(run_id: str, session: Session = Depends(get_session)) -> dict[str, Any]:
+def get_run_callbacks(run_id: str, session: SessionDep) -> dict[str, Any]:
     run_repo = RunRepository(session)
     if run_repo.get_run(run_id) is None:
         raise NotFoundError(f"未找到 run: {run_id}")
@@ -224,8 +303,12 @@ def get_run_callbacks(run_id: str, session: Session = Depends(get_session)) -> d
 
 
 @router.get("/api/runs/{run_id}/artifacts")
-def get_run_artifacts(run_id: str, request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
-    service = ArtifactService(ArtifactRepository(session), RunRepository(session), request.app.state.settings)
+def get_run_artifacts(
+    run_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _artifact_service(session, request)
     return {
         "artifacts": [
             {
@@ -241,22 +324,35 @@ def get_run_artifacts(run_id: str, request: Request, session: Session = Depends(
 
 
 @router.get("/ui/runs/{run_id}", response_class=HTMLResponse)
-def run_view(run_id: str, request: Request, session: Session = Depends(get_session)) -> str:
+def run_view(
+    run_id: str,
+    request: Request,
+    session: SessionDep,
+) -> str:
     detail = get_run(run_id, request, session)
     callbacks = get_run_callbacks(run_id, session)["events"]
     return render_run_view(detail, callbacks)
 
 
 @router.post("/api/runs/{run_id}/stop")
-def stop_run(run_id: str, request_body: StopRunRequest, request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def stop_run(
+    run_id: str,
+    request_body: StopRunRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
     service = _run_service(session, request)
     run = service.stop_run(run_id, request_body.reason)
     return {"run_id": run.id, "status": run.status, "stop_reason": run.stop_reason}
 
 
 @router.post("/api/artifacts")
-def publish_artifact(manifest: ArtifactManifest, request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
-    service = ArtifactService(ArtifactRepository(session), RunRepository(session), request.app.state.settings)
+def publish_artifact(
+    manifest: ArtifactManifest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _artifact_service(session, request)
     artifact, created = service.publish_manifest(manifest)
     return {
         "created": created,
@@ -267,7 +363,11 @@ def publish_artifact(manifest: ArtifactManifest, request: Request, session: Sess
 
 
 @router.post("/api/callbacks")
-def submit_callback(payload: NodeCallbackPayload, request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def submit_callback(
+    payload: NodeCallbackPayload,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
     coordinator = _runtime_coordinator(session, request)
     return coordinator.submit_callback(payload)
 
@@ -278,15 +378,9 @@ def dispatch_executor(
     node_id: str,
     request_body: ExecutorDispatchRequest,
     request: Request,
-    session: Session = Depends(get_session),
+    session: SessionDep,
 ) -> dict[str, Any]:
-    dispatcher = ClaudeExecutorDispatcher(
-        RunRepository(session),
-        WorkflowRepository(session),
-        CallbackRepository(session),
-        ArtifactRepository(session),
-        request.app.state.settings,
-    )
+    dispatcher = _executor_dispatcher(session, request)
     return dispatcher.dispatch(
         run_id=run_id,
         node_id=node_id,
@@ -302,15 +396,9 @@ def dispatch_validator(
     validator_id: str,
     request_body: ValidatorDispatchRequest,
     request: Request,
-    session: Session = Depends(get_session),
+    session: SessionDep,
 ) -> dict[str, Any]:
-    dispatcher = ClaudeValidatorDispatcher(
-        RunRepository(session),
-        WorkflowRepository(session),
-        CallbackRepository(session),
-        ArtifactRepository(session),
-        request.app.state.settings,
-    )
+    dispatcher = _validator_dispatcher(session, request)
     return dispatcher.dispatch(
         run_id=run_id,
         node_id=node_id,

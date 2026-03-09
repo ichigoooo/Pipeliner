@@ -92,7 +92,11 @@ class RunService:
         if any(node_run.status in attention_statuses for node_run in latest.values()):
             run.status = RunStatus.NEEDS_ATTENTION.value
             return run
-        if latest and all(latest.get(node.node_id) and latest[node.node_id].status == NodeRunStatus.PASSED.value for node in spec.nodes):
+        if latest and all(
+            latest.get(node.node_id)
+            and latest[node.node_id].status == NodeRunStatus.PASSED.value
+            for node in spec.nodes
+        ):
             run.status = RunStatus.COMPLETED.value
             return run
         if run.status != RunStatus.STOPPED.value:
@@ -108,8 +112,20 @@ class RunService:
         for node in spec.nodes:
             if node.node_id in latest:
                 continue
-            if all(latest.get(dep) and latest[dep].status == NodeRunStatus.PASSED.value for dep in node.depends_on):
-                created.append(self._create_node_round(run, spec, node, 1, workspace, rework_brief=None))
+            if all(
+                latest.get(dep) and latest[dep].status == NodeRunStatus.PASSED.value
+                for dep in node.depends_on
+            ):
+                created.append(
+                    self._create_node_round(
+                        run,
+                        spec,
+                        node,
+                        1,
+                        workspace,
+                        rework_brief=None,
+                    )
+                )
         self.refresh_run_status(run.id)
         return created
 
@@ -152,7 +168,11 @@ class RunService:
                     }
                 )
                 continue
-            artifact = self.artifact_service.get_latest_node_artifact(run.id, source.node_id or "", source.output or "")
+            artifact = self.artifact_service.get_latest_node_artifact(
+                run.id,
+                source.node_id or "",
+                source.output or "",
+            )
             if artifact is None:
                 raise InvalidStateError(
                     f"无法为节点 {node.node_id} 构建输入 {input_spec.name}，上游 artifact 缺失"
@@ -193,7 +213,10 @@ class RunService:
         round_no: int,
         artifacts: list[ArtifactRef],
     ) -> dict:
-        manifests = [self.artifact_service.resolve_ref(run.id, ref).model_dump(mode="json") for ref in artifacts]
+        manifests = [
+            self.artifact_service.resolve_ref(run.id, ref).model_dump(mode="json")
+            for ref in artifacts
+        ]
         return {
             "run_id": run.id,
             "node_id": node.node_id,
@@ -203,7 +226,12 @@ class RunService:
             "artifacts": manifests,
         }
 
-    def _activate_root_nodes(self, run: RunModel, spec: WorkflowSpec, workspace: RunWorkspace) -> None:
+    def _activate_root_nodes(
+        self,
+        run: RunModel,
+        spec: WorkflowSpec,
+        workspace: RunWorkspace,
+    ) -> None:
         roots = [node for node in spec.nodes if not node.depends_on]
         if not roots:
             raise ValidationError("workflow 没有可启动节点")

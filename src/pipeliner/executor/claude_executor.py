@@ -11,15 +11,30 @@ from uuid import uuid4
 
 from pipeliner.config import Settings, get_settings
 from pipeliner.persistence.models import NodeRunModel, RunModel
-from pipeliner.persistence.repositories import ArtifactRepository, CallbackRepository, RunRepository, WorkflowRepository
+from pipeliner.persistence.repositories import (
+    ArtifactRepository,
+    CallbackRepository,
+    RunRepository,
+    WorkflowRepository,
+)
 from pipeliner.protocols.artifact import ArtifactManifest, ArtifactStorage, ProducedBy
-from pipeliner.protocols.callback import CallbackExecution, CallbackSubmission, NodeCallbackPayload
+from pipeliner.protocols.callback import (
+    CallbackExecution,
+    CallbackSubmission,
+    NodeCallbackPayload,
+)
 from pipeliner.protocols.workflow import WorkflowNodeSpec
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.artifact_service import ArtifactService
 from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
 from pipeliner.services.run_service import RunService
-from pipeliner.types import ActorRole, ArtifactKind, ExecutionStatus, NodeRunStatus, StorageBackend
+from pipeliner.types import (
+    ActorRole,
+    ArtifactKind,
+    ExecutionStatus,
+    NodeRunStatus,
+    StorageBackend,
+)
 
 
 @dataclass(slots=True)
@@ -47,7 +62,13 @@ class ClaudeExecutorDispatcher:
         self.artifact_repo = artifact_repo
         self.settings = settings or get_settings()
         self.run_service = RunService(run_repo, workflow_repo, artifact_repo, self.settings)
-        self.runtime = RuntimeCoordinator(run_repo, workflow_repo, callback_repo, artifact_repo, self.settings)
+        self.runtime = RuntimeCoordinator(
+            run_repo,
+            workflow_repo,
+            callback_repo,
+            artifact_repo,
+            self.settings,
+        )
         self.artifact_service = ArtifactService(artifact_repo, run_repo, self.settings)
 
     def dispatch(
@@ -69,7 +90,11 @@ class ClaudeExecutorDispatcher:
             )
 
         workspace = self.run_service.get_workspace(run)
-        dirs = self.run_service.workspace.ensure_node_round_dirs(workspace, node_id, node_run.round_no)
+        dirs = self.run_service.workspace.ensure_node_round_dirs(
+            workspace,
+            node_id,
+            node_run.round_no,
+        )
         executor_dir = dirs["executor_dir"]
         context_path = executor_dir / "context.json"
         if not context_path.exists():
@@ -100,7 +125,10 @@ class ClaudeExecutorDispatcher:
             ],
         }
         task_path = executor_dir / "executor_task.json"
-        task_path.write_text(json.dumps(task_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        task_path.write_text(
+            json.dumps(task_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         prompt_path = executor_dir / "claude_prompt.md"
         prompt_text = self._render_prompt(task_payload)
         prompt_path.write_text(prompt_text, encoding="utf-8")
@@ -136,14 +164,7 @@ class ClaudeExecutorDispatcher:
                 message=f"executor command failed(exit={process.returncode})",
             )
             result = self.runtime.submit_callback(payload)
-            return {
-                "run_id": run.id,
-                "node_id": node.node_id,
-                "round_no": node_run.round_no,
-                "status": "failed",
-                "event_id": payload.event_id,
-                "runtime": result,
-            }
+            return self._failure_result(run, node, node_run, payload.event_id, result)
 
         try:
             manifests = self._publish_manifests(run, node, node_run.round_no, targets)
@@ -155,15 +176,13 @@ class ClaudeExecutorDispatcher:
                 message=str(exc),
             )
             result = self.runtime.submit_callback(payload)
-            return {
-                "run_id": run.id,
-                "node_id": node.node_id,
-                "round_no": node_run.round_no,
-                "status": "failed",
-                "event_id": payload.event_id,
-                "runtime": result,
-            }
-        callback_payload = self._build_success_callback(run.id, node.node_id, node_run.round_no, manifests)
+            return self._failure_result(run, node, node_run, payload.event_id, result)
+        callback_payload = self._build_success_callback(
+            run.id,
+            node.node_id,
+            node_run.round_no,
+            manifests,
+        )
         result = self.runtime.submit_callback(callback_payload)
         return {
             "run_id": run.id,
@@ -190,6 +209,23 @@ class ClaudeExecutorDispatcher:
             raise NotFoundError(f"节点 {node_id} 尚未初始化")
         return node_run
 
+    def _failure_result(
+        self,
+        run: RunModel,
+        node: WorkflowNodeSpec,
+        node_run: NodeRunModel,
+        event_id: str,
+        runtime_result: dict,
+    ) -> dict:
+        return {
+            "run_id": run.id,
+            "node_id": node.node_id,
+            "round_no": node_run.round_no,
+            "status": "failed",
+            "event_id": event_id,
+            "runtime": runtime_result,
+        }
+
     def _build_targets(self, run: RunModel, node: WorkflowNodeSpec) -> list[ArtifactTarget]:
         output_specs = {item.name: item for item in node.outputs}
         handoff = node.handoff.outputs or [item.name for item in node.outputs]
@@ -197,9 +233,15 @@ class ClaudeExecutorDispatcher:
         for artifact_id in handoff:
             output_spec = output_specs.get(artifact_id)
             if output_spec is None:
-                raise ValidationError(f"节点 {node.node_id} handoff.outputs 引用了未知 output: {artifact_id}")
+                raise ValidationError(
+                    f"节点 {node.node_id} handoff.outputs 引用了未知 output: {artifact_id}"
+                )
 
-            latest = self.artifact_service.get_latest_node_artifact(run.id, node.node_id, artifact_id)
+            latest = self.artifact_service.get_latest_node_artifact(
+                run.id,
+                node.node_id,
+                artifact_id,
+            )
             version = self._next_version(latest.version if latest else None)
             kind = self._shape_to_kind(output_spec.shape)
 
@@ -272,7 +314,10 @@ class ClaudeExecutorDispatcher:
             actor={"role": "executor"},
             execution=CallbackExecution(status=ExecutionStatus.COMPLETED),
             submission=CallbackSubmission(
-                artifacts=[{"artifact_id": item.artifact_id, "version": item.version} for item in manifests]
+                artifacts=[
+                    {"artifact_id": item.artifact_id, "version": item.version}
+                    for item in manifests
+                ]
             ),
         )
 
@@ -309,7 +354,11 @@ class ClaudeExecutorDispatcher:
             work_dir=str(executor_dir),
         )
         command = shlex.split(formatted)
-        if "{prompt_file}" not in template and "{task_file}" not in template and len(command) == 1:
+        if (
+            "{prompt_file}" not in template
+            and "{task_file}" not in template
+            and len(command) == 1
+        ):
             command.append(str(prompt_path))
         return command
 
@@ -321,7 +370,10 @@ class ClaudeExecutorDispatcher:
 
     def _render_prompt(self, task_payload: dict) -> str:
         targets = "\n".join(
-            f"- artifact `{item['artifact_id']}@{item['version']}` => `{item['absolute_path']}` ({item['shape']})"
+            (
+                f"- artifact `{item['artifact_id']}@{item['version']}` "
+                f"=> `{item['absolute_path']}` ({item['shape']})"
+            )
             for item in task_payload["targets"]
         )
         return (
@@ -365,7 +417,8 @@ class ClaudeExecutorDispatcher:
         return ".txt"
 
     def _event_id(self, prefix: str) -> str:
-        return f"evt_{prefix}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        return f"evt_{prefix}_{timestamp}_{uuid4().hex[:8]}"
 
     def _get_node(self, nodes: list[WorkflowNodeSpec], node_id: str) -> WorkflowNodeSpec:
         for node in nodes:

@@ -4,12 +4,22 @@ from datetime import timezone
 
 from pipeliner.config import Settings, get_settings
 from pipeliner.persistence.models import CallbackEventModel, NodeRunModel, RunModel
-from pipeliner.persistence.repositories import ArtifactRepository, CallbackRepository, RunRepository, WorkflowRepository
+from pipeliner.persistence.repositories import (
+    ArtifactRepository,
+    CallbackRepository,
+    RunRepository,
+    WorkflowRepository,
+)
 from pipeliner.protocols.callback import NodeCallbackPayload
 from pipeliner.protocols.workflow import WorkflowNodeSpec, WorkflowSpec
 from pipeliner.runtime.guards import is_timeout_exceeded
 from pipeliner.services.artifact_service import ArtifactService
-from pipeliner.services.errors import ConflictError, InvalidStateError, NotFoundError, ValidationError
+from pipeliner.services.errors import (
+    ConflictError,
+    InvalidStateError,
+    NotFoundError,
+    ValidationError,
+)
 from pipeliner.services.run_service import RunService
 from pipeliner.types import ActorRole, ExecutionStatus, NodeRunStatus, RunStatus, VerdictStatus
 
@@ -46,7 +56,8 @@ class RuntimeCoordinator:
         node_run = self.run_repo.get_node_run(run.id, payload.node_id, payload.round_no)
         if node_run is None:
             raise NotFoundError(
-                f"未找到 node round: run={run.id} node={payload.node_id} round={payload.round_no}"
+                "未找到 node round: "
+                f"run={run.id} node={payload.node_id} round={payload.round_no}"
             )
 
         if payload.actor.role == ActorRole.VALIDATOR and payload.actor.validator_id:
@@ -111,7 +122,11 @@ class RuntimeCoordinator:
                     node_run.waiting_for_role = None
                     run.status = RunStatus.NEEDS_ATTENTION.value
                     timed_out.append(
-                        {"run_id": run.id, "node_id": node_run.node_id, "round_no": node_run.round_no}
+                        {
+                            "run_id": run.id,
+                            "node_id": node_run.node_id,
+                            "round_no": node_run.round_no,
+                        }
                     )
         return timed_out
 
@@ -132,7 +147,9 @@ class RuntimeCoordinator:
             expected_outputs = set(node.handoff.outputs or [item.name for item in node.outputs])
             submitted_outputs = {item.artifact_id for item in submission.artifacts}
             if not expected_outputs.issubset(submitted_outputs):
-                raise ValidationError("executor callback 缺少节点 handoff.outputs 对应的 artifact")
+                raise ValidationError(
+                    "executor callback 缺少节点 handoff.outputs 对应的 artifact"
+                )
             for artifact_ref in submission.artifacts:
                 self.artifact_service.resolve_ref(run.id, artifact_ref)
             node_run.status = NodeRunStatus.WAITING_VALIDATOR.value
@@ -150,7 +167,10 @@ class RuntimeCoordinator:
                     node.node_id,
                     node_run.round_no,
                     validator.validator_id,
-                    {**validator_context, "validator": validator.model_dump(mode="json")},
+                    {
+                        **validator_context,
+                        "validator": validator.model_dump(mode="json"),
+                    },
                 )
             return
         if payload.execution.status == ExecutionStatus.FAILED:
@@ -217,7 +237,11 @@ class RuntimeCoordinator:
                 node,
                 next_round,
                 workspace,
-                rework_brief=payload.rework_brief.model_dump(mode="json") if payload.rework_brief else None,
+                rework_brief=(
+                    payload.rework_brief.model_dump(mode="json")
+                    if payload.rework_brief
+                    else None
+                ),
             )
             return
 
@@ -225,7 +249,10 @@ class RuntimeCoordinator:
         validator_passes = {
             event.validator_id
             for event in events
-            if event.actor_role == ActorRole.VALIDATOR.value and event.verdict_status == VerdictStatus.PASS.value
+            if (
+                event.actor_role == ActorRole.VALIDATOR.value
+                and event.verdict_status == VerdictStatus.PASS.value
+            )
         }
         expected = {validator.validator_id for validator in node.validators}
         if expected.issubset(validator_passes):

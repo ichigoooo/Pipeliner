@@ -34,10 +34,14 @@ def test_workflow_cycle_detection(client, workflow_fixture) -> None:
         workflow_fixture["nodes"][0]["inputs"].append(
             {
                 "name": "loop_input",
-                "from": {"kind": "node_output", "node_id": "final_review", "output": "approved_article"},
+                "from": {
+                    "kind": "node_output",
+                    "node_id": "final_review",
+                    "output": "approved_article",
+                },
                 "shape": "file",
                 "required": True,
-                "summary": "illegal loop"
+                "summary": "illegal loop",
             }
         )
         with pytest.raises(WorkflowLintError):

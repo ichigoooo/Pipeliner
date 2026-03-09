@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from pathlib import Path
-
-from pipeliner.protocols.artifact import ArtifactManifest
 
 
 def _register_workflow(client, workflow_fixture) -> None:
@@ -15,13 +11,22 @@ def _register_workflow(client, workflow_fixture) -> None:
 def _start_run(client) -> dict:
     response = client.post(
         "/api/runs",
-        json={"workflow_id": "mvp-review-loop", "version": "0.1.0", "inputs": {"topic": "AI"}},
+        json={
+            "workflow_id": "mvp-review-loop",
+            "version": "0.1.0",
+            "inputs": {"topic": "AI"},
+        },
     )
     assert response.status_code == 200
     return response.json()
 
 
-def test_artifact_registration_is_resolvable_and_immutable(client, workflow_fixture, settings, workspace_manager) -> None:
+def test_artifact_registration_is_resolvable_and_immutable(
+    client,
+    workflow_fixture,
+    settings,
+    workspace_manager,
+) -> None:
     _register_workflow(client, workflow_fixture)
     run_info = _start_run(client)
     artifact_rel = f"{run_info['workspace_root']}/artifacts/article_draft@v1/payload/article.md"
@@ -39,21 +44,21 @@ def test_artifact_registration_is_resolvable_and_immutable(client, workflow_fixt
             "run_id": run_info["run_id"],
             "node_id": "draft_article",
             "round_no": 1,
-            "role": "executor"
+            "role": "executor",
         },
         "storage": {
             "backend": "local_fs",
-            "uri": artifact_rel
+            "uri": artifact_rel,
         },
         "integrity": {
             "digest": digest,
-            "size_bytes": size
+            "size_bytes": size,
         },
         "created_at": datetime.now(timezone.utc).isoformat(),
         "descriptor": {
             "media_type": "text/markdown",
-            "entrypoint": "article.md"
-        }
+            "entrypoint": "article.md",
+        },
     }
 
     response = client.post("/api/artifacts", json=manifest)

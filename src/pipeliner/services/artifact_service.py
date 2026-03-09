@@ -10,7 +10,12 @@ from pipeliner.types import ArtifactKind
 
 
 class ArtifactService:
-    def __init__(self, artifact_repo: ArtifactRepository, run_repo: RunRepository, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        artifact_repo: ArtifactRepository,
+        run_repo: RunRepository,
+        settings: Settings | None = None,
+    ) -> None:
         self.artifact_repo = artifact_repo
         self.run_repo = run_repo
         self.settings = settings or get_settings()
@@ -28,13 +33,19 @@ class ArtifactService:
         payload_path = self.workspace.resolve_storage_path(manifest.storage.uri)
         if manifest.kind == ArtifactKind.FILE and not payload_path.is_file():
             raise ValidationError(f"artifact payload 文件不存在: {payload_path}")
-        if manifest.kind in {ArtifactKind.DIRECTORY, ArtifactKind.COLLECTION} and not payload_path.is_dir():
+        if (
+            manifest.kind in {ArtifactKind.DIRECTORY, ArtifactKind.COLLECTION}
+            and not payload_path.is_dir()
+        ):
             raise ValidationError(f"artifact payload 目录不存在: {payload_path}")
 
         actual_digest, actual_size = self.workspace.compute_digest(payload_path)
         if manifest.integrity.digest != actual_digest:
             raise ValidationError("artifact digest 与实际内容不匹配")
-        if manifest.integrity.size_bytes is not None and manifest.integrity.size_bytes != actual_size:
+        if (
+            manifest.integrity.size_bytes is not None
+            and manifest.integrity.size_bytes != actual_size
+        ):
             raise ValidationError("artifact size_bytes 与实际内容不匹配")
 
         manifest_json = manifest.model_dump(mode="json")
@@ -61,7 +72,11 @@ class ArtifactService:
             manifest_json=manifest_json,
         )
         created = self.artifact_repo.create_artifact(artifact)
-        manifest_path = self.workspace.artifact_manifest_path(workspace, manifest.artifact_id, manifest.version)
+        manifest_path = self.workspace.artifact_manifest_path(
+            workspace,
+            manifest.artifact_id,
+            manifest.version,
+        )
         self.workspace.write_json(manifest_path, manifest_json)
         return created, True
 
@@ -74,7 +89,12 @@ class ArtifactService:
     def list_run_artifacts(self, run_id: str) -> list[ArtifactModel]:
         return self.artifact_repo.list_run_artifacts(run_id)
 
-    def get_latest_node_artifact(self, run_id: str, node_id: str, artifact_id: str) -> ArtifactModel | None:
+    def get_latest_node_artifact(
+        self,
+        run_id: str,
+        node_id: str,
+        artifact_id: str,
+    ) -> ArtifactModel | None:
         artifacts = [
             item
             for item in self.artifact_repo.list_run_artifacts(run_id)
