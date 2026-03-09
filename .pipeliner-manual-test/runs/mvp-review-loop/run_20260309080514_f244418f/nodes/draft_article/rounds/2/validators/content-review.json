@@ -1,0 +1,49 @@
+{
+  "run_id": "run_20260309080514_f244418f",
+  "node_id": "draft_article",
+  "round_no": 2,
+  "acceptance": {
+    "done_means": "Produce a coherent first draft",
+    "pass_condition": [
+      "Structure is complete",
+      "Logic is coherent"
+    ]
+  },
+  "gate": {
+    "mode": "all_validators_pass"
+  },
+  "artifacts": [
+    {
+      "schema_version": "pipeliner.artifact/v1alpha1",
+      "artifact_id": "article_draft",
+      "version": "v2",
+      "kind": "file",
+      "produced_by": {
+        "run_id": "run_20260309080514_f244418f",
+        "node_id": "draft_article",
+        "round_no": 2,
+        "role": "executor"
+      },
+      "storage": {
+        "backend": "local_fs",
+        "uri": "runs/mvp-review-loop/run_20260309080514_f244418f/artifacts/article_draft@v2/payload/article.md"
+      },
+      "integrity": {
+        "digest": "sha256:b2f5c16851eb12dd8ccff53a0ea1c823f59ae6b81d672b2d17ef865031bf6486",
+        "size_bytes": 217
+      },
+      "created_at": "2026-03-09T08:08:47.317527Z",
+      "descriptor": {
+        "media_type": "text/markdown",
+        "entrypoint": "article.md",
+        "index_file": null,
+        "item_count": null
+      },
+      "lineage": null
+    }
+  ],
+  "validator": {
+    "validator_id": "content-review",
+    "skill": "review-wechat-article"
+  }
+}

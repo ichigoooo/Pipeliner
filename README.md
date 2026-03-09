@@ -1,1 +1,145 @@
 # Pipeliner
+
+Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
+
+当前版本已经跑通最小可交付闭环：
+- `workflow spec` 作为唯一机器真源
+- `executor -> validator -> pass / revise / blocked` 最小状态机
+- 统一 callback API
+- 基于 `artifact manifest` 的交付物登记与不可变版本流转
+- 本地 `run workspace` 目录追踪
+- 最小 CLI / FastAPI / HTML inspection surface
+- 真实 `Claude` executor / validator 接入
+- `run drive` 自动顺序驱动 run 到终态
+
+## 当前进展
+
+当前 MVP 后端核心已经完成，已经具备实际试跑能力。
+
+已完成：
+- workflow 注册、版本加载与 run 启动
+- node callback 协议、artifact manifest 协议与 runtime guards
+- run / node run / callback / artifact 持久化
+- executor 调度、validator 调度、超时协调、人工介入可见性
+- 本地 workspace、产物落盘、manifest 发布、callback 归档
+- 最小 CLI、API、HTML 只读检查界面
+
+已验证：
+- 自动化测试通过：`15 passed`
+- 真实 `Claude` 联调通过
+- 一条真实 run 已从启动推进到 `completed`
+
+## 当前能力
+
+当前可以完成以下操作：
+- 注册 `workflow spec`
+- 启动 `run`
+- 查看 run、node、artifact、callback 状态
+- 用真实 `Claude` 执行 executor 节点
+- 用真实 `Claude` 执行 validator 节点
+- 用 `run drive` 自动顺序驱动整个 run
+- 在 `blocked`、`failed`、`timed_out`、`rework_limit` 时停在人工介入边界
+
+## 技术栈
+
+- `Python 3.12+`
+- `FastAPI`
+- `Pydantic v2`
+- `SQLAlchemy 2.x`
+- `Alembic`
+- `Typer`
+- `SQLite`
+- `pytest`
+
+## 本地开发
+
+```bash
+uv sync
+uv run alembic upgrade head
+uv run pipeliner db-init
+uv run uvicorn pipeliner.app:create_app --factory --reload
+```
+
+## 最小使用流
+
+1. 注册 workflow spec
+2. 启动 run，并写入 workflow inputs
+3. 使用 `run drive` 自动驱动，或手动逐节点执行 `executor dispatch` / `validator dispatch`
+4. 通过 CLI / API / HTML 页面检查运行状态
+
+如果不走自动驱动，也支持手动模式：
+
+1. 在 run workspace 下准备 artifact payload 文件
+2. 发布 artifact manifest
+3. 让 executor / validator 通过 callback API 回报结果
+
+## CLI
+
+```bash
+uv run pipeliner workflow register tests/fixtures/workflows/mvp_review_loop.json
+uv run pipeliner run start mvp-review-loop 0.1.0 tests/fixtures/run_inputs.json
+uv run pipeliner run show <run_id>
+uv run pipeliner run attention
+uv run pipeliner run drive <run_id>
+uv run pipeliner run reconcile-timeouts
+uv run pipeliner executor dispatch <run_id> <node_id>
+uv run pipeliner validator dispatch <run_id> <node_id> <validator_id>
+```
+
+`executor dispatch` 会读取节点 `executor/context.json`，调用配置的 Claude 命令生成产物，自动发布 artifact manifest，并自动提交 executor callback。
+`validator dispatch` 会读取 validator context，调用配置的 Claude 命令生成结构化判定结果，并自动提交 validator callback。
+`run drive` 会顺序调度当前 run 中所有可执行的 executor / validator，直到 run 进入 `completed`、`needs_attention`、`stopped` 或达到 `max_steps`。
+
+可通过环境变量覆盖命令模板：
+
+```bash
+export PIPELINER_CLAUDE_EXECUTOR_CMD='claude -p --permission-mode bypassPermissions'
+export PIPELINER_CLAUDE_VALIDATOR_CMD='claude -p --permission-mode bypassPermissions'
+```
+
+支持模板占位符：`{prompt_file}`、`{task_file}`、`{work_dir}`。
+调度器会把节点 prompt 通过 stdin 传入命令（默认模板为 `claude -p --permission-mode bypassPermissions`）。
+如果模板不含占位符且只有一个命令词，系统会把 `prompt_file` 作为末尾参数附加。
+
+## API / UI
+
+- API 文档：`/docs`
+- 首页：`/`
+- Workflow 只读视图：`/ui/workflows/{workflow_id}/versions/{version}`
+- Run 只读视图：`/ui/runs/{run_id}`
+- Executor 调度接口：`POST /api/runs/{run_id}/nodes/{node_id}/executor/dispatch`
+- Validator 调度接口：`POST /api/runs/{run_id}/nodes/{node_id}/validators/{validator_id}/dispatch`
+
+## Canonical Workflow View
+
+MVP 中，`workflow spec` 是唯一机器真源。
+任何面向人类的视图，包括 HTML 页面，都是从注册后的 spec 派生出的只读视图，而不是独立 authoring 真源。
+
+## Run Workspace 约定
+
+每个 run 在本地都有独立工作目录：
+
+```text
+.pipeliner/
+└─ runs/
+   └─ <workflow_id>/
+      └─ <run_id>/
+         ├─ inputs/workflow_inputs.json
+         ├─ nodes/<node_id>/rounds/<round_no>/...
+         ├─ artifacts/<artifact_id>@<version>/manifest.json
+         └─ callbacks/<event_id>.json
+```
+
+其中：
+- `inputs/` 保存 workflow 输入快照
+- `nodes/` 保存 executor/validator handoff context
+- `artifacts/` 保存 manifest 元数据，payload 由 manifest 的 `storage.uri` 指向
+- `callbacks/` 保存 callback 原始归档
+
+## 后续计划
+
+下一阶段优先做以下几项：
+- 增加人工恢复与重试操作，例如继续执行、重跑当前节点、处理 `needs_attention`
+- 增加批量调度与更稳定的运行控制，例如并发、重试策略、输出限制
+- 增加更清晰的 operator 界面，降低查看 run / node / artifact 状态的成本
+- 在核心稳定后，再逐步补强产品化 UI/UX，而不是提前做复杂前端

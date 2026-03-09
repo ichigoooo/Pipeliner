@@ -1,0 +1,28 @@
+{
+  "schema_version": "pipeliner.callback/v1alpha1",
+  "event_id": "evt_val_20260309114945_648e5311",
+  "sent_at": "2026-03-09T11:49:45.214840Z",
+  "run_id": "run_20260309114830_48cadb22",
+  "node_id": "draft_article",
+  "round_no": 1,
+  "actor": {
+    "role": "validator",
+    "validator_id": "content-review"
+  },
+  "execution": {
+    "status": "completed",
+    "message": null
+  },
+  "submission": null,
+  "verdict": {
+    "status": "pass",
+    "target_artifacts": [
+      {
+        "artifact_id": "article_draft",
+        "version": "v1"
+      }
+    ],
+    "summary": "文章初稿结构完整、逻辑连贯。包含引言、定义、重要性、挑战、最佳实践和结论六个部分，层次清晰。从概念定义到实践应用的逻辑递进合理，各章节内容充实，符合初稿质量标准。"
+  },
+  "rework_brief": null
+}

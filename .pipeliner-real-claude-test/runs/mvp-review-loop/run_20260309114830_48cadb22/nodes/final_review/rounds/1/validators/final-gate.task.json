@@ -1,0 +1,8 @@
+{
+  "run_id": "run_20260309114830_48cadb22",
+  "node_id": "final_review",
+  "round_no": 1,
+  "validator_id": "final-gate",
+  "context_file": "/Users/wuyuheng/Documents/Projects/Pipeliner/.pipeliner-real-claude-test/runs/mvp-review-loop/run_20260309114830_48cadb22/nodes/final_review/rounds/1/validators/final-gate.json",
+  "result_file": "/Users/wuyuheng/Documents/Projects/Pipeliner/.pipeliner-real-claude-test/runs/mvp-review-loop/run_20260309114830_48cadb22/nodes/final_review/rounds/1/validators/final-gate.result.json"
+}

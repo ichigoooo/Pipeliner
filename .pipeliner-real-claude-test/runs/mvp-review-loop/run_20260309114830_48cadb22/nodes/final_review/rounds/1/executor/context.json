@@ -1,0 +1,100 @@
+{
+  "run_id": "run_20260309114830_48cadb22",
+  "workflow_id": "mvp-review-loop",
+  "workflow_version": "0.1.0",
+  "node": {
+    "node_id": "final_review",
+    "title": "Final Review",
+    "purpose": "Approve or block final article",
+    "archetype": "review-content",
+    "depends_on": [
+      "draft_article"
+    ],
+    "inputs": [
+      {
+        "name": "article_draft",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "draft_article",
+          "output": "article_draft"
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "Latest draft artifact"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved_article",
+        "shape": "file",
+        "summary": "Approved final article"
+      }
+    ],
+    "executor": {
+      "skill": "prepare-final-article"
+    },
+    "validators": [
+      {
+        "validator_id": "final-gate",
+        "skill": "approve-final-article"
+      }
+    ],
+    "acceptance": {
+      "done_means": "Produce a publishable article",
+      "pass_condition": [
+        "Ready for publication"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "approved_article"
+      ]
+    }
+  },
+  "round_no": 1,
+  "inputs": [
+    {
+      "name": "article_draft",
+      "source": {
+        "kind": "node_output",
+        "node_id": "draft_article",
+        "output": "article_draft"
+      },
+      "artifact_ref": {
+        "artifact_id": "article_draft",
+        "version": "v1"
+      },
+      "manifest": {
+        "schema_version": "pipeliner.artifact/v1alpha1",
+        "artifact_id": "article_draft",
+        "version": "v1",
+        "kind": "file",
+        "produced_by": {
+          "run_id": "run_20260309114830_48cadb22",
+          "node_id": "draft_article",
+          "round_no": 1,
+          "role": "executor"
+        },
+        "storage": {
+          "backend": "local_fs",
+          "uri": "runs/mvp-review-loop/run_20260309114830_48cadb22/artifacts/article_draft@v1/payload/article_draft.md"
+        },
+        "integrity": {
+          "digest": "sha256:dc184a497116d2412b0eb27e46d740cfb044a885340ae5be5528db985304dc94",
+          "size_bytes": 2087
+        },
+        "created_at": "2026-03-09T11:49:12.583873Z",
+        "descriptor": null,
+        "lineage": null
+      },
+      "shape": "file",
+      "required": true,
+      "summary": "Latest draft artifact"
+    }
+  ],
+  "rework_brief": null
+}

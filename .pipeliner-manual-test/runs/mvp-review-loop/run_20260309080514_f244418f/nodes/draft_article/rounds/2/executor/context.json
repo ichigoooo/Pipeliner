@@ -1,0 +1,92 @@
+{
+  "run_id": "run_20260309080514_f244418f",
+  "workflow_id": "mvp-review-loop",
+  "workflow_version": "0.1.0",
+  "node": {
+    "node_id": "draft_article",
+    "title": "Draft Article",
+    "purpose": "Create first draft",
+    "archetype": "draft-content",
+    "depends_on": [],
+    "inputs": [
+      {
+        "name": "topic",
+        "from": {
+          "kind": "workflow_input",
+          "name": "topic",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "Requested topic"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "article_draft",
+        "shape": "file",
+        "summary": "Draft markdown"
+      }
+    ],
+    "executor": {
+      "skill": "draft-wechat-article"
+    },
+    "validators": [
+      {
+        "validator_id": "content-review",
+        "skill": "review-wechat-article"
+      }
+    ],
+    "acceptance": {
+      "done_means": "Produce a coherent first draft",
+      "pass_condition": [
+        "Structure is complete",
+        "Logic is coherent"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "article_draft"
+      ]
+    }
+  },
+  "round_no": 2,
+  "inputs": [
+    {
+      "name": "topic",
+      "source": {
+        "kind": "workflow_input",
+        "name": "topic"
+      },
+      "value": "AI agents runtime orchestration",
+      "shape": "string",
+      "required": true,
+      "summary": "Requested topic"
+    }
+  ],
+  "rework_brief": {
+    "must_fix": [
+      {
+        "target": "第二段",
+        "problem": "承接不足",
+        "expected": "补足从问题到方案的过渡"
+      },
+      {
+        "target": "结尾",
+        "problem": "收束偏弱",
+        "expected": "给出更明确的落地结论"
+      }
+    ],
+    "preserve": [
+      "保留问题-方案-落地三段式结构"
+    ],
+    "resubmit_instruction": "提交一版更完整的 markdown 初稿",
+    "evidence": [
+      "第二段从问题直接跳到实现，缺少解释"
+    ]
+  }
+}

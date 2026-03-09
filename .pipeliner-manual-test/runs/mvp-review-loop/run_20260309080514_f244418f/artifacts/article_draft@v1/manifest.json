@@ -1,0 +1,28 @@
+{
+  "schema_version": "pipeliner.artifact/v1alpha1",
+  "artifact_id": "article_draft",
+  "version": "v1",
+  "kind": "file",
+  "produced_by": {
+    "run_id": "run_20260309080514_f244418f",
+    "node_id": "draft_article",
+    "round_no": 1,
+    "role": "executor"
+  },
+  "storage": {
+    "backend": "local_fs",
+    "uri": "runs/mvp-review-loop/run_20260309080514_f244418f/artifacts/article_draft@v1/payload/article.md"
+  },
+  "integrity": {
+    "digest": "sha256:82dbe6fa5a8efcf52b84f24b5df3427c53ff25d6e75f31bff7756a435961a165",
+    "size_bytes": 127
+  },
+  "created_at": "2026-03-09T08:07:04.284842Z",
+  "descriptor": {
+    "media_type": "text/markdown",
+    "entrypoint": "article.md",
+    "index_file": null,
+    "item_count": null
+  },
+  "lineage": null
+}

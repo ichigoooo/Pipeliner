@@ -1,0 +1,8 @@
+{
+  "run_id": "run_20260309114830_48cadb22",
+  "node_id": "draft_article",
+  "round_no": 1,
+  "validator_id": "content-review",
+  "context_file": "/Users/wuyuheng/Documents/Projects/Pipeliner/.pipeliner-real-claude-test/runs/mvp-review-loop/run_20260309114830_48cadb22/nodes/draft_article/rounds/1/validators/content-review.json",
+  "result_file": "/Users/wuyuheng/Documents/Projects/Pipeliner/.pipeliner-real-claude-test/runs/mvp-review-loop/run_20260309114830_48cadb22/nodes/draft_article/rounds/1/validators/content-review.result.json"
+}

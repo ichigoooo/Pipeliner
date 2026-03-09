@@ -1,0 +1,28 @@
+{
+  "schema_version": "pipeliner.callback/v1alpha1",
+  "event_id": "evt_val_20260309112425_523c8a0d",
+  "sent_at": "2026-03-09T11:24:25.963373Z",
+  "run_id": "run_20260309112304_8457251b",
+  "node_id": "draft_article",
+  "round_no": 1,
+  "actor": {
+    "role": "validator",
+    "validator_id": "content-review"
+  },
+  "execution": {
+    "status": "completed",
+    "message": null
+  },
+  "submission": null,
+  "verdict": {
+    "status": "pass",
+    "target_artifacts": [
+      {
+        "artifact_id": "article_draft",
+        "version": "v1"
+      }
+    ],
+    "summary": "文章结构完整，逻辑连贯。包含清晰的引言、五个主要章节（定义、重要性、实践、误区、总结），层次分明。内容从'是什么'到'为什么'再到'怎么做'，逻辑递进自然。格式丰富，使用了标题、列表、表格等多种形式。整体作为初稿已达到可交付标准。"
+  },
+  "rework_brief": null
+}

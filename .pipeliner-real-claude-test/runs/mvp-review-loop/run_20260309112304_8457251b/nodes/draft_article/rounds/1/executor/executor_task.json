@@ -1,0 +1,16 @@
+{
+  "run_id": "run_20260309112304_8457251b",
+  "node_id": "draft_article",
+  "round_no": 1,
+  "context_file": "/Users/wuyuheng/Documents/Projects/Pipeliner/.pipeliner-real-claude-test/runs/mvp-review-loop/run_20260309112304_8457251b/nodes/draft_article/rounds/1/executor/context.json",
+  "targets": [
+    {
+      "artifact_id": "article_draft",
+      "version": "v1",
+      "shape": "file",
+      "kind": "file",
+      "relative_uri": "runs/mvp-review-loop/run_20260309112304_8457251b/artifacts/article_draft@v1/payload/article_draft.md",
+      "absolute_path": "/Users/wuyuheng/Documents/Projects/Pipeliner/.pipeliner-real-claude-test/runs/mvp-review-loop/run_20260309112304_8457251b/artifacts/article_draft@v1/payload/article_draft.md"
+    }
+  ]
+}

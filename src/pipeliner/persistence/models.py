@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from pipeliner.db import Base
+
+
+class WorkflowDefinitionModel(Base):
+    __tablename__ = "workflow_definitions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    workflow_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    purpose: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    versions: Mapped[list[WorkflowVersionModel]] = relationship(
+        back_populates="workflow_definition", cascade="all, delete-orphan"
+    )
+
+
+class WorkflowVersionModel(Base):
+    __tablename__ = "workflow_versions"
+    __table_args__ = (UniqueConstraint("workflow_definition_id", "version", name="uq_workflow_version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    workflow_definition_id: Mapped[int] = mapped_column(
+        ForeignKey("workflow_definitions.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[str] = mapped_column(String(64))
+    schema_version: Mapped[str] = mapped_column(String(128))
+    spec_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    lint_warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    workflow_definition: Mapped[WorkflowDefinitionModel] = relationship(back_populates="versions")
+    runs: Mapped[list[RunModel]] = relationship(back_populates="workflow_version_rel")
+
+
+class RunModel(Base):
+    __tablename__ = "runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workflow_version_id: Mapped[int] = mapped_column(
+        ForeignKey("workflow_versions.id", ondelete="RESTRICT"), index=True
+    )
+    workflow_id: Mapped[str] = mapped_column(String(255), index=True)
+    workflow_version: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(64), index=True)
+    inputs_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    workspace_root: Mapped[str] = mapped_column(String(512))
+    stop_reason: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    workflow_version_rel: Mapped[WorkflowVersionModel] = relationship(back_populates="runs")
+    node_runs: Mapped[list[NodeRunModel]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    callback_events: Mapped[list[CallbackEventModel]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+    artifacts: Mapped[list[ArtifactModel]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+
+
+class NodeRunModel(Base):
+    __tablename__ = "node_runs"
+    __table_args__ = (UniqueConstraint("run_id", "node_id", "round_no", name="uq_node_round"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    node_id: Mapped[str] = mapped_column(String(255), index=True)
+    round_no: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(64), index=True)
+    waiting_for_role: Mapped[str | None] = mapped_column(String(32), default=None)
+    stop_reason: Mapped[str | None] = mapped_column(Text, default=None)
+    rework_brief_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    run: Mapped[RunModel] = relationship(back_populates="node_runs")
+
+
+class CallbackEventModel(Base):
+    __tablename__ = "callback_events"
+
+    event_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    node_id: Mapped[str] = mapped_column(String(255), index=True)
+    round_no: Mapped[int] = mapped_column(Integer)
+    actor_role: Mapped[str] = mapped_column(String(32), index=True)
+    validator_id: Mapped[str | None] = mapped_column(String(255), default=None)
+    execution_status: Mapped[str] = mapped_column(String(32))
+    verdict_status: Mapped[str | None] = mapped_column(String(32), default=None)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[RunModel] = relationship(back_populates="callback_events")
+
+
+class ArtifactModel(Base):
+    __tablename__ = "artifacts"
+    __table_args__ = (UniqueConstraint("run_id", "artifact_id", "version", name="uq_run_artifact_version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    node_id: Mapped[str] = mapped_column(String(255), index=True)
+    round_no: Mapped[int] = mapped_column(Integer)
+    role: Mapped[str] = mapped_column(String(32))
+    artifact_id: Mapped[str] = mapped_column(String(255), index=True)
+    version: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(64))
+    storage_backend: Mapped[str] = mapped_column(String(64))
+    storage_uri: Mapped[str] = mapped_column(String(1024))
+    digest: Mapped[str] = mapped_column(String(255))
+    size_bytes: Mapped[int | None] = mapped_column(Integer, default=None)
+    manifest_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[RunModel] = relationship(back_populates="artifacts")

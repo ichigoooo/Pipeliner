@@ -1,0 +1,72 @@
+{
+  "run_id": "run_20260309112304_8457251b",
+  "workflow_id": "mvp-review-loop",
+  "workflow_version": "0.1.0",
+  "node": {
+    "node_id": "draft_article",
+    "title": "Draft Article",
+    "purpose": "Create first draft",
+    "archetype": "draft-content",
+    "depends_on": [],
+    "inputs": [
+      {
+        "name": "topic",
+        "from": {
+          "kind": "workflow_input",
+          "name": "topic",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "Requested topic"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "article_draft",
+        "shape": "file",
+        "summary": "Draft markdown"
+      }
+    ],
+    "executor": {
+      "skill": "draft-wechat-article"
+    },
+    "validators": [
+      {
+        "validator_id": "content-review",
+        "skill": "review-wechat-article"
+      }
+    ],
+    "acceptance": {
+      "done_means": "Produce a coherent first draft",
+      "pass_condition": [
+        "Structure is complete",
+        "Logic is coherent"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "article_draft"
+      ]
+    }
+  },
+  "round_no": 1,
+  "inputs": [
+    {
+      "name": "topic",
+      "source": {
+        "kind": "workflow_input",
+        "name": "topic"
+      },
+      "value": "真实联调测试",
+      "shape": "string",
+      "required": true,
+      "summary": "Requested topic"
+    }
+  ],
+  "rework_brief": null
+}

@@ -1,0 +1,137 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "mvp-review-loop",
+    "title": "MVP Review Loop",
+    "purpose": "Exercise executor, validator, revise, pass, and blocked paths",
+    "version": "0.1.0",
+    "tags": ["mvp", "test"]
+  },
+  "inputs": [
+    {
+      "name": "topic",
+      "shape": "string",
+      "required": true,
+      "summary": "Requested topic"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "final_article",
+      "from": {
+        "node_id": "final_review",
+        "output": "approved_article"
+      },
+      "shape": "file",
+      "required": true,
+      "summary": "Final approved article"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "draft_article",
+      "title": "Draft Article",
+      "purpose": "Create first draft",
+      "archetype": "draft-content",
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "topic",
+          "from": {
+            "kind": "workflow_input",
+            "name": "topic"
+          },
+          "shape": "string",
+          "required": true,
+          "summary": "Requested topic"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "article_draft",
+          "shape": "file",
+          "summary": "Draft markdown"
+        }
+      ],
+      "executor": {
+        "skill": "draft-wechat-article"
+      },
+      "validators": [
+        {
+          "validator_id": "content-review",
+          "skill": "review-wechat-article"
+        }
+      ],
+      "acceptance": {
+        "done_means": "Produce a coherent first draft",
+        "pass_condition": [
+          "Structure is complete",
+          "Logic is coherent"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": ["article_draft"]
+      }
+    },
+    {
+      "node_id": "final_review",
+      "title": "Final Review",
+      "purpose": "Approve or block final article",
+      "archetype": "review-content",
+      "depends_on": ["draft_article"],
+      "inputs": [
+        {
+          "name": "article_draft",
+          "from": {
+            "kind": "node_output",
+            "node_id": "draft_article",
+            "output": "article_draft"
+          },
+          "shape": "file",
+          "required": true,
+          "summary": "Latest draft artifact"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "approved_article",
+          "shape": "file",
+          "summary": "Approved final article"
+        }
+      ],
+      "executor": {
+        "skill": "prepare-final-article"
+      },
+      "validators": [
+        {
+          "validator_id": "final-gate",
+          "skill": "approve-final-article"
+        }
+      ],
+      "acceptance": {
+        "done_means": "Produce a publishable article",
+        "pass_condition": [
+          "Ready for publication"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": ["approved_article"]
+      }
+    }
+  ],
+  "defaults": {
+    "runtime_guards": {
+      "timeout": "30m",
+      "max_rework_rounds": 3,
+      "blocked_requires_manual": true,
+      "failure_requires_manual": true
+    }
+  },
+  "extensions": {}
+}

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pipeliner"
+version = "0.1.0"
+description = "Skill-driven agent workflow orchestrator MVP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "pydantic>=2.10,<3",
+  "sqlalchemy>=2.0,<3",
+  "alembic>=1.14,<2",
+  "typer>=0.15,<1",
+  "pytest>=8.3,<9",
+  "httpx>=0.28,<1",
+  "PyYAML>=6.0,<7",
+]
+
+[project.scripts]
+pipeliner = "pipeliner.cli:app"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]

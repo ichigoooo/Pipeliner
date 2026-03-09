@@ -1,0 +1,23 @@
+{
+  "schema_version": "pipeliner.callback/v1alpha1",
+  "event_id": "evt_val_20260309112132_13fce9a2",
+  "sent_at": "2026-03-09T11:21:32.696033Z",
+  "run_id": "run_20260309112003_74dfce61",
+  "node_id": "draft_article",
+  "round_no": 1,
+  "actor": {
+    "role": "validator",
+    "validator_id": "content-review"
+  },
+  "execution": {
+    "status": "failed",
+    "message": "validator 结果文件无效: 1 validation error for ValidatorResultFile\nverdict.target_artifacts.0\n  Input should be an object [type=model_type, input_value='article_draft', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.12/v/model_type"
+  },
+  "submission": null,
+  "verdict": {
+    "status": "blocked",
+    "target_artifacts": [],
+    "summary": "validator 结果文件无效: 1 validation error for ValidatorResultFile\nverdict.target_artifacts.0\n  Input should be an object [type=model_type, input_value='article_draft', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.12/v/model_type"
+  },
+  "rework_brief": null
+}

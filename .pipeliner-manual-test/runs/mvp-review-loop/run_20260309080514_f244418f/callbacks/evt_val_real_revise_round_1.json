@@ -1,0 +1,48 @@
+{
+  "schema_version": "pipeliner.callback/v1alpha1",
+  "event_id": "evt_val_real_revise_round_1",
+  "sent_at": "2026-03-09T08:07:04.285307Z",
+  "run_id": "run_20260309080514_f244418f",
+  "node_id": "draft_article",
+  "round_no": 1,
+  "actor": {
+    "role": "validator",
+    "validator_id": "content-review"
+  },
+  "execution": {
+    "status": "completed",
+    "message": null
+  },
+  "submission": null,
+  "verdict": {
+    "status": "revise",
+    "target_artifacts": [
+      {
+        "artifact_id": "article_draft",
+        "version": "v1"
+      }
+    ],
+    "summary": "结构还不够强，第二段需要更明确的承接"
+  },
+  "rework_brief": {
+    "must_fix": [
+      {
+        "target": "第二段",
+        "problem": "承接不足",
+        "expected": "补足从问题到方案的过渡"
+      },
+      {
+        "target": "结尾",
+        "problem": "收束偏弱",
+        "expected": "给出更明确的落地结论"
+      }
+    ],
+    "preserve": [
+      "保留问题-方案-落地三段式结构"
+    ],
+    "resubmit_instruction": "提交一版更完整的 markdown 初稿",
+    "evidence": [
+      "第二段从问题直接跳到实现，缺少解释"
+    ]
+  }
+}

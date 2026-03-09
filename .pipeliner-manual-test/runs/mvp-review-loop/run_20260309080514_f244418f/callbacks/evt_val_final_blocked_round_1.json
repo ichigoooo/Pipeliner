@@ -1,0 +1,28 @@
+{
+  "schema_version": "pipeliner.callback/v1alpha1",
+  "event_id": "evt_val_final_blocked_round_1",
+  "sent_at": "2026-03-09T08:08:47.318469Z",
+  "run_id": "run_20260309080514_f244418f",
+  "node_id": "final_review",
+  "round_no": 1,
+  "actor": {
+    "role": "validator",
+    "validator_id": "final-gate"
+  },
+  "execution": {
+    "status": "completed",
+    "message": null
+  },
+  "submission": null,
+  "verdict": {
+    "status": "blocked",
+    "target_artifacts": [
+      {
+        "artifact_id": "approved_article",
+        "version": "v1"
+      }
+    ],
+    "summary": "需要人工法务审核后才能继续"
+  },
+  "rework_brief": null
+}

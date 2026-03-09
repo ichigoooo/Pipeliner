@@ -1,0 +1,43 @@
+{
+  "run_id": "run_20260309114830_48cadb22",
+  "node_id": "final_review",
+  "round_no": 1,
+  "acceptance": {
+    "done_means": "Produce a publishable article",
+    "pass_condition": [
+      "Ready for publication"
+    ]
+  },
+  "gate": {
+    "mode": "all_validators_pass"
+  },
+  "artifacts": [
+    {
+      "schema_version": "pipeliner.artifact/v1alpha1",
+      "artifact_id": "approved_article",
+      "version": "v1",
+      "kind": "file",
+      "produced_by": {
+        "run_id": "run_20260309114830_48cadb22",
+        "node_id": "final_review",
+        "round_no": 1,
+        "role": "executor"
+      },
+      "storage": {
+        "backend": "local_fs",
+        "uri": "runs/mvp-review-loop/run_20260309114830_48cadb22/artifacts/approved_article@v1/payload/approved_article.md"
+      },
+      "integrity": {
+        "digest": "sha256:54b99d38df6e0744405cbd2f63aeac697ea0625507f34cc4b3d38c9cbe0774eb",
+        "size_bytes": 2160
+      },
+      "created_at": "2026-03-09T11:50:24.716381Z",
+      "descriptor": null,
+      "lineage": null
+    }
+  ],
+  "validator": {
+    "validator_id": "final-gate",
+    "skill": "approve-final-article"
+  }
+}

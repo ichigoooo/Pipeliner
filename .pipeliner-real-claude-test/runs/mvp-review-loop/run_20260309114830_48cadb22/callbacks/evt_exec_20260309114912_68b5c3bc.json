@@ -1,0 +1,26 @@
+{
+  "schema_version": "pipeliner.callback/v1alpha1",
+  "event_id": "evt_exec_20260309114912_68b5c3bc",
+  "sent_at": "2026-03-09T11:49:12.592005Z",
+  "run_id": "run_20260309114830_48cadb22",
+  "node_id": "draft_article",
+  "round_no": 1,
+  "actor": {
+    "role": "executor",
+    "validator_id": null
+  },
+  "execution": {
+    "status": "completed",
+    "message": null
+  },
+  "submission": {
+    "artifacts": [
+      {
+        "artifact_id": "article_draft",
+        "version": "v1"
+      }
+    ]
+  },
+  "verdict": null,
+  "rework_brief": null
+}
