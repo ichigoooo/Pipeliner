@@ -1,0 +1,267 @@
+{
+  "dashboard": {
+    "header": "Workflow Studio",
+    "title": "面向开发者的控制面板，支持创作、运行、关注处理和配置溯源。",
+    "subtitle": "所有视图都围绕同一份 canonical workflow spec 派生，不再让 graph、cards 或调试面板成为第二份真源。",
+    "stats": {
+      "publishedWorkflows": "已发布工作流",
+      "runs": "运行数",
+      "needAttention": "需关注"
+    },
+    "shortcuts": {
+      "authoring": {
+        "eyebrow": "创作",
+        "title": "创建或修改工作流草案",
+        "body": "继续会话、查看版本历史、编辑原始规范，仅在语法检查通过后发布。"
+      },
+      "catalog": {
+        "eyebrow": "工作流目录",
+        "title": "查看已注册版本",
+        "body": "从单一规范工作流版本浏览卡片、图形、规范和语法检查。"
+      },
+      "workspace": {
+        "eyebrow": "运行工作区",
+        "title": "追踪回调、产物和轮次",
+        "body": "使用运行工作区检查节点轮次、上下文负载和干预操作。"
+      },
+      "settings": {
+        "eyebrow": "设置",
+        "title": "查看解析后的配置溯源",
+        "body": "比较生效的命令模板、存储路径和运行时保护默认值。"
+      }
+    }
+  },
+  "sidebar": {
+    "title": "Pipeliner",
+    "subtitle": "Workflow Studio",
+    "description": "查看工作流规范、创作草稿、调试运行，以及追踪解析后的配置。",
+    "nav": {
+      "dashboard": "概览",
+      "authoring": "创作",
+      "workflows": "工作流",
+      "runs": "运行",
+      "attention": "关注队列",
+      "settings": "设置"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "subtitle": "解析后的配置及来源",
+    "description": "开发者可以直接看到当前生效值，以及它来自 `default` 还是 `env`。",
+    "sections": {
+      "commandTemplates": "命令模板",
+      "storageDatabase": "存储 + 数据库",
+      "runtimeGuards": "运行时保护",
+      "providerBindings": "Provider 绑定",
+      "observedSkills": "已观察的 Skills",
+      "rawSnapshot": "原始快照"
+    },
+    "labels": {
+      "executor": "执行器",
+      "validator": "验证器",
+      "storageBackend": "存储后端",
+      "dataDir": "数据目录",
+      "runRoot": "运行根目录",
+      "databaseUrl": "数据库 URL",
+      "databasePath": "数据库路径",
+      "defaultTimeout": "默认超时",
+      "maxReworkRounds": "最大重做次数",
+      "blockedRequiresManual": "阻塞需手动处理",
+      "failureRequiresManual": "失败需手动处理"
+    },
+    "language": {
+      "title": "语言",
+      "description": "选择界面语言。",
+      "current": "当前语言",
+      "options": {
+        "en": "English",
+        "zh": "中文 (Chinese)"
+      }
+    },
+    "loading": "加载设置快照中..."
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "start": "开始",
+    "retry": "重试",
+    "stop": "停止",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "back": "返回",
+    "next": "下一步",
+    "close": "关闭",
+    "open": "打开",
+    "edit": "编辑",
+    "delete": "删除",
+    "create": "创建",
+    "refresh": "刷新"
+  },
+  "authoring": {
+    "title": "创作",
+    "subtitle": "对话 + 规范草案",
+    "description": "Intent brief、revision history、raw spec 和 publish gate 都在同一工作区里。",
+    "newSession": "新建创作会话",
+    "continueSession": "继续会话",
+    "createSession": "创建会话",
+    "saveDraft": "保存原始草案",
+    "continue": "继续会话",
+    "publish": "发布最新版本",
+    "sessions": "会话列表",
+    "messages": "消息",
+    "revisionHistory": "版本历史",
+    "revision": "版本",
+    "canonicalSpec": "规范工作流定义",
+    "instruction": "创作指令",
+    "placeholder": {
+      "sessionTitle": "会话标题",
+      "intentBrief": "意图简介"
+    },
+    "summary": {
+      "sessions": "会话数",
+      "revisions": "版本数",
+      "blockingIssues": "阻塞问题"
+    },
+    "status": {
+      "ready": "就绪",
+      "blocking": "阻塞"
+    },
+    "draft": {
+      "title": "草稿",
+      "save": "保存草稿",
+      "publish": "发布",
+      "lint": "语法检查"
+    },
+    "empty": {
+      "noSession": "未选择会话",
+      "selectSession": "请先从左侧创建或选择一个会话。",
+      "workspaceHint": "选择一个会话以查看同步的 cards / graph / spec / lint 视图。"
+    },
+    "published": "已发布为",
+    "selectedSession": "已选会话",
+    "updated": "更新于",
+    "total": "共 {count} 个",
+    "revisionInfo": "版本 {revision} · 更新于 {time}"
+  },
+  "workflows": {
+    "title": "工作流",
+    "list": "工作流列表",
+    "details": "工作流详情",
+    "version": "版本",
+    "versions": "工作流版本",
+    "startRun": "开始运行",
+    "noWorkflows": "未找到工作流",
+    "backToWorkflows": "返回工作流列表",
+    "backToVersions": "返回版本列表",
+    "description": "选择一个版本进入 cards / graph / spec / lint 同步工作区。",
+    "selectVersionHint": "选择一个版本进入 cards / graph / spec / lint 工作区。",
+    "created": "创建时间",
+    "createdAt": "创建于 {date}",
+    "schema": "Schema",
+    "warnings": "警告",
+    "noWarnings": "无警告",
+    "workspace": "工作流工作区",
+    "loadingWorkspace": "加载工作流工作区...",
+    "runInputs": "运行输入 (JSON)",
+    "launchRun": "启动运行",
+    "cancel": "取消",
+    "jsonObjectRequired": "输入必须是 JSON 对象",
+    "parseFailed": "解析输入失败"
+  },
+  "runs": {
+    "title": "运行",
+    "list": "运行列表",
+    "details": "运行详情",
+    "status": "状态",
+    "timeline": "时间线",
+    "callbacks": "回调",
+    "artifacts": "产物",
+    "context": "上下文",
+    "logs": "日志",
+    "noRuns": "未找到运行",
+    "loading": "加载运行工作区...",
+    "backToRuns": "返回运行列表",
+    "workspace": "运行工作区",
+    "stopRun": "停止运行",
+    "retrySelectedNode": "重试选中节点",
+    "runHealth": "运行健康度",
+    "stopReason": "停止原因",
+    "stopReasonLabel": "停止原因：{reason}",
+    "nodesInLatestState": "最新状态节点数",
+    "none": "无",
+    "noStopReason": "无停止原因",
+    "waitingFor": "等待 {role}",
+    "round": "第 {round} 轮",
+    "inspectRawContext": "查看原始上下文",
+    "logRefs": "日志引用",
+    "noArtifactsInRound": "本轮未发布产物。",
+    "noLogsInRound": "本轮未记录日志。",
+    "noArtifactsRegistered": "尚未注册产物。",
+    "inspectorTitle": "运行检查器",
+    "tabs": {
+      "timeline": "时间线",
+      "nodeDetail": "节点详情",
+      "artifacts": "产物",
+      "raw": "原始数据"
+    }
+  },
+  "workflow": {
+    "tabs": {
+      "graph": "图形",
+      "cards": "卡片",
+      "spec": "规范",
+      "lint": "检查"
+    },
+    "lintTab": "检查 ({count})",
+    "lint": {
+      "blockingIssues": "阻塞问题",
+      "warnings": "警告",
+      "noBlockingIssues": "无阻塞问题。",
+      "noWarnings": "无警告。"
+    },
+    "inspector": {
+      "title": "原始检查器"
+    },
+    "card": {
+      "archetype": "工作流节点",
+      "dependsOn": "依赖",
+      "rootNode": "根节点",
+      "executor": "执行器",
+      "validators": "验证器",
+      "doneMeans": "完成条件"
+    }
+  },
+  "status": {
+    "completed": "已完成",
+    "running": "运行中",
+    "needs_attention": "需关注",
+    "failed": "失败",
+    "blocked": "阻塞",
+    "waiting_executor": "等待执行器",
+    "waiting_validator": "等待验证器",
+    "revise": "需修改",
+    "stopped": "已停止",
+    "timed_out": "超时",
+    "rework_limit": "重做次数超限",
+    "published": "已发布",
+    "active": "活跃",
+    "unknown": "未知",
+    "ready": "就绪",
+    "reported": "已报告"
+  },
+  "attention": {
+    "title": "关注队列",
+    "description": "需要人工介入的运行",
+    "status": {
+      "blocked": "阻塞",
+      "failed": "失败",
+      "timedOut": "超时",
+      "reworkLimit": "重做次数超限"
+    },
+    "actions": {
+      "retry": "重试",
+      "stop": "停止"
+    }
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "dashboard": {
+    "header": "Workflow Studio",
+    "title": "Developer-first control surface for authoring, runs, attention handling, and config provenance.",
+    "subtitle": "All views are derived from the same canonical workflow spec. No more second sources from graph, cards, or debug panels.",
+    "stats": {
+      "publishedWorkflows": "Published Workflows",
+      "runs": "Runs",
+      "needAttention": "Need Attention"
+    },
+    "shortcuts": {
+      "authoring": {
+        "eyebrow": "Authoring",
+        "title": "Create or revise a workflow draft",
+        "body": "Continue a session, inspect revisions, edit raw spec, and publish only when lint passes."
+      },
+      "catalog": {
+        "eyebrow": "Workflow Catalog",
+        "title": "Inspect registered versions",
+        "body": "Browse cards, graph, spec, and lint from one canonical workflow version."
+      },
+      "workspace": {
+        "eyebrow": "Run Workspace",
+        "title": "Trace callbacks, artifacts, and rounds",
+        "body": "Use the run workspace to inspect node rounds, context payloads, and intervention actions."
+      },
+      "settings": {
+        "eyebrow": "Settings",
+        "title": "See resolved config provenance",
+        "body": "Compare the effective command templates, storage paths, and runtime guard defaults."
+      }
+    }
+  },
+  "sidebar": {
+    "title": "Pipeliner",
+    "subtitle": "Workflow Studio",
+    "description": "Inspect workflow specs, author drafts, debug runs, and track resolved config.",
+    "nav": {
+      "dashboard": "Dashboard",
+      "authoring": "Authoring",
+      "workflows": "Workflows",
+      "runs": "Runs",
+      "attention": "Attention Queue",
+      "settings": "Settings"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Resolved configuration + provenance",
+    "description": "Developers can see the current effective values and whether they come from 'default' or 'env'.",
+    "sections": {
+      "commandTemplates": "Command templates",
+      "storageDatabase": "Storage + database",
+      "runtimeGuards": "Runtime guards",
+      "providerBindings": "Provider bindings",
+      "observedSkills": "Observed skills",
+      "rawSnapshot": "Raw snapshot"
+    },
+    "labels": {
+      "executor": "Executor",
+      "validator": "Validator",
+      "storageBackend": "Storage backend",
+      "dataDir": "Data dir",
+      "runRoot": "Run root",
+      "databaseUrl": "Database URL",
+      "databasePath": "Database path",
+      "defaultTimeout": "Default timeout",
+      "maxReworkRounds": "Max rework rounds",
+      "blockedRequiresManual": "Blocked requires manual",
+      "failureRequiresManual": "Failure requires manual"
+    },
+    "language": {
+      "title": "Language",
+      "description": "Choose your preferred language for the interface.",
+      "current": "Current language",
+      "options": {
+        "en": "English",
+        "zh": "中文 (Chinese)"
+      }
+    },
+    "loading": "Loading settings snapshot..."
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "start": "Start",
+    "retry": "Retry",
+    "stop": "Stop",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "back": "Back",
+    "next": "Next",
+    "close": "Close",
+    "open": "Open",
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "refresh": "Refresh"
+  },
+  "authoring": {
+    "title": "Authoring",
+    "subtitle": "Conversation + canonical draft",
+    "description": "Intent brief, revision history, raw spec and publish gate are all in one workspace.",
+    "newSession": "New Authoring Session",
+    "continueSession": "Continue Session",
+    "createSession": "Create Session",
+    "saveDraft": "Save Raw Draft",
+    "continue": "Continue Session",
+    "publish": "Publish Latest Revision",
+    "sessions": "Sessions",
+    "messages": "Messages",
+    "revisionHistory": "Revision History",
+    "revision": "Revision",
+    "canonicalSpec": "Canonical workflow spec",
+    "instruction": "Authoring instruction",
+    "placeholder": {
+      "sessionTitle": "Session title",
+      "intentBrief": "Intent brief"
+    },
+    "summary": {
+      "sessions": "Sessions",
+      "revisions": "Revisions",
+      "blockingIssues": "Blocking Issues"
+    },
+    "status": {
+      "ready": "ready",
+      "blocking": "blocking"
+    },
+    "draft": {
+      "title": "Draft",
+      "save": "Save Draft",
+      "publish": "Publish",
+      "lint": "Lint Check"
+    },
+    "empty": {
+      "noSession": "No session selected",
+      "selectSession": "Create or select a session from the left first.",
+      "workspaceHint": "Select a session to view synchronized cards / graph / spec / lint views."
+    },
+    "published": "Published as",
+    "selectedSession": "Selected Session",
+    "updated": "Updated",
+    "total": "{count} total",
+    "revisionInfo": "Revision {revision} · updated {time}"
+  },
+  "workflows": {
+    "title": "Workflows",
+    "list": "Workflow List",
+    "details": "Workflow Details",
+    "version": "Version",
+    "versions": "Workflow versions",
+    "startRun": "Start Run",
+    "noWorkflows": "No workflows found",
+    "backToWorkflows": "Back to workflows",
+    "backToVersions": "Back to versions",
+    "description": "Select a version to enter the cards / graph / spec / lint synchronized workspace.",
+    "selectVersionHint": "Select a version to enter the cards / graph / spec / lint workspace.",
+    "created": "Created",
+    "createdAt": "Created {date}",
+    "schema": "Schema",
+    "warnings": "Warnings",
+    "noWarnings": "No warnings",
+    "workspace": "Workflow workspace",
+    "loadingWorkspace": "Loading workflow workspace...",
+    "runInputs": "Run inputs (JSON)",
+    "launchRun": "Launch Run",
+    "cancel": "Cancel",
+    "jsonObjectRequired": "Input must be a JSON object",
+    "parseFailed": "Failed to parse input"
+  },
+  "runs": {
+    "title": "Runs",
+    "list": "Run List",
+    "details": "Run Details",
+    "status": "Status",
+    "timeline": "Timeline",
+    "callbacks": "Callbacks",
+    "artifacts": "Artifacts",
+    "context": "Context",
+    "logs": "Logs",
+    "noRuns": "No runs found",
+    "loading": "Loading run workspace...",
+    "backToRuns": "Back to runs",
+    "workspace": "Run workspace",
+    "stopRun": "Stop Run",
+    "retrySelectedNode": "Retry Selected Node",
+    "runHealth": "Run health",
+    "stopReason": "Stop reason",
+    "stopReasonLabel": "Stop reason: {reason}",
+    "nodesInLatestState": "Nodes in latest state",
+    "none": "None",
+    "noStopReason": "No stop reason",
+    "waitingFor": "Waiting {role}",
+    "round": "Round {round}",
+    "inspectRawContext": "Inspect raw context",
+    "logRefs": "Log refs",
+    "noArtifactsInRound": "No artifacts published in this round.",
+    "noLogsInRound": "No logs recorded for this round.",
+    "noArtifactsRegistered": "No artifacts registered yet.",
+    "inspectorTitle": "Run Inspector",
+    "tabs": {
+      "timeline": "Timeline",
+      "nodeDetail": "Node Detail",
+      "artifacts": "Artifacts",
+      "raw": "Raw"
+    }
+  },
+  "workflow": {
+    "tabs": {
+      "graph": "Graph",
+      "cards": "Cards",
+      "spec": "Spec",
+      "lint": "Lint"
+    },
+    "lintTab": "Lint ({count})",
+    "lint": {
+      "blockingIssues": "Blocking Issues",
+      "warnings": "Warnings",
+      "noBlockingIssues": "No blocking issues.",
+      "noWarnings": "No warnings found."
+    },
+    "inspector": {
+      "title": "Raw Inspector"
+    },
+    "card": {
+      "archetype": "workflow-node",
+      "dependsOn": "Depends On",
+      "rootNode": "Root node",
+      "executor": "Executor",
+      "validators": "Validators",
+      "doneMeans": "Done Means"
+    }
+  },
+  "status": {
+    "completed": "Completed",
+    "running": "Running",
+    "needs_attention": "Needs Attention",
+    "failed": "Failed",
+    "blocked": "Blocked",
+    "waiting_executor": "Waiting Executor",
+    "waiting_validator": "Waiting Validator",
+    "revise": "Revise",
+    "stopped": "Stopped",
+    "timed_out": "Timed Out",
+    "rework_limit": "Rework Limit",
+    "published": "Published",
+    "active": "Active",
+    "unknown": "Unknown",
+    "ready": "Ready",
+    "reported": "Reported"
+  },
+  "attention": {
+    "title": "Attention Queue",
+    "description": "Runs that need manual intervention",
+    "status": {
+      "blocked": "Blocked",
+      "failed": "Failed",
+      "timedOut": "Timed Out",
+      "reworkLimit": "Rework Limit"
+    },
+    "actions": {
+      "retry": "Retry",
+      "stop": "Stop"
+    }
+  }
+}

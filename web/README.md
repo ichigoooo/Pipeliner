@@ -34,3 +34,46 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Internationalization (i18n)
+
+This project supports multiple languages using `next-intl`.
+
+### Supported Languages
+
+- **English** (`en`) - Default
+- **中文** (`zh`) - Chinese
+
+### Adding Translations
+
+Translation files are located in `src/i18n/messages/`:
+
+- `en.json` - English translations
+- `zh.json` - Chinese translations
+
+To add new translations:
+
+1. Add the translation key to both `en.json` and `zh.json` files
+2. Use the `useTranslations` hook in your component:
+
+```tsx
+import { useTranslations } from 'next-intl';
+
+export function MyComponent() {
+  const t = useTranslations('myNamespace');
+  return <h1>{t('myKey')}</h1>;
+}
+```
+
+### Translation Key Naming Convention
+
+Use hierarchical naming with dots: `page.component.element`
+
+Examples:
+- `settings.language.title`
+- `sidebar.nav.workflows`
+- `common.save`
+
+### Language Switching
+
+Users can change language in the Settings page. The preference is stored in localStorage and persists across sessions.

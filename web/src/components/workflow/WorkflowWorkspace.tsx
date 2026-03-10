@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Edge, Node } from '@xyflow/react';
+import { useTranslations } from 'next-intl';
 import { TabList } from '@/components/ui/TabList';
 import { InspectorPanel } from '@/components/ui/InspectorPanel';
 import { WorkflowGraph } from '@/components/workflow/WorkflowGraph';
@@ -25,10 +26,11 @@ export function WorkflowWorkspace({
   lintWarnings,
   lintErrors = [],
 }: WorkflowWorkspaceProps) {
-  const lintTab = `Lint (${lintWarnings.length + lintErrors.length})`;
-  const [activeTab, setActiveTab] = useState('Graph');
+  const t = useTranslations('workflow');
+  const lintTab = t('lintTab', { count: lintWarnings.length + lintErrors.length });
+  const [activeTab, setActiveTab] = useState(t('tabs.graph'));
   const [selectedNodeData, setSelectedNodeData] = useState<unknown>(null);
-  const tabs = ['Graph', 'Cards', 'Spec', lintTab];
+  const tabs = [t('tabs.graph'), t('tabs.cards'), t('tabs.spec'), lintTab];
 
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
     setSelectedNodeData(node.data?.spec || node.data || null);
@@ -45,7 +47,7 @@ export function WorkflowWorkspace({
       </div>
 
       <div className="relative flex-1 overflow-hidden bg-stone-50">
-        {activeTab === 'Graph' && (
+        {activeTab === t('tabs.graph') && (
           <WorkflowGraph
             initialNodes={nodes}
             initialEdges={edges}
@@ -54,7 +56,7 @@ export function WorkflowWorkspace({
           />
         )}
 
-        {activeTab === 'Cards' && (
+        {activeTab === t('tabs.cards') && (
           <div className="grid h-full gap-4 overflow-auto p-4 xl:grid-cols-2">
             {cards.map((card) => (
               <button
@@ -77,19 +79,19 @@ export function WorkflowWorkspace({
                 <p className="text-sm leading-6 text-stone-600">{card.purpose}</p>
                 <dl className="mt-4 grid gap-3 text-sm text-stone-700">
                   <div>
-                    <dt className="font-medium text-stone-500">Depends On</dt>
-                    <dd>{card.depends_on.length ? card.depends_on.join(', ') : 'Root node'}</dd>
+                    <dt className="font-medium text-stone-500">{t('card.dependsOn')}</dt>
+                    <dd>{card.depends_on.length ? card.depends_on.join(', ') : t('card.rootNode')}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-stone-500">Executor</dt>
+                    <dt className="font-medium text-stone-500">{t('card.executor')}</dt>
                     <dd>{card.executor_skill || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-stone-500">Validators</dt>
+                    <dt className="font-medium text-stone-500">{t('card.validators')}</dt>
                     <dd>{card.validator_ids.filter(Boolean).join(', ') || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-stone-500">Done Means</dt>
+                    <dt className="font-medium text-stone-500">{t('card.doneMeans')}</dt>
                     <dd>{card.done_means || '-'}</dd>
                   </div>
                 </dl>
@@ -98,15 +100,15 @@ export function WorkflowWorkspace({
           </div>
         )}
 
-        {activeTab === 'Spec' && <WorkflowSpecView spec={spec} />}
+        {activeTab === t('tabs.spec') && <WorkflowSpecView spec={spec} />}
 
         {activeTab === lintTab && (
           <div className="grid h-full gap-6 overflow-auto p-4 lg:grid-cols-2">
             <section className="rounded-3xl border border-rose-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-stone-900">Blocking Issues</h3>
+              <h3 className="text-base font-semibold text-stone-900">{t('lint.blockingIssues')}</h3>
               <div className="mt-4 space-y-3">
                 {lintErrors.length === 0 ? (
-                  <p className="text-sm text-stone-500">No blocking issues.</p>
+                  <p className="text-sm text-stone-500">{t('lint.noBlockingIssues')}</p>
                 ) : (
                   lintErrors.map((message) => (
                     <div
@@ -120,10 +122,10 @@ export function WorkflowWorkspace({
               </div>
             </section>
             <section className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-stone-900">Warnings</h3>
+              <h3 className="text-base font-semibold text-stone-900">{t('lint.warnings')}</h3>
               <div className="mt-4 space-y-3">
                 {lintWarnings.length === 0 ? (
-                  <p className="text-sm text-stone-500">No warnings found.</p>
+                  <p className="text-sm text-stone-500">{t('lint.noWarnings')}</p>
                 ) : (
                   lintWarnings.map((message) => (
                     <div
@@ -140,10 +142,10 @@ export function WorkflowWorkspace({
         )}
       </div>
 
-      {selectedNodeData && (
+      {selectedNodeData !== null && (
         <div className="absolute inset-y-0 right-0 z-10 border-l border-stone-200 shadow-lg">
           <InspectorPanel
-            title="Raw Inspector"
+            title={t('inspector.title')}
             data={selectedNodeData}
             onClose={() => setSelectedNodeData(null)}
           />

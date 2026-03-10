@@ -68,6 +68,33 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 
 ## 构建与启动
 
+### 一键启动（推荐）
+
+先准备环境变量文件：
+
+```bash
+cp ".env.example" ".env"
+cp "web/.env.local.example" "web/.env.local"
+chmod +x "scripts/dev-up.sh"
+```
+
+然后直接启动前后端：
+
+```bash
+"./scripts/dev-up.sh"
+```
+
+脚本会自动执行以下动作：
+- 加载根目录 `.env` 与 `web/.env.local`
+- 执行 `uv sync`
+- 执行数据库迁移与 `db-init`
+- 启动后端 `FastAPI`
+- 启动前端 `Next.js`
+
+默认地址：
+- 后端：`http://127.0.0.1:8000`
+- 前端：`http://127.0.0.1:3000`
+
 ### 后端（API + Runtime）
 
 ```bash
@@ -212,4 +239,17 @@ export PIPELINER_CLAUDE_VALIDATOR_CMD="claude -p --permission-mode bypassPermiss
 
 ```bash
 export PIPELINER_API_BASE_URL="http://127.0.0.1:8000"
+```
+
+建议直接复制模板后按需修改：
+
+```bash
+cp ".env.example" ".env"
+cp "web/.env.local.example" "web/.env.local"
+```
+
+如果需要自定义数据库，再额外设置：
+
+```bash
+export PIPELINER_DATABASE_URL="sqlite:////absolute/path/to/pipeliner.db"
 ```

@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
 import { classNames } from '@/lib/format';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -17,8 +20,9 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export function StatusBadge({ value }: { value: string | null | undefined }) {
-  const label = value || 'unknown';
-  const normalized = label.toLowerCase();
+  const t = useTranslations('status');
+  const normalized = (value || 'unknown').toLowerCase();
+  const label = t(normalized as never) || value || 'Unknown';
 
   return (
     <span

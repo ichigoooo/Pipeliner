@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 
 interface InspectorPanelProps {
     title: string;
@@ -9,13 +10,14 @@ interface InspectorPanelProps {
 }
 
 export function InspectorPanel({ title, data, onClose }: InspectorPanelProps) {
+  const t = useTranslations('common');
   return (
     <div className="flex h-full w-[360px] flex-col bg-stone-950 text-white">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <h3 className="text-sm font-medium">{title}</h3>
         {onClose ? (
           <button onClick={onClose} className="rounded-full bg-white/10 p-2 text-stone-300 transition hover:bg-white/20 hover:text-white">
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('close')}</span>
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path
                 fillRule="evenodd"

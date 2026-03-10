@@ -1,13 +1,23 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
+import { NextIntlClientProvider } from 'next-intl';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
+import enMessages from '@/i18n/messages/en.json';
 
 vi.mock('@/components/workflow/WorkflowGraph', () => ({
   WorkflowGraph: ({ initialNodes }: { initialNodes: Array<{ id: string }> }) => (
     <div data-testid="workflow-graph">Graph nodes: {initialNodes.length}</div>
   ),
 }));
+
+const renderWithI18n = (ui: React.ReactElement) => {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>
+  );
+};
 
 describe('WorkflowWorkspace', () => {
   it('renders synchronized views and raw inspector', () => {
@@ -35,7 +45,7 @@ describe('WorkflowWorkspace', () => {
       },
     ];
 
-    render(
+    renderWithI18n(
       <WorkflowWorkspace
         spec={spec}
         cards={cards}

@@ -2,8 +2,10 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
+import { NextIntlClientProvider } from 'next-intl';
 import SettingsPage from '@/app/(studio)/settings/page';
 import { api } from '@/lib/api';
+import enMessages from '@/i18n/messages/en.json';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -21,7 +23,11 @@ const renderWithClient = (ui: React.ReactElement) => {
       },
     },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+    </NextIntlClientProvider>
+  );
 };
 
 describe('SettingsPage', () => {

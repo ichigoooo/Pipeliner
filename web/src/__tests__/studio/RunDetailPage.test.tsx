@@ -1,9 +1,11 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NextIntlClientProvider } from 'next-intl';
 import { vi } from 'vitest';
-import RunDetailPage from '@/app/(studio)/runs/[run_id]/page';
+import { RunDetailClient } from '@/app/(studio)/runs/[run_id]/RunDetailClient';
 import { api } from '@/lib/api';
+import enMessages from '@/i18n/messages/en.json';
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -33,7 +35,11 @@ const renderWithClient = (ui: React.ReactElement) => {
       },
     },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+    </NextIntlClientProvider>
+  );
 };
 
 describe('RunDetailPage', () => {
@@ -109,7 +115,7 @@ describe('RunDetailPage', () => {
       status: 'waiting_executor',
     });
 
-    renderWithClient(<RunDetailPage params={{ run_id: 'run_1' }} />);
+    renderWithClient(<RunDetailClient runId="run_1" />);
 
     expect(await screen.findByText('Run workspace')).toBeInTheDocument();
     expect(screen.getAllByText('draft_article').length).toBeGreaterThan(0);

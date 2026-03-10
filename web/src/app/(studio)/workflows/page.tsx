@@ -2,10 +2,13 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
 
 export default function WorkflowsPage() {
+  const t = useTranslations('workflows');
+  const tc = useTranslations('common');
   const workflowsQuery = useQuery({
     queryKey: ['workflows'],
     queryFn: api.listWorkflows,
@@ -17,17 +20,17 @@ export default function WorkflowsPage() {
     <div className="p-6 lg:p-8">
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">Workflows</p>
-          <h1 className="mt-3 text-3xl font-semibold text-stone-900">Published workflow catalog</h1>
+          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+          <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('list')}</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600">
-            版本列表、lint 信号和 workflow projections 都从 canonical registered spec 派生。
+            {t('noWorkflows')}
           </p>
         </div>
         <Link
           href="/authoring"
           className="rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
         >
-          Open Authoring
+          {tc('open')}
         </Link>
       </div>
 
@@ -35,9 +38,9 @@ export default function WorkflowsPage() {
         <table className="min-w-full divide-y divide-stone-200">
           <thead className="bg-stone-50">
             <tr className="text-left text-xs uppercase tracking-[0.22em] text-stone-500">
-              <th className="px-6 py-4">Workflow</th>
+              <th className="px-6 py-4">{t('title')}</th>
               <th className="px-6 py-4">Purpose</th>
-              <th className="px-6 py-4">Versions</th>
+              <th className="px-6 py-4">{t('version')}</th>
               <th className="px-6 py-4">Latest</th>
             </tr>
           </thead>
@@ -60,7 +63,7 @@ export default function WorkflowsPage() {
                 <td className="px-6 py-5 text-sm text-stone-700">
                   <div>{workflow.latest_version || '-'}</div>
                   <div className="mt-1 text-xs text-stone-500">
-                    Updated {formatTimestamp(workflow.updated_at)}
+                    {tc('refresh')} {formatTimestamp(workflow.updated_at)}
                   </div>
                 </td>
               </tr>
@@ -68,7 +71,7 @@ export default function WorkflowsPage() {
             {workflows.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-12 text-center text-sm text-stone-500">
-                  暂无已发布 workflow。先到 authoring 中发布一个 draft。
+                  {t('noWorkflows')}
                 </td>
               </tr>
             ) : null}

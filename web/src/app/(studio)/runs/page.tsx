@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function RunsPage() {
+  const t = useTranslations('runs');
   const runsQuery = useQuery({
     queryKey: ['runs'],
     queryFn: api.listRuns,
@@ -18,10 +20,10 @@ export default function RunsPage() {
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-8">
-        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">Runs</p>
-        <h1 className="mt-3 text-3xl font-semibold text-stone-900">Execution monitor</h1>
+        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+        <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('list')}</h1>
         <p className="mt-3 text-sm leading-6 text-stone-600">
-          轮询显示当前 run 状态、attention 节点数量和调试入口。
+          {t('noRuns')}
         </p>
       </div>
 
@@ -37,7 +39,7 @@ export default function RunsPage() {
                 <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{run.workflow_id}</p>
                 <h2 className="mt-2 text-xl font-semibold text-stone-900">{run.run_id}</h2>
                 <p className="mt-3 text-sm text-stone-600">
-                  Version {run.version} · created {formatTimestamp(run.created_at)}
+                  {t('version')} {run.version} · {t('status')} {formatTimestamp(run.created_at)}
                 </p>
               </div>
               <StatusBadge value={run.status} />

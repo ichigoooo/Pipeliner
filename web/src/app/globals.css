@@ -7,6 +7,8 @@
   --surface-muted: #fafaf9;
   --accent: #f59e0b;
   --ink-soft: #57534e;
+  --font-space-grotesk: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-ibm-plex-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
 }
 
 @theme inline {

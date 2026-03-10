@@ -46,10 +46,8 @@ class Settings:
     def __post_init__(self) -> None:
         self.run_root = self.data_dir / "runs"
         self.database_path = self.data_dir / "pipeliner.db"
-        self.database_url = os.getenv(
-            "PIPELINER_DATABASE_URL",
-            f"sqlite:///{self.database_path}",
-        )
+        database_url = os.getenv("PIPELINER_DATABASE_URL")
+        self.database_url = database_url or f"sqlite:///{self.database_path}"
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)

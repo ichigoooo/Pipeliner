@@ -1,8 +1,11 @@
 'use client';
 
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { api, SettingValue } from '@/lib/api';
 import { prettyJson } from '@/lib/format';
+import { LanguageSelector } from './components/LanguageSelector';
 
 function SettingRow<T>({ label, setting }: { label: string; setting: SettingValue<T> }) {
   return (
@@ -14,7 +17,17 @@ function SettingRow<T>({ label, setting }: { label: string; setting: SettingValu
   );
 }
 
+function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">{title}</h2>
+      <div className="mt-4 space-y-3">{children}</div>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
+  const t = useTranslations('settings');
   const settingsQuery = useQuery({
     queryKey: ['settings'],
     queryFn: api.getSettings,
@@ -25,7 +38,7 @@ export default function SettingsPage() {
   if (!settings) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-stone-500">
-        Loading settings snapshot...
+        {t('loading')}
       </div>
     );
   }
@@ -33,97 +46,74 @@ export default function SettingsPage() {
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-8">
-        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">Settings</p>
-        <h1 className="mt-3 text-3xl font-semibold text-stone-900">Resolved configuration + provenance</h1>
-        <p className="mt-3 text-sm leading-6 text-stone-600">
-          开发者可以直接看到当前生效值，以及它来自 `default` 还是 `env`。
-        </p>
+        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+        <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('subtitle')}</h1>
+        <p className="mt-3 text-sm leading-6 text-stone-600">{t('description')}</p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
-          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
-              Command templates
-            </h2>
-            <div className="mt-4 space-y-3">
-              <SettingRow label="Executor" setting={settings.executor_command} />
-              <SettingRow label="Validator" setting={settings.validator_command} />
-            </div>
-          </section>
+          <SettingsSection title={t('sections.commandTemplates')}>
+            <SettingRow label={t('labels.executor')} setting={settings.executor_command} />
+            <SettingRow label={t('labels.validator')} setting={settings.validator_command} />
+          </SettingsSection>
 
-          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
-              Storage + database
-            </h2>
-            <div className="mt-4 space-y-3">
-              <SettingRow label="Storage backend" setting={settings.storage.backend} />
-              <SettingRow label="Data dir" setting={settings.storage.data_dir} />
-              <SettingRow label="Run root" setting={settings.storage.run_root} />
-              <SettingRow label="Database URL" setting={settings.database.url} />
-              <SettingRow label="Database path" setting={settings.database.path} />
-            </div>
-          </section>
+          <SettingsSection title={t('sections.storageDatabase')}>
+            <SettingRow label={t('labels.storageBackend')} setting={settings.storage.backend} />
+            <SettingRow label={t('labels.dataDir')} setting={settings.storage.data_dir} />
+            <SettingRow label={t('labels.runRoot')} setting={settings.storage.run_root} />
+            <SettingRow label={t('labels.databaseUrl')} setting={settings.database.url} />
+            <SettingRow label={t('labels.databasePath')} setting={settings.database.path} />
+          </SettingsSection>
 
-          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
-              Runtime guards
-            </h2>
-            <div className="mt-4 space-y-3">
-              <SettingRow label="Default timeout" setting={settings.runtime_guards.default_timeout} />
-              <SettingRow
-                label="Max rework rounds"
-                setting={settings.runtime_guards.default_max_rework_rounds}
-              />
-              <SettingRow
-                label="Blocked requires manual"
-                setting={settings.runtime_guards.blocked_requires_manual}
-              />
-              <SettingRow
-                label="Failure requires manual"
-                setting={settings.runtime_guards.failure_requires_manual}
-              />
-            </div>
-          </section>
+          <SettingsSection title={t('sections.runtimeGuards')}>
+            <SettingRow label={t('labels.defaultTimeout')} setting={settings.runtime_guards.default_timeout} />
+            <SettingRow
+              label={t('labels.maxReworkRounds')}
+              setting={settings.runtime_guards.default_max_rework_rounds}
+            />
+            <SettingRow
+              label={t('labels.blockedRequiresManual')}
+              setting={settings.runtime_guards.blocked_requires_manual}
+            />
+            <SettingRow
+              label={t('labels.failureRequiresManual')}
+              setting={settings.runtime_guards.failure_requires_manual}
+            />
+          </SettingsSection>
+
+          <SettingsSection title={t('language.title')}>
+            <LanguageSelector />
+          </SettingsSection>
         </div>
 
         <div className="space-y-4">
-          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
-              Provider bindings
-            </h2>
-            <div className="mt-4 space-y-3">
-              {settings.providers.map((provider) => (
-                <div key={`${provider.provider}-${provider.role}`} className="rounded-3xl bg-stone-50 p-4 text-sm">
-                  <p className="font-medium text-stone-900">
-                    {provider.provider} / {provider.role}
-                  </p>
-                  <p className="mt-2 break-all text-stone-600">{provider.command_template.value}</p>
-                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-500">
-                    {provider.command_template.source}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
+          <SettingsSection title={t('sections.providerBindings')}>
+            {settings.providers.map((provider) => (
+              <div key={`${provider.provider}-${provider.role}`} className="rounded-3xl bg-stone-50 p-4 text-sm">
+                <p className="font-medium text-stone-900">
+                  {provider.provider} / {provider.role}
+                </p>
+                <p className="mt-2 break-all text-stone-600">{provider.command_template.value}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-500">
+                  {provider.command_template.source}
+                </p>
+              </div>
+            ))}
+          </SettingsSection>
 
-          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
-              Observed skills
-            </h2>
-            <div className="mt-4 space-y-3">
-              {settings.skills.map((skill) => (
-                <div key={skill.skill} className="rounded-3xl border border-stone-200 px-4 py-3 text-sm">
-                  <p className="font-medium text-stone-900">{skill.skill}</p>
-                  <p className="mt-2 text-stone-600">{skill.used_by.join(', ')}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+          <SettingsSection title={t('sections.observedSkills')}>
+            {settings.skills.map((skill) => (
+              <div key={skill.skill} className="rounded-3xl border border-stone-200 px-4 py-3 text-sm">
+                <p className="font-medium text-stone-900">{skill.skill}</p>
+                <p className="mt-2 text-stone-600">{skill.used_by.join(', ')}</p>
+              </div>
+            ))}
+          </SettingsSection>
 
           <section className="rounded-[2rem] border border-stone-200 bg-stone-950 p-5 shadow-sm">
             <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-400">
-              Raw snapshot
+              {t('sections.rawSnapshot')}
             </h2>
             <pre className="mt-4 overflow-auto text-xs leading-6 text-stone-100">
               {prettyJson(settings)}

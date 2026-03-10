@@ -2,11 +2,14 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function AttentionQueuePage() {
+  const t = useTranslations('attention');
+  const tc = useTranslations('common');
   const attentionQuery = useQuery({
     queryKey: ['attention-runs'],
     queryFn: api.listAttentionRuns,
@@ -18,11 +21,8 @@ export default function AttentionQueuePage() {
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-8">
-        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">Attention queue</p>
-        <h1 className="mt-3 text-3xl font-semibold text-stone-900">Runs needing manual handling</h1>
-        <p className="mt-3 text-sm leading-6 text-stone-600">
-          blocked、failed、timed out 和 rework limit 的运行会持续出现在这里。
-        </p>
+        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+        <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('description')}</h1>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -37,22 +37,22 @@ export default function AttentionQueuePage() {
                 <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{run.workflow_id}</p>
                 <h2 className="mt-2 text-xl font-semibold text-stone-900">{run.run_id}</h2>
                 <p className="mt-3 text-sm text-stone-600">
-                  Version {run.version} · updated {formatTimestamp(run.updated_at)}
+                  {t('status.blocked')} {run.version}
                 </p>
               </div>
               <StatusBadge value={run.status} />
             </div>
             <p className="mt-4 rounded-3xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {run.stop_reason || 'Needs manual intervention'}
+              {run.stop_reason || t('description')}
             </p>
             <p className="mt-3 text-xs uppercase tracking-[0.18em] text-stone-500">
-              Available actions: {run.actions.join(', ')}
+              {tc('refresh')}: {run.actions.join(', ')}
             </p>
           </Link>
         ))}
         {runs.length === 0 ? (
           <div className="rounded-[2rem] border border-dashed border-stone-300 bg-white p-12 text-center text-sm text-stone-500">
-            当前没有需要处理的 attention run。
+            {t('title')}
           </div>
         ) : null}
       </div>

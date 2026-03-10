@@ -3,8 +3,11 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useTranslations } from 'next-intl';
 
 export default function DashboardPage() {
+  const t = useTranslations('dashboard');
+
   const workflowsQuery = useQuery({ queryKey: ['dashboard-workflows'], queryFn: api.listWorkflows });
   const runsQuery = useQuery({
     queryKey: ['dashboard-runs'],
@@ -18,49 +21,49 @@ export default function DashboardPage() {
   });
 
   const stats = [
-    { label: 'Published Workflows', value: workflowsQuery.data?.workflows.length ?? 0 },
-    { label: 'Runs', value: runsQuery.data?.runs.length ?? 0 },
-    { label: 'Need Attention', value: attentionQuery.data?.runs.length ?? 0 },
+    { label: t('stats.publishedWorkflows'), value: workflowsQuery.data?.workflows.length ?? 0 },
+    { label: t('stats.runs'), value: runsQuery.data?.runs.length ?? 0 },
+    { label: t('stats.needAttention'), value: attentionQuery.data?.runs.length ?? 0 },
   ];
 
   const shortcuts = [
     {
       href: '/authoring',
-      eyebrow: 'Authoring',
-      title: 'Create or revise a workflow draft',
-      body: 'Continue a session, inspect revisions, edit raw spec, and publish only when lint passes.',
+      eyebrow: t('shortcuts.authoring.eyebrow'),
+      title: t('shortcuts.authoring.title'),
+      body: t('shortcuts.authoring.body'),
     },
     {
       href: '/workflows',
-      eyebrow: 'Workflow Catalog',
-      title: 'Inspect registered versions',
-      body: 'Browse cards, graph, spec, and lint from one canonical workflow version.',
+      eyebrow: t('shortcuts.catalog.eyebrow'),
+      title: t('shortcuts.catalog.title'),
+      body: t('shortcuts.catalog.body'),
     },
     {
       href: '/runs',
-      eyebrow: 'Run Workspace',
-      title: 'Trace callbacks, artifacts, and rounds',
-      body: 'Use the run workspace to inspect node rounds, context payloads, and intervention actions.',
+      eyebrow: t('shortcuts.workspace.eyebrow'),
+      title: t('shortcuts.workspace.title'),
+      body: t('shortcuts.workspace.body'),
     },
     {
       href: '/settings',
-      eyebrow: 'Settings',
-      title: 'See resolved config provenance',
-      body: 'Compare the effective command templates, storage paths, and runtime guard defaults.',
+      eyebrow: t('shortcuts.settings.eyebrow'),
+      title: t('shortcuts.settings.title'),
+      body: t('shortcuts.settings.body'),
     },
   ];
 
   return (
     <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.18),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#f5f5f4_100%)] p-6 lg:p-8">
       <section className="rounded-[2.5rem] border border-stone-200 bg-white/90 p-8 shadow-xl backdrop-blur">
-        <p className="text-xs uppercase tracking-[0.3em] text-stone-500">Workflow Studio</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-stone-500">{t('header')}</p>
         <div className="mt-4 grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_360px]">
           <div>
             <h1 className="max-w-3xl text-4xl font-semibold leading-tight text-stone-950">
-              Developer-first control surface for authoring, runs, attention handling, and config provenance.
+              {t('title')}
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-600">
-              所有视图都围绕同一份 canonical workflow spec 派生，不再让 graph、cards 或调试面板成为第二份真源。
+              {t('subtitle')}
             </p>
           </div>
           <div className="grid gap-3">

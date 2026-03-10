@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { api, AuthoringDraft, AuthoringSession } from '@/lib/api';
@@ -13,6 +14,7 @@ function parseSpec(value: string) {
 }
 
 export function AuthoringStudio() {
+  const t = useTranslations('authoring');
   const queryClient = useQueryClient();
   const sessionsQuery = useQuery({
     queryKey: ['authoring-sessions'],
@@ -124,19 +126,19 @@ export function AuthoringStudio() {
   const summary = useMemo(
     () => [
       {
-        label: 'Sessions',
+        label: t('summary.sessions'),
         value: sessions.length,
       },
       {
-        label: 'Revisions',
+        label: t('summary.revisions'),
         value: draftList.length,
       },
       {
-        label: 'Blocking Issues',
+        label: t('summary.blockingIssues'),
         value: activeDraft?.lint_report.errors.length ?? 0,
       },
     ],
-    [activeDraft?.lint_report.errors.length, draftList.length, sessions.length]
+    [activeDraft?.lint_report.errors.length, draftList.length, sessions.length, t]
   );
 
   const submitCreateSession = async (event: FormEvent) => {
@@ -151,7 +153,7 @@ export function AuthoringStudio() {
 
   const submitDraft = async (mode: 'save' | 'continue') => {
     if (!selectedSessionId) {
-      setError('请先选择或创建一个 authoring session。');
+      setError(t('empty.selectSession'));
       return;
     }
 
@@ -180,10 +182,10 @@ export function AuthoringStudio() {
     <div className="grid h-full gap-4 p-4 xl:grid-cols-[320px_minmax(0,420px)_minmax(0,1fr)]">
       <section className="flex min-h-0 flex-col rounded-[2rem] border border-stone-200 bg-stone-950 p-5 text-white shadow-xl">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Authoring</p>
-          <h1 className="mt-3 text-2xl font-semibold">Conversation + canonical draft</h1>
+          <p className="text-xs uppercase tracking-[0.3em] text-stone-400">{t('title')}</p>
+          <h1 className="mt-3 text-2xl font-semibold">{t('subtitle')}</h1>
           <p className="mt-3 text-sm leading-6 text-stone-300">
-            Intent brief、revision history、raw spec 和 publish gate 都在同一工作区里。
+            {t('description')}
           </p>
         </div>
 
@@ -201,28 +203,28 @@ export function AuthoringStudio() {
             className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm outline-none placeholder:text-stone-500"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Session title"
+            placeholder={t('placeholder.sessionTitle')}
           />
           <textarea
             className="min-h-28 w-full rounded-3xl border border-white/10 bg-white/10 px-4 py-3 text-sm outline-none placeholder:text-stone-500"
             value={intentBrief}
             onChange={(event) => setIntentBrief(event.target.value)}
-            placeholder="Intent brief"
+            placeholder={t('placeholder.intentBrief')}
           />
           <button
             type="submit"
             className="w-full rounded-full bg-amber-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
           >
-            Create Session
+            {t('createSession')}
           </button>
         </form>
 
         <div className="mt-6 min-h-0 flex-1 overflow-auto">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-400">
-              Sessions
+              {t('sessions')}
             </h2>
-            <span className="text-xs text-stone-500">{sessions.length} total</span>
+            <span className="text-xs text-stone-500">{t('total', { count: sessions.length })}</span>
           </div>
           <div className="space-y-3">
             {sessions.map((session: AuthoringSession) => (
@@ -243,7 +245,7 @@ export function AuthoringStudio() {
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-stone-400">
-                  Updated {formatTimestamp(session.updated_at)}
+                  {t('updated')} {formatTimestamp(session.updated_at)}
                 </p>
               </button>
             ))}
@@ -255,17 +257,17 @@ export function AuthoringStudio() {
         <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">Selected Session</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('selectedSession')}</p>
               <h2 className="mt-2 text-xl font-semibold text-stone-900">
-                {currentSession?.title || 'No session selected'}
+                {currentSession?.title || t('empty.noSession')}
               </h2>
               <p className="mt-3 text-sm leading-6 text-stone-600">
-                {currentSession?.intent_brief || '先从左侧创建或选择一个 session。'}
+                {currentSession?.intent_brief || t('empty.selectSession')}
               </p>
             </div>
             {currentSession?.published_workflow_id ? (
               <div className="rounded-3xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                Published as {currentSession.published_workflow_id}@{currentSession.published_version}
+                {t('published')} {currentSession.published_workflow_id}@{currentSession.published_version}
               </div>
             ) : null}
           </div>
@@ -273,7 +275,7 @@ export function AuthoringStudio() {
 
         <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
           <label className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
-            Authoring instruction
+            {t('instruction')}
           </label>
           <textarea
             className="mt-3 min-h-24 w-full rounded-3xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-900 outline-none"
@@ -286,14 +288,14 @@ export function AuthoringStudio() {
               onClick={() => submitDraft('save')}
               className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
             >
-              Save Raw Draft
+              {t('saveDraft')}
             </button>
             <button
               type="button"
               onClick={() => submitDraft('continue')}
               className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
             >
-              Continue Session
+              {t('continue')}
             </button>
             <button
               type="button"
@@ -305,7 +307,7 @@ export function AuthoringStudio() {
               }
               className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200"
             >
-              Publish Latest Revision
+              {t('publish')}
             </button>
           </div>
           {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
@@ -315,9 +317,9 @@ export function AuthoringStudio() {
           <div className="flex min-h-0 flex-col rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-stone-500">Canonical workflow spec</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('canonicalSpec')}</p>
                 <p className="mt-2 text-sm text-stone-600">
-                  Revision {activeDraft?.revision ?? '-'} · updated {formatTimestamp(activeDraft?.created_at)}
+                  {t('revisionInfo', { revision: activeDraft?.revision ?? '-', time: formatTimestamp(activeDraft?.created_at) })}
                 </p>
               </div>
             </div>
@@ -336,7 +338,7 @@ export function AuthoringStudio() {
           <div className="grid min-h-0 gap-4">
             <div className="min-h-0 overflow-auto rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
-                Messages
+                {t('messages')}
               </h3>
               <div className="mt-4 space-y-3">
                 {messages.map((message) => (
@@ -360,7 +362,7 @@ export function AuthoringStudio() {
 
             <div className="min-h-0 overflow-auto rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
-                Revision History
+                {t('revisionHistory')}
               </h3>
               <div className="mt-4 space-y-3">
                 {draftList.map((draft) => (
@@ -371,9 +373,11 @@ export function AuthoringStudio() {
                     className="w-full rounded-3xl border border-stone-200 px-4 py-3 text-left transition hover:border-amber-500"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium text-stone-900">Revision {draft.revision}</span>
+                      <span className="font-medium text-stone-900">
+                        {t('revision')} {draft.revision}
+                      </span>
                       <span className="text-xs uppercase tracking-[0.18em] text-stone-500">
-                        {draft.lint_report.blocking ? 'blocking' : 'ready'}
+                        {draft.lint_report.blocking ? t('status.blocking') : t('status.ready')}
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-stone-500">{formatTimestamp(draft.created_at)}</p>
@@ -397,7 +401,7 @@ export function AuthoringStudio() {
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-stone-500">
-            选择一个 session 以查看同步的 cards / graph / spec / lint 视图。
+            {t('empty.workspaceHint')}
           </div>
         )}
       </section>
