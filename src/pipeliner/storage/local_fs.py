@@ -66,6 +66,9 @@ class WorkspaceManager:
             encoding="utf-8",
         )
 
+    def read_json(self, path: Path) -> dict[str, Any]:
+        return json.loads(path.read_text(encoding="utf-8"))
+
     def write_workflow_inputs(self, workspace: RunWorkspace, inputs: dict[str, Any]) -> Path:
         path = workspace.inputs_dir / "workflow_inputs.json"
         self.write_json(path, inputs)
@@ -130,6 +133,49 @@ class WorkspaceManager:
         version: str,
     ) -> Path:
         return workspace.artifacts_dir / f"{artifact_id}@{version}" / "manifest.json"
+
+    def read_executor_context(
+        self,
+        workspace: RunWorkspace,
+        node_id: str,
+        round_no: int,
+    ) -> dict[str, Any]:
+        dirs = self.ensure_node_round_dirs(workspace, node_id, round_no)
+        path = dirs["executor_dir"] / "context.json"
+        return self.read_json(path)
+
+    def read_validator_context(
+        self,
+        workspace: RunWorkspace,
+        node_id: str,
+        round_no: int,
+        validator_id: str,
+    ) -> dict[str, Any]:
+        dirs = self.ensure_node_round_dirs(workspace, node_id, round_no)
+        path = dirs["validators_dir"] / f"{validator_id}.json"
+        return self.read_json(path)
+
+    def list_round_log_refs(
+        self,
+        workspace: RunWorkspace,
+        node_id: str,
+        round_no: int,
+    ) -> list[dict[str, str]]:
+        dirs = self.ensure_node_round_dirs(workspace, node_id, round_no)
+        refs: list[dict[str, str]] = []
+        for pattern, actor in (
+            ("executor/*.log", "executor"),
+            ("validators/*.log", "validator"),
+        ):
+            for path in sorted(dirs["round_dir"].glob(pattern)):
+                refs.append(
+                    {
+                        "actor": actor,
+                        "name": path.name,
+                        "path": str(path),
+                    }
+                )
+        return refs
 
     def resolve_storage_path(self, manifest_uri: str) -> Path:
         return self.settings.data_dir / manifest_uri

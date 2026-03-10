@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
-from pipeliner.persistence.models import WorkflowVersionModel
+from pipeliner.persistence.models import WorkflowDefinitionModel, WorkflowVersionModel
 from pipeliner.persistence.repositories import WorkflowRepository
 from pipeliner.protocols.workflow import WorkflowSpec
 from pipeliner.services.errors import NotFoundError, ValidationError
@@ -70,6 +71,100 @@ class WorkflowService:
     def load_spec_model(self, workflow_id: str, version: str) -> WorkflowSpec:
         workflow_version = self.get_version(workflow_id, version)
         return WorkflowSpec.model_validate(workflow_version.spec_json)
+
+    def list_workflows(self) -> list[WorkflowDefinitionModel]:
+        return self.repo.list_definitions()
+
+    def project_spec(self, raw_spec: dict[str, Any]) -> dict[str, Any]:
+        lint_errors: list[str] = []
+        warnings: list[str] = []
+        validated_spec: WorkflowSpec | None = None
+        canonical_spec = raw_spec
+
+        try:
+            validated_spec, warnings = self.validate_spec(raw_spec)
+            canonical_spec = validated_spec.model_dump(by_alias=True, mode="json")
+        except WorkflowLintError as exc:
+            lint_errors = [f"[{issue.code}] {issue.message}" for issue in exc.issues]
+        except Exception as exc:  # pragma: no cover - fallback for malformed payloads
+            lint_errors = [str(exc)]
+
+        spec_data = canonical_spec if isinstance(canonical_spec, dict) else raw_spec
+        metadata = spec_data.get("metadata", {})
+        raw_nodes = spec_data.get("nodes", []) if isinstance(spec_data.get("nodes", []), list) else []
+
+        cards: list[dict[str, Any]] = []
+        graph_nodes: list[dict[str, Any]] = []
+        graph_edges: list[dict[str, Any]] = []
+        for index, node in enumerate(raw_nodes):
+            node_id = node.get("node_id", f"node_{index + 1}")
+            depends_on = node.get("depends_on", [])
+            inputs = node.get("inputs", [])
+            outputs = node.get("outputs", [])
+            validators = node.get("validators", [])
+            executor = node.get("executor", {})
+            cards.append(
+                {
+                    "node_id": node_id,
+                    "title": node.get("title", node_id),
+                    "purpose": node.get("purpose", ""),
+                    "archetype": node.get("archetype", ""),
+                    "depends_on": depends_on,
+                    "executor_skill": executor.get("skill"),
+                    "validator_ids": [item.get("validator_id") for item in validators],
+                    "input_names": [item.get("name") for item in inputs],
+                    "output_names": [item.get("name") for item in outputs],
+                    "done_means": node.get("acceptance", {}).get("done_means"),
+                    "raw": node,
+                }
+            )
+            graph_nodes.append(
+                {
+                    "id": node_id,
+                    "type": "workflowNode",
+                    "data": {
+                        "label": node.get("title", node_id),
+                        "node_id": node_id,
+                        "spec": node,
+                    },
+                    "position": {"x": 80 + (index % 3) * 260, "y": 80 + (index // 3) * 180},
+                }
+            )
+            for dep in depends_on:
+                graph_edges.append(
+                    {
+                        "id": f"{dep}->{node_id}",
+                        "source": dep,
+                        "target": node_id,
+                        "type": "smoothstep",
+                        "animated": True,
+                    }
+                )
+
+        return {
+            "canonical_spec": canonical_spec,
+            "workflow_view": {
+                "metadata": {
+                    "workflow_id": metadata.get("workflow_id"),
+                    "title": metadata.get("title"),
+                    "purpose": metadata.get("purpose"),
+                    "version": metadata.get("version"),
+                    "tags": metadata.get("tags", []),
+                },
+                "inputs": spec_data.get("inputs", []),
+                "outputs": spec_data.get("outputs", []),
+                "cards": cards,
+            },
+            "graph": {
+                "nodes": graph_nodes,
+                "edges": graph_edges,
+            },
+            "lint_report": {
+                "warnings": warnings,
+                "errors": lint_errors,
+                "blocking": bool(lint_errors),
+            },
+        }
 
     def _lint(self, spec: WorkflowSpec) -> list[WorkflowLintIssue]:
         issues: list[WorkflowLintIssue] = []

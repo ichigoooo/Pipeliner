@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from pipeliner.api.router import install_exception_handlers, router
 from pipeliner.config import Settings, get_settings
@@ -23,6 +24,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Pipeliner MVP", version="0.1.0", lifespan=lifespan)
     app.state.settings = app_settings
     app.state.db = db
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:3000",
+            "http://localhost:3000",
+            "http://127.0.0.1:3001",
+            "http://localhost:3001",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(router)
     install_exception_handlers(app)
     return app

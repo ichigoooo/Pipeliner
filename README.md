@@ -2,19 +2,20 @@
 
 Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 
-当前版本已经跑通最小可交付闭环：
+当前版本已经跑通最小可交付闭环，并新增 Developer Workflow Studio：
 - `workflow spec` 作为唯一机器真源
 - `executor -> validator -> pass / revise / blocked` 最小状态机
 - 统一 callback API
 - 基于 `artifact manifest` 的交付物登记与不可变版本流转
 - 本地 `run workspace` 目录追踪
 - 最小 CLI / FastAPI / HTML inspection surface
+- Developer Workflow Studio（Next.js）工作台、authoring session 与多视图 workflow workspace
 - 真实 `Claude` executor / validator 接入
 - `run drive` 自动顺序驱动 run 到终态
 
 ## 当前进展
 
-当前 MVP 后端核心已经完成，已经具备实际试跑能力。
+当前 MVP 后端核心已完成，已具备实际试跑能力；开发者工作台和 authoring 能力已就绪。
 
 已完成：
 - workflow 注册、版本加载与 run 启动
@@ -23,9 +24,15 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - executor 调度、validator 调度、超时协调、人工介入可见性
 - 本地 workspace、产物落盘、manifest 发布、callback 归档
 - 最小 CLI、API、HTML 只读检查界面
+- Developer Workflow Studio 前端（authoring / workflows / runs / attention / settings）
+- authoring session、draft revision、lint gating、publish
+- workflow 多视图同步（cards / graph / spec / lint）
+- run 调试聚合视图与手动介入（retry / stop）
+- settings 溯源面板（生效值 + 来源）
 
 已验证：
-- 自动化测试通过：`15 passed`
+- 后端自动化测试通过：`23 passed`
+- 前端 Vitest 通过：`5 passed`
 - 真实 `Claude` 联调通过
 - 一条真实 run 已从启动推进到 `completed`
 
@@ -39,6 +46,7 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - 用真实 `Claude` 执行 validator 节点
 - 用 `run drive` 自动顺序驱动整个 run
 - 在 `blocked`、`failed`、`timed_out`、`rework_limit` 时停在人工介入边界
+- 使用 Workflow Studio 完成 authoring、workflow 浏览、run 调试与 settings 溯源
 
 ## 技术栈
 
@@ -50,8 +58,17 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - `Typer`
 - `SQLite`
 - `pytest`
+- `Next.js`
+- `React + TypeScript`
+- `TanStack Query`
+- `React Flow`
+- `CodeMirror`
+- `Tailwind CSS`
+- `Vitest`
 
-## 本地开发
+## 构建与启动
+
+### 后端（API + Runtime）
 
 ```bash
 uv sync
@@ -60,7 +77,40 @@ uv run pipeliner db-init
 uv run uvicorn pipeliner.app:create_app --factory --reload
 ```
 
-## 最小使用流
+默认监听 `http://127.0.0.1:8000`，API 文档在 `/docs`。
+
+### 前端（Workflow Studio）
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+默认启动 `http://localhost:3000`，前端会通过 `/api/*` 代理到后端。
+
+### 构建（生产）
+
+```bash
+cd web
+npm run build
+npm run start
+```
+
+## 使用说明
+
+### Workflow Studio（推荐入口）
+
+1. 打开 `http://localhost:3000`
+2. 进入 `/authoring` 创建 authoring session
+3. 在右侧编辑 canonical spec，保存或继续会话
+4. lint 通过后发布为 workflow version
+5. 在 `/workflows` 选择版本并点击 `Start Run`
+6. 在 `/runs` 或 `/runs/{run_id}` 查看 timeline、callbacks、artifacts、context 与 log refs
+7. 在 `/attention` 处理中断状态并执行 retry/stop
+8. 在 `/settings` 查看运行时配置与来源
+
+### 最小 CLI 使用流
 
 1. 注册 workflow spec
 2. 启动 run，并写入 workflow inputs
@@ -107,6 +157,8 @@ export PIPELINER_CLAUDE_VALIDATOR_CMD='claude -p --permission-mode bypassPermiss
 - 首页：`/`
 - Workflow 只读视图：`/ui/workflows/{workflow_id}/versions/{version}`
 - Run 只读视图：`/ui/runs/{run_id}`
+- Workflow Studio：`http://localhost:3000`
+- Studio 入口：`/authoring`、`/workflows`、`/runs`、`/attention`、`/settings`
 - Executor 调度接口：`POST /api/runs/{run_id}/nodes/{node_id}/executor/dispatch`
 - Validator 调度接口：`POST /api/runs/{run_id}/nodes/{node_id}/validators/{validator_id}/dispatch`
 
@@ -114,6 +166,8 @@ export PIPELINER_CLAUDE_VALIDATOR_CMD='claude -p --permission-mode bypassPermiss
 
 MVP 中，`workflow spec` 是唯一机器真源。
 任何面向人类的视图，包括 HTML 页面，都是从注册后的 spec 派生出的只读视图，而不是独立 authoring 真源。
+
+Workflow Studio 中的 cards / graph / spec / lint 与 raw inspector 都来自同一 canonical draft 或已发布版本。
 
 ## Run Workspace 约定
 
@@ -143,3 +197,19 @@ MVP 中，`workflow spec` 是唯一机器真源。
 - 增加批量调度与更稳定的运行控制，例如并发、重试策略、输出限制
 - 增加更清晰的 operator 界面，降低查看 run / node / artifact 状态的成本
 - 在核心稳定后，再逐步补强产品化 UI/UX，而不是提前做复杂前端
+
+## 环境变量
+
+后端常用：
+
+```bash
+export PIPELINER_DATA_DIR=".pipeliner"
+export PIPELINER_CLAUDE_EXECUTOR_CMD="claude -p --permission-mode bypassPermissions"
+export PIPELINER_CLAUDE_VALIDATOR_CMD="claude -p --permission-mode bypassPermissions"
+```
+
+前端代理后端地址（可选）：
+
+```bash
+export PIPELINER_API_BASE_URL="http://127.0.0.1:8000"
+```

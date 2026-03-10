@@ -5,11 +5,14 @@ from sqlalchemy.orm import Session
 
 from pipeliner.persistence.models import (
     ArtifactModel,
+    AuthoringDraftModel,
+    AuthoringMessageModel,
     CallbackEventModel,
     NodeRunModel,
     RunModel,
     WorkflowDefinitionModel,
     WorkflowVersionModel,
+    AuthoringSessionModel,
 )
 
 
@@ -87,6 +90,10 @@ class WorkflowRepository:
         )
         return list(self.session.scalars(stmt))
 
+    def list_definitions(self) -> list[WorkflowDefinitionModel]:
+        stmt = select(WorkflowDefinitionModel).order_by(WorkflowDefinitionModel.updated_at.desc())
+        return list(self.session.scalars(stmt))
+
 
 class RunRepository:
     def __init__(self, session: Session) -> None:
@@ -102,6 +109,14 @@ class RunRepository:
 
     def list_runs(self) -> list[RunModel]:
         stmt = select(RunModel).order_by(RunModel.created_at.desc())
+        return list(self.session.scalars(stmt))
+
+    def list_workflow_runs(self, workflow_id: str) -> list[RunModel]:
+        stmt = (
+            select(RunModel)
+            .where(RunModel.workflow_id == workflow_id)
+            .order_by(RunModel.created_at.desc())
+        )
         return list(self.session.scalars(stmt))
 
     def list_runs_requiring_attention(self) -> list[RunModel]:
@@ -236,5 +251,103 @@ class ArtifactRepository:
             select(ArtifactModel)
             .where(ArtifactModel.run_id == run_id)
             .order_by(ArtifactModel.created_at.asc())
+        )
+        return list(self.session.scalars(stmt))
+
+
+class AuthoringRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create_session(self, session_id: str, title: str, intent_brief: str) -> AuthoringSessionModel:
+        authoring_session = AuthoringSessionModel(
+            id=session_id,
+            title=title,
+            intent_brief=intent_brief,
+            status="active",
+        )
+        self.session.add(authoring_session)
+        self.session.flush()
+        return authoring_session
+
+    def add_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        revision: int | None = None,
+    ) -> AuthoringMessageModel:
+        message = AuthoringMessageModel(
+            session_id=session_id,
+            revision=revision,
+            role=role,
+            content=content,
+        )
+        self.session.add(message)
+        self.session.flush()
+        return message
+
+    def get_session(self, session_id: str) -> AuthoringSessionModel | None:
+        return self.session.get(AuthoringSessionModel, session_id)
+
+    def list_sessions(self, status: str | None = None) -> list[AuthoringSessionModel]:
+        stmt = select(AuthoringSessionModel)
+        if status:
+            stmt = stmt.where(AuthoringSessionModel.status == status)
+        stmt = stmt.order_by(AuthoringSessionModel.updated_at.desc())
+        return list(self.session.scalars(stmt))
+
+    def create_draft(
+        self,
+        session_id: str,
+        revision: int,
+        spec_json: dict,
+        workflow_view_json: dict,
+        graph_json: dict,
+        lint_report_json: dict,
+        lint_warnings: list[str],
+    ) -> AuthoringDraftModel:
+        draft = AuthoringDraftModel(
+            session_id=session_id,
+            revision=revision,
+            spec_json=spec_json,
+            workflow_view_json=workflow_view_json,
+            graph_json=graph_json,
+            lint_report_json=lint_report_json,
+            lint_warnings=lint_warnings,
+        )
+        self.session.add(draft)
+        self.session.flush()
+        return draft
+
+    def list_drafts(self, session_id: str) -> list[AuthoringDraftModel]:
+        stmt = (
+            select(AuthoringDraftModel)
+            .where(AuthoringDraftModel.session_id == session_id)
+            .order_by(AuthoringDraftModel.revision.asc())
+        )
+        return list(self.session.scalars(stmt))
+
+    def get_draft(self, session_id: str, revision: int) -> AuthoringDraftModel | None:
+        stmt = (
+            select(AuthoringDraftModel)
+            .where(AuthoringDraftModel.session_id == session_id)
+            .where(AuthoringDraftModel.revision == revision)
+        )
+        return self.session.scalar(stmt)
+
+    def get_latest_draft(self, session_id: str) -> AuthoringDraftModel | None:
+        stmt = (
+            select(AuthoringDraftModel)
+            .where(AuthoringDraftModel.session_id == session_id)
+            .order_by(AuthoringDraftModel.revision.desc())
+        )
+        return self.session.scalars(stmt).first()
+
+    def list_messages(self, session_id: str) -> list[AuthoringMessageModel]:
+        stmt = (
+            select(AuthoringMessageModel)
+            .where(AuthoringMessageModel.session_id == session_id)
+            .order_by(AuthoringMessageModel.created_at.asc(), AuthoringMessageModel.id.asc())
         )
         return list(self.session.scalars(stmt))

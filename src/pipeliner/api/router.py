@@ -15,6 +15,7 @@ from pipeliner.persistence.repositories import (
     CallbackRepository,
     RunRepository,
     WorkflowRepository,
+    AuthoringRepository,
 )
 from pipeliner.protocols.artifact import ArtifactManifest
 from pipeliner.protocols.callback import NodeCallbackPayload
@@ -26,8 +27,11 @@ from pipeliner.services.errors import (
     NotFoundError,
     ValidationError,
 )
+from pipeliner.config import get_settings
 from pipeliner.services.run_service import RunService
 from pipeliner.services.workflow_service import WorkflowService
+from pipeliner.services.authoring_service import AuthoringService
+from pipeliner.services.settings_service import SettingsService
 from pipeliner.ui.views import render_index, render_run_view, render_workflow_view
 
 router = APIRouter()
@@ -57,6 +61,20 @@ class ValidatorDispatchRequest(BaseModel):
     command_template: str | None = None
 
 
+class AuthoringSessionCreateRequest(BaseModel):
+    title: str
+    intent_brief: str
+
+
+class AuthoringDraftSaveRequest(BaseModel):
+    spec: dict[str, Any]
+    instruction: str | None = None
+
+
+class RunRetryRequest(BaseModel):
+    rework_brief: dict[str, Any] | None = None
+
+
 def get_database(request: Request) -> Database:
     return request.app.state.db
 
@@ -76,12 +94,26 @@ def _workflow_service(session: Session) -> WorkflowService:
     return WorkflowService(WorkflowRepository(session))
 
 
+def _authoring_service(session: Session) -> AuthoringService:
+    return AuthoringService(
+        AuthoringRepository(session),
+        WorkflowService(WorkflowRepository(session)),
+    )
+
+
 def _run_service(session: Session, request: Request) -> RunService:
     return RunService(
         RunRepository(session),
         WorkflowRepository(session),
         ArtifactRepository(session),
         request.app.state.settings,
+    )
+
+
+def _settings_service(session: Session, request: Request) -> SettingsService:
+    return SettingsService(
+        request.app.state.settings,
+        WorkflowRepository(session),
     )
 
 
@@ -129,6 +161,21 @@ def _validator_dispatcher(
     )
 
 
+def _authoring_draft_payload(draft) -> dict[str, Any]:
+    return {
+        "session_id": draft.session_id,
+        "revision": draft.revision,
+        "spec_json": draft.spec_json,
+        "workflow_view": draft.workflow_view_json,
+        "graph": draft.graph_json,
+        "lint_report": draft.lint_report_json,
+        "lint_warnings": draft.lint_warnings,
+        "workflow_id": draft.spec_json.get("metadata", {}).get("workflow_id"),
+        "version": draft.spec_json.get("metadata", {}).get("version"),
+        "created_at": draft.created_at.isoformat() if draft.created_at else None,
+    }
+
+
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -149,6 +196,189 @@ def ui_index(request: Request, session: SessionDep) -> str:
     return render_index(attention_runs)
 
 
+@router.post("/api/authoring/sessions")
+def create_authoring_session(
+    request_body: AuthoringSessionCreateRequest,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    authoring_session = service.create_session(
+        title=request_body.title,
+        intent_brief=request_body.intent_brief,
+    )
+    latest_draft = service.get_latest_draft(authoring_session.id)
+    return {
+        "session_id": authoring_session.id,
+        "title": authoring_session.title,
+        "status": authoring_session.status,
+        "latest_revision": latest_draft.revision,
+    }
+
+
+@router.get("/api/authoring/sessions")
+def list_authoring_sessions(
+    session: SessionDep,
+    status: str | None = None,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    sessions = service.list_sessions(status=status)
+    return {
+        "sessions": [
+            {
+                "session_id": s.id,
+                "title": s.title,
+                "status": s.status,
+                "latest_revision": s.drafts[-1].revision if s.drafts else None,
+                "draft_count": len(s.drafts),
+                "published_workflow_id": s.published_workflow_id,
+                "published_version": s.published_version,
+                "published_revision": s.published_revision,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            }
+            for s in sessions
+        ]
+    }
+
+
+@router.get("/api/authoring/sessions/{session_id}")
+def get_authoring_session(
+    session_id: str,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    authoring_session = service.get_session(session_id)
+    return {
+        "session_id": authoring_session.id,
+        "title": authoring_session.title,
+        "intent_brief": authoring_session.intent_brief,
+        "status": authoring_session.status,
+        "published_workflow_id": authoring_session.published_workflow_id,
+        "published_version": authoring_session.published_version,
+        "published_revision": authoring_session.published_revision,
+        "published_at": (
+            authoring_session.published_at.isoformat()
+            if authoring_session.published_at
+            else None
+        ),
+    }
+
+
+@router.post("/api/authoring/sessions/{session_id}/drafts")
+def save_authoring_draft(
+    session_id: str,
+    request_body: AuthoringDraftSaveRequest,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    draft = service.save_draft(
+        session_id,
+        request_body.spec,
+        instruction=request_body.instruction,
+    )
+    return _authoring_draft_payload(draft)
+
+
+@router.post("/api/authoring/sessions/{session_id}/continue")
+def continue_authoring_session(
+    session_id: str,
+    request_body: AuthoringDraftSaveRequest,
+    session: SessionDep,
+) -> dict[str, Any]:
+    if not request_body.instruction:
+        raise ValidationError("continue authoring 需要 instruction")
+    service = _authoring_service(session)
+    draft = service.continue_session(session_id, request_body.instruction, request_body.spec)
+    return _authoring_draft_payload(draft)
+
+
+@router.get("/api/authoring/sessions/{session_id}/drafts/latest")
+def get_latest_authoring_draft(
+    session_id: str,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    draft = service.get_latest_draft(session_id)
+    return _authoring_draft_payload(draft)
+
+
+@router.get("/api/authoring/sessions/{session_id}/drafts/{revision}")
+def get_authoring_draft(
+    session_id: str,
+    revision: int,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    draft = service.get_draft(session_id, revision)
+    return _authoring_draft_payload(draft)
+
+
+@router.get("/api/authoring/sessions/{session_id}/drafts")
+def list_authoring_drafts(
+    session_id: str,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    drafts = service.list_drafts(session_id)
+    return {"drafts": [_authoring_draft_payload(item) for item in drafts]}
+
+
+@router.get("/api/authoring/sessions/{session_id}/messages")
+def list_authoring_messages(
+    session_id: str,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    items = service.list_messages(session_id)
+    return {
+        "messages": [
+            {
+                "id": item.id,
+                "session_id": item.session_id,
+                "revision": item.revision,
+                "role": item.role,
+                "content": item.content,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            }
+            for item in items
+        ]
+    }
+
+
+
+
+
+@router.post("/api/authoring/sessions/{session_id}/publish")
+def publish_authoring_session(
+    session_id: str,
+    session: SessionDep,
+    revision: int | None = None,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    if revision is None:
+        latest = service.get_latest_draft(session_id)
+        revision = latest.revision
+    result = service.publish(session_id, revision)
+    return result
+
+@router.get("/api/authoring/sessions/{session_id}/drafts/{revision}/derive")
+def derive_draft_graph_projection(
+    session_id: str,
+    revision: int,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session)
+    draft = service.get_draft(session_id, revision)
+    return {
+        "session_id": draft.session_id,
+        "revision": draft.revision,
+        "workflow_view": draft.workflow_view_json,
+        "graph": draft.graph_json,
+        "lint_report": draft.lint_report_json,
+        "lint_warnings": draft.lint_warnings,
+    }
+
+
 @router.post("/api/workflows/register")
 def register_workflow(
     request_body: WorkflowRegisterRequest,
@@ -164,6 +394,54 @@ def register_workflow(
     }
 
 
+@router.get("/api/workflows")
+def list_workflows(session: SessionDep) -> dict[str, Any]:
+    service = _workflow_service(session)
+    workflows = service.list_workflows()
+    return {
+        "workflows": [
+            {
+                "workflow_id": item.workflow_id,
+                "title": item.title,
+                "purpose": item.purpose,
+                "version_count": len(item.versions),
+                "latest_version": (
+                    max(
+                        item.versions,
+                        key=lambda version: version.created_at,
+                    ).version
+                    if item.versions
+                    else None
+                ),
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            }
+            for item in workflows
+        ]
+    }
+
+
+@router.get("/api/workflows/{workflow_id}/versions")
+def list_workflow_versions(
+    workflow_id: str,
+    session: SessionDep,
+) -> dict[str, Any]:
+    versions = WorkflowRepository(session).list_versions(workflow_id)
+    if not versions:
+        raise NotFoundError(f"未找到 workflow: {workflow_id}")
+    return {
+        "workflow_id": workflow_id,
+        "versions": [
+            {
+                "version": item.version,
+                "schema_version": item.schema_version,
+                "warnings": item.lint_warnings,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            }
+            for item in versions
+        ],
+    }
+
+
 @router.get("/api/workflows/{workflow_id}/versions/{version}")
 def get_workflow(
     workflow_id: str,
@@ -172,12 +450,16 @@ def get_workflow(
 ) -> dict[str, Any]:
     service = _workflow_service(session)
     workflow_version = service.get_version(workflow_id, version)
+    projection = service.project_spec(workflow_version.spec_json)
     return {
         "workflow_id": workflow_id,
         "version": version,
         "title": workflow_version.workflow_definition.title,
         "warnings": workflow_version.lint_warnings,
         "spec": workflow_version.spec_json,
+        "workflow_view": projection["workflow_view"],
+        "graph": projection["graph"],
+        "lint_report": projection["lint_report"],
     }
 
 
@@ -236,10 +518,23 @@ def list_attention_runs(
                 "version": run.workflow_version,
                 "status": run.status,
                 "stop_reason": run.stop_reason,
+                "created_at": run.created_at.isoformat() if run.created_at else None,
+                "updated_at": run.updated_at.isoformat() if run.updated_at else None,
+                "actions": ["retry_node", "stop_run"],
             }
             for run in runs
         ]
     }
+
+
+@router.get("/api/runs")
+def list_runs(
+    request: Request,
+    session: SessionDep,
+    workflow_id: str | None = None,
+) -> dict[str, Any]:
+    service = _run_service(session, request)
+    return {"runs": service.list_run_summaries(workflow_id=workflow_id)}
 
 
 @router.get("/api/runs/{run_id}")
@@ -274,9 +569,97 @@ def get_run(
                 "version": item.version,
                 "kind": item.kind,
                 "storage_uri": item.storage_uri,
+                "node_id": item.node_id,
+                "round_no": item.round_no,
             }
             for item in detail["artifacts"]
         ],
+    }
+
+
+@router.get("/api/runs/{run_id}/debug/overview")
+def get_run_debug_overview(
+    run_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _run_service(session, request)
+    overview = service.get_run_debug_overview(run_id)
+    return overview
+
+
+@router.get("/api/runs/{run_id}/debug/nodes/{node_id}/rounds/{round_no}")
+def get_run_node_debug_details(
+    run_id: str,
+    node_id: str,
+    round_no: int,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _run_service(session, request)
+    run_repo = RunRepository(session)
+
+    node_run = run_repo.get_node_run(run_id, node_id, round_no)
+    if not node_run:
+        raise NotFoundError(f"未找到 node run: {node_id}@{round_no}")
+
+    events = CallbackRepository(session).list_run_events(run_id)
+    node_events = [e for e in events if e.node_id == node_id and e.round_no == round_no]
+    run = service.get_run(run_id)
+    workspace = service.get_workspace(run)
+    try:
+        context = service.workspace.read_executor_context(workspace, node_id, round_no)
+    except FileNotFoundError:
+        context = None
+
+    artifacts = [
+        item
+        for item in ArtifactRepository(session).list_run_artifacts(run_id)
+        if item.node_id == node_id and item.round_no == round_no
+    ]
+
+    log_refs = []
+    round_dir = workspace.nodes_dir / node_id / "rounds" / str(round_no)
+    if round_dir.exists():
+        for file_path in sorted(round_dir.rglob("*")):
+            if file_path.is_file():
+                log_refs.append(
+                    {
+                        "path": str(file_path.relative_to(workspace.root)),
+                        "kind": "file",
+                    }
+                )
+
+    return {
+        "node_id": node_id,
+        "round_no": round_no,
+        "status": node_run.status,
+        "waiting_for_role": node_run.waiting_for_role,
+        "stop_reason": node_run.stop_reason,
+        "rework_brief": node_run.rework_brief_json,
+        "context": context,
+        "callbacks": [
+            {
+                "event_id": item.event_id,
+                "actor_role": item.actor_role,
+                "validator_id": item.validator_id,
+                "execution_status": item.execution_status,
+                "verdict_status": item.verdict_status,
+                "payload": item.payload_json,
+            }
+            for item in node_events
+        ],
+        "artifacts": [
+            {
+                "artifact_id": item.artifact_id,
+                "version": item.version,
+                "kind": item.kind,
+                "storage_uri": item.storage_uri,
+                "digest": item.digest,
+            }
+            for item in artifacts
+        ],
+        "log_refs": log_refs,
     }
 
 
@@ -346,6 +729,25 @@ def stop_run(
     return {"run_id": run.id, "status": run.status, "stop_reason": run.stop_reason}
 
 
+@router.post("/api/runs/{run_id}/nodes/{node_id}/retry")
+def retry_run_node(
+    run_id: str,
+    node_id: str,
+    request_body: RunRetryRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _run_service(session, request)
+    node_run = service.retry_node(run_id, node_id, request_body.rework_brief)
+    return {
+        "run_id": run_id,
+        "node_id": node_id,
+        "round_no": node_run.round_no,
+        "status": node_run.status,
+        "waiting_for_role": node_run.waiting_for_role,
+    }
+
+
 @router.post("/api/artifacts")
 def publish_artifact(
     manifest: ArtifactManifest,
@@ -406,6 +808,12 @@ def dispatch_validator(
         round_no=request_body.round_no,
         command_template=request_body.command_template,
     )
+
+
+@router.get("/api/settings")
+def get_settings_snapshot(request: Request, session: SessionDep) -> dict[str, Any]:
+    service = _settings_service(session, request)
+    return {"settings": service.build_snapshot()}
 
 
 def install_exception_handlers(app: FastAPI) -> None:

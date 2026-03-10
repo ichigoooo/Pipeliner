@@ -1,0 +1,80 @@
+'use client';
+
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { formatTimestamp } from '@/lib/format';
+
+export default function WorkflowsPage() {
+  const workflowsQuery = useQuery({
+    queryKey: ['workflows'],
+    queryFn: api.listWorkflows,
+  });
+
+  const workflows = workflowsQuery.data?.workflows ?? [];
+
+  return (
+    <div className="p-6 lg:p-8">
+      <div className="mb-8 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">Workflows</p>
+          <h1 className="mt-3 text-3xl font-semibold text-stone-900">Published workflow catalog</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600">
+            版本列表、lint 信号和 workflow projections 都从 canonical registered spec 派生。
+          </p>
+        </div>
+        <Link
+          href="/authoring"
+          className="rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
+        >
+          Open Authoring
+        </Link>
+      </div>
+
+      <div className="overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
+        <table className="min-w-full divide-y divide-stone-200">
+          <thead className="bg-stone-50">
+            <tr className="text-left text-xs uppercase tracking-[0.22em] text-stone-500">
+              <th className="px-6 py-4">Workflow</th>
+              <th className="px-6 py-4">Purpose</th>
+              <th className="px-6 py-4">Versions</th>
+              <th className="px-6 py-4">Latest</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {workflows.map((workflow) => (
+              <tr key={workflow.workflow_id} className="align-top">
+                <td className="px-6 py-5">
+                  <Link
+                    href={`/workflows/${workflow.workflow_id}`}
+                    className="text-lg font-semibold text-stone-900 transition hover:text-amber-700"
+                  >
+                    {workflow.title}
+                  </Link>
+                  <p className="mt-2 text-xs uppercase tracking-[0.2em] text-stone-500">
+                    {workflow.workflow_id}
+                  </p>
+                </td>
+                <td className="px-6 py-5 text-sm leading-6 text-stone-600">{workflow.purpose}</td>
+                <td className="px-6 py-5 text-sm text-stone-700">{workflow.version_count}</td>
+                <td className="px-6 py-5 text-sm text-stone-700">
+                  <div>{workflow.latest_version || '-'}</div>
+                  <div className="mt-1 text-xs text-stone-500">
+                    Updated {formatTimestamp(workflow.updated_at)}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {workflows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-sm text-stone-500">
+                  暂无已发布 workflow。先到 authoring 中发布一个 draft。
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

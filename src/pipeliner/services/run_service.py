@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import uuid4
+from typing import Any
 
 from pipeliner.config import Settings, get_settings
 from pipeliner.persistence.models import NodeRunModel, RunModel
@@ -144,6 +145,110 @@ class RunService:
             "nodes": node_runs,
             "artifacts": artifacts,
         }
+
+    def list_run_summaries(self, workflow_id: str | None = None) -> list[dict[str, Any]]:
+        runs = (
+            self.run_repo.list_workflow_runs(workflow_id)
+            if workflow_id is not None
+            else self.run_repo.list_runs()
+        )
+        items: list[dict[str, Any]] = []
+        for run in runs:
+            latest = self.run_repo.list_latest_node_runs(run.id)
+            items.append(
+                {
+                    "run_id": run.id,
+                    "workflow_id": run.workflow_id,
+                    "version": run.workflow_version,
+                    "status": run.status,
+                    "stop_reason": run.stop_reason,
+                    "created_at": run.created_at.isoformat() if run.created_at else None,
+                    "updated_at": run.updated_at.isoformat() if run.updated_at else None,
+                    "attention_node_count": sum(
+                        1
+                        for node_run in latest.values()
+                        if node_run.status
+                        in {
+                            NodeRunStatus.BLOCKED.value,
+                            NodeRunStatus.FAILED.value,
+                            NodeRunStatus.TIMED_OUT.value,
+                            NodeRunStatus.REWORK_LIMIT.value,
+                            NodeRunStatus.STOPPED.value,
+                        }
+                    ),
+                }
+            )
+        return items
+
+    def get_run_debug_overview(self, run_id: str) -> dict[str, Any]:
+        detail = self.get_run_detail(run_id)
+        timeline = [
+            {
+                "node_id": item.node_id,
+                "round_no": item.round_no,
+                "status": item.status,
+                "waiting_for_role": item.waiting_for_role,
+                "stop_reason": item.stop_reason,
+                "rework_brief": item.rework_brief_json,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            }
+            for item in detail["nodes"]
+        ]
+        latest = self.run_repo.list_latest_node_runs(run_id)
+        return {
+            "run_id": run_id,
+            "status": detail["run"].status,
+            "stop_reason": detail["run"].stop_reason,
+            "workflow": detail["workflow"],
+            "timeline": timeline,
+            "latest_nodes": [
+                {
+                    "node_id": item.node_id,
+                    "round_no": item.round_no,
+                    "status": item.status,
+                    "waiting_for_role": item.waiting_for_role,
+                    "stop_reason": item.stop_reason,
+                }
+                for item in latest.values()
+            ],
+        }
+
+    def retry_node(
+        self,
+        run_id: str,
+        node_id: str,
+        rework_brief: dict[str, Any] | None = None,
+    ) -> NodeRunModel:
+        run = self.get_run(run_id)
+        spec = self.get_run_spec(run)
+        node = next((item for item in spec.nodes if item.node_id == node_id), None)
+        if node is None:
+            raise NotFoundError(f"未找到节点: {node_id}")
+        latest = self.run_repo.get_latest_node_run(run_id, node_id)
+        if latest is None:
+            raise NotFoundError(f"未找到 node run: {node_id}")
+        if latest.status not in {
+            NodeRunStatus.BLOCKED.value,
+            NodeRunStatus.FAILED.value,
+            NodeRunStatus.TIMED_OUT.value,
+            NodeRunStatus.REWORK_LIMIT.value,
+            NodeRunStatus.STOPPED.value,
+        }:
+            raise InvalidStateError(f"当前节点状态不允许重试: {latest.status}")
+        latest.waiting_for_role = None
+        workspace = self.get_workspace(run)
+        retried = self._create_node_round(
+            run,
+            spec,
+            node,
+            latest.round_no + 1,
+            workspace,
+            rework_brief=rework_brief,
+        )
+        run.status = RunStatus.RUNNING.value
+        run.stop_reason = None
+        return retried
 
     def build_executor_context(
         self,

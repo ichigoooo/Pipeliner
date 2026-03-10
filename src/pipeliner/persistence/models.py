@@ -18,6 +18,72 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pipeliner.db import Base
 
 
+class AuthoringSessionModel(Base):
+    __tablename__ = "authoring_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(255))
+    intent_brief: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(64), index=True, default="active")  # active, published, discarded
+    published_workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    published_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    published_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    drafts: Mapped[list[AuthoringDraftModel]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", order_by="AuthoringDraftModel.revision"
+    )
+    messages: Mapped[list[AuthoringMessageModel]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", order_by="AuthoringMessageModel.created_at"
+    )
+
+class AuthoringDraftModel(Base):
+    __tablename__ = "authoring_drafts"
+    __table_args__ = (
+        UniqueConstraint("session_id", "revision", name="uq_session_revision"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("authoring_sessions.id", ondelete="CASCADE"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    spec_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    workflow_view_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    graph_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    lint_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    lint_warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    session: Mapped[AuthoringSessionModel] = relationship(back_populates="drafts")
+
+
+class AuthoringMessageModel(Base):
+    __tablename__ = "authoring_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("authoring_sessions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    role: Mapped[str] = mapped_column(String(32))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    session: Mapped[AuthoringSessionModel] = relationship(back_populates="messages")
+
 class WorkflowDefinitionModel(Base):
     __tablename__ = "workflow_definitions"
 
