@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from fastapi.testclient import TestClient
+
+from pipeliner.persistence.repositories import RunRepository
 
 
 def _authoring_spec(version: str = "v0.1.0") -> dict:
@@ -78,7 +83,10 @@ def _authoring_spec(version: str = "v0.1.0") -> dict:
     }
 
 
-def test_developer_workflow_end_to_end(client: TestClient) -> None:
+def test_developer_workflow_end_to_end(client: TestClient, settings) -> None:
+    authoring_script = Path("tests/fixtures/mock_claude_authoring.py").resolve()
+    settings.claude_authoring_cmd = f"{sys.executable} {authoring_script} {{task_file}}"
+
     session_response = client.post(
         "/api/authoring/sessions",
         json={
@@ -89,11 +97,11 @@ def test_developer_workflow_end_to_end(client: TestClient) -> None:
     assert session_response.status_code == 200
     session_id = session_response.json()["session_id"]
 
-    save_response = client.post(
-        f"/api/authoring/sessions/{session_id}/drafts",
-        json={"spec": _authoring_spec()},
+    generate_response = client.post(
+        f"/api/authoring/sessions/{session_id}/generate",
+        json={"instruction": "Generate a baseline spec", "spec": _authoring_spec()},
     )
-    assert save_response.status_code == 200
+    assert generate_response.status_code == 200
 
     publish_response = client.post(f"/api/authoring/sessions/{session_id}/publish")
     assert publish_response.status_code == 200
@@ -110,6 +118,22 @@ def test_developer_workflow_end_to_end(client: TestClient) -> None:
     )
     assert run_response.status_code == 200
     run_id = run_response.json()["run_id"]
+
+    executor_script = Path("tests/fixtures/mock_claude_executor.py").resolve()
+    validator_script = Path("tests/fixtures/mock_pipeline_validator_sequence.py").resolve()
+    executor_command = f"{sys.executable} {executor_script} {{task_file}}"
+    validator_command = f"{sys.executable} {validator_script}"
+
+    drive_response = client.post(
+        f"/api/runs/{run_id}/drive",
+        json={
+            "max_steps": 10,
+            "executor_command_template": executor_command,
+            "validator_command_template": validator_command,
+        },
+    )
+    assert drive_response.status_code == 200
+    assert drive_response.json()["status"] == "completed"
 
     overview_response = client.get(f"/api/runs/{run_id}/debug/overview")
     assert overview_response.status_code == 200
@@ -128,7 +152,18 @@ def test_developer_workflow_end_to_end(client: TestClient) -> None:
         f"/api/runs/{run_id}/nodes/{node_id}/executor/dispatch",
         json={"command_template": "definitely_not_existing_command"},
     )
-    assert dispatch_response.status_code == 200
+    assert dispatch_response.status_code == 400
+
+    with client.app.state.db.session() as db:
+        run_repo = RunRepository(db)
+        run = run_repo.get_run(run_id)
+        node_run = run_repo.get_latest_node_run(run_id, node_id)
+        assert run is not None
+        assert node_run is not None
+        run.status = "needs_attention"
+        run.stop_reason = "blocked"
+        node_run.status = "blocked"
+        db.flush()
 
     attention_response = client.get("/api/runs/attention")
     assert attention_response.status_code == 200
@@ -140,3 +175,17 @@ def test_developer_workflow_end_to_end(client: TestClient) -> None:
     )
     assert retry_response.status_code == 200
     assert retry_response.json()["round_no"] >= 2
+
+    with client.app.state.db.session() as db:
+        run_repo = RunRepository(db)
+        node_run = run_repo.get_latest_node_run(run_id, node_id)
+        assert node_run is not None
+        node_run.status = "blocked"
+        node_run.rework_brief_json = {"summary": "manual iterate"}
+        db.flush()
+
+    iterate_response = client.post(
+        "/api/authoring/sessions/from-run",
+        json={"run_id": run_id},
+    )
+    assert iterate_response.status_code == 200

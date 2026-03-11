@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from pipeliner.persistence.models import (
     ArtifactModel,
     AuthoringDraftModel,
+    AuthoringGenerationLogModel,
     AuthoringMessageModel,
     CallbackEventModel,
     NodeRunModel,
@@ -259,12 +260,21 @@ class AuthoringRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create_session(self, session_id: str, title: str, intent_brief: str) -> AuthoringSessionModel:
+    def create_session(
+        self,
+        session_id: str,
+        title: str,
+        intent_brief: str,
+        source_type: str | None = None,
+        source_payload: dict | None = None,
+    ) -> AuthoringSessionModel:
         authoring_session = AuthoringSessionModel(
             id=session_id,
             title=title,
             intent_brief=intent_brief,
             status="active",
+            source_type=source_type,
+            source_payload_json=source_payload,
         )
         self.session.add(authoring_session)
         self.session.flush()
@@ -306,6 +316,7 @@ class AuthoringRepository:
         graph_json: dict,
         lint_report_json: dict,
         lint_warnings: list[str],
+        source_json: dict | None = None,
     ) -> AuthoringDraftModel:
         draft = AuthoringDraftModel(
             session_id=session_id,
@@ -315,6 +326,7 @@ class AuthoringRepository:
             graph_json=graph_json,
             lint_report_json=lint_report_json,
             lint_warnings=lint_warnings,
+            source_json=source_json,
         )
         self.session.add(draft)
         self.session.flush()
@@ -351,3 +363,25 @@ class AuthoringRepository:
             .order_by(AuthoringMessageModel.created_at.asc(), AuthoringMessageModel.id.asc())
         )
         return list(self.session.scalars(stmt))
+
+    def create_generation_log(
+        self,
+        session_id: str,
+        *,
+        revision: int | None,
+        status: str,
+        duration_ms: int | None,
+        error_message: str | None,
+        metadata_json: dict | None = None,
+    ) -> AuthoringGenerationLogModel:
+        log = AuthoringGenerationLogModel(
+            session_id=session_id,
+            revision=revision,
+            status=status,
+            duration_ms=duration_ms,
+            error_message=error_message,
+            metadata_json=metadata_json,
+        )
+        self.session.add(log)
+        self.session.flush()
+        return log

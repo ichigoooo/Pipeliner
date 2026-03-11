@@ -6,22 +6,44 @@ from typing import Any
 
 from pipeliner.persistence.models import AuthoringDraftModel, AuthoringMessageModel, AuthoringSessionModel
 from pipeliner.persistence.repositories import AuthoringRepository
+from pipeliner.services.authoring_agent import AuthoringAgent, AuthoringAgentError
 from pipeliner.services.errors import NotFoundError, ValidationError
 from pipeliner.services.workflow_service import WorkflowService
 
 
 class AuthoringService:
-    def __init__(self, repo: AuthoringRepository, workflow_service: WorkflowService) -> None:
+    def __init__(
+        self,
+        repo: AuthoringRepository,
+        workflow_service: WorkflowService,
+        authoring_agent: AuthoringAgent | None = None,
+    ) -> None:
         self.repo = repo
         self.workflow_service = workflow_service
+        self.authoring_agent = authoring_agent or AuthoringAgent()
 
-    def create_session(self, title: str, intent_brief: str) -> AuthoringSessionModel:
+    def create_session(
+        self,
+        title: str,
+        intent_brief: str,
+        *,
+        base_spec: dict[str, Any] | None = None,
+        source: dict[str, Any] | None = None,
+    ) -> AuthoringSessionModel:
         import uuid
 
         session_id = f"session_{uuid.uuid4().hex[:8]}"
-        session = self.repo.create_session(session_id, title, intent_brief)
+        source_type = source.get("type") if isinstance(source, dict) else None
+        source_payload = source.get("payload") if isinstance(source, dict) else None
+        session = self.repo.create_session(
+            session_id,
+            title,
+            intent_brief,
+            source_type=source_type,
+            source_payload=source_payload,
+        )
         self.repo.add_message(session.id, role="user", content=intent_brief)
-        bootstrap_spec = self._bootstrap_spec(title, intent_brief)
+        bootstrap_spec = base_spec or self._bootstrap_spec(title, intent_brief)
         projection = self.workflow_service.project_spec(bootstrap_spec)
         self.repo.create_draft(
             session_id=session.id,
@@ -31,6 +53,7 @@ class AuthoringService:
             graph_json=projection["graph"],
             lint_report_json=projection["lint_report"],
             lint_warnings=projection["lint_report"]["warnings"],
+            source_json=self._build_source_payload(session),
         )
         return session
 
@@ -78,6 +101,7 @@ class AuthoringService:
             graph_json=projection["graph"],
             lint_report_json=projection["lint_report"],
             lint_warnings=warnings,
+            source_json=self._build_source_payload(session),
         )
 
     def continue_session(
@@ -142,6 +166,51 @@ class AuthoringService:
             "session_id": session.id,
             "revision": revision,
         }
+
+    def generate_draft(
+        self,
+        session_id: str,
+        instruction: str,
+        *,
+        base_spec: dict[str, Any] | None = None,
+    ) -> AuthoringDraftModel:
+        session = self.get_session(session_id)
+        current_spec = base_spec or self.get_latest_draft(session_id).spec_json
+        try:
+            result = self.authoring_agent.generate(
+                session_id=session_id,
+                intent_brief=session.intent_brief,
+                instruction=instruction,
+                base_spec=current_spec,
+            )
+            draft = self.save_draft(session_id, result.spec_json, instruction=instruction)
+            self.repo.create_generation_log(
+                session_id,
+                revision=draft.revision,
+                status="success",
+                duration_ms=result.metadata.get("duration_ms"),
+                error_message=None,
+                metadata_json=result.metadata,
+            )
+            return draft
+        except AuthoringAgentError as exc:
+            self.repo.create_generation_log(
+                session_id,
+                revision=None,
+                status="failed",
+                duration_ms=exc.metadata.get("duration_ms"),
+                error_message=str(exc),
+                metadata_json=exc.metadata,
+            )
+            raise ValidationError(str(exc)) from exc
+
+    def _build_source_payload(self, session: AuthoringSessionModel) -> dict[str, Any] | None:
+        if session.source_type or session.source_payload_json:
+            return {
+                "type": session.source_type,
+                "payload": session.source_payload_json,
+            }
+        return None
 
     def _bootstrap_spec(self, title: str, intent_brief: str) -> dict[str, Any]:
         slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "authoring-draft"

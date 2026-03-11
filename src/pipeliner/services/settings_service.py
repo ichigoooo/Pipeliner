@@ -53,6 +53,11 @@ class SettingsService:
                 self.settings.claude_validator_cmd,
                 "claude -p --permission-mode bypassPermissions",
             ),
+            "authoring_command": self._env_value(
+                "PIPELINER_CLAUDE_AUTHORING_CMD",
+                self.settings.claude_authoring_cmd,
+                "claude -p --permission-mode bypassPermissions",
+            ),
             "storage": {
                 "backend": {
                     "value": "local_fs",
@@ -86,6 +91,11 @@ class SettingsService:
                     self.settings.default_timeout,
                     "30m",
                 ),
+                "authoring_timeout": self._env_value(
+                    "PIPELINER_AUTHORING_TIMEOUT",
+                    self.settings.authoring_timeout,
+                    "20m",
+                ),
                 "default_max_rework_rounds": self._env_value(
                     "PIPELINER_DEFAULT_MAX_REWORK_ROUNDS",
                     self.settings.default_max_rework_rounds,
@@ -118,6 +128,15 @@ class SettingsService:
                     "command_template": self._env_value(
                         "PIPELINER_CLAUDE_VALIDATOR_CMD",
                         self.settings.claude_validator_cmd,
+                        "claude -p --permission-mode bypassPermissions",
+                    ),
+                },
+                {
+                    "provider": "claude",
+                    "role": "authoring",
+                    "command_template": self._env_value(
+                        "PIPELINER_CLAUDE_AUTHORING_CMD",
+                        self.settings.claude_authoring_cmd,
                         "claude -p --permission-mode bypassPermissions",
                     ),
                 },

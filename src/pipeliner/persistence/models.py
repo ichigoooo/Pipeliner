@@ -29,6 +29,8 @@ class AuthoringSessionModel(Base):
     published_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     published_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -42,6 +44,9 @@ class AuthoringSessionModel(Base):
     )
     messages: Mapped[list[AuthoringMessageModel]] = relationship(
         back_populates="session", cascade="all, delete-orphan", order_by="AuthoringMessageModel.created_at"
+    )
+    generation_logs: Mapped[list[AuthoringGenerationLogModel]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", order_by="AuthoringGenerationLogModel.created_at"
     )
 
 class AuthoringDraftModel(Base):
@@ -58,6 +63,7 @@ class AuthoringDraftModel(Base):
     graph_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     lint_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     lint_warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
+    source_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -83,6 +89,27 @@ class AuthoringMessageModel(Base):
     )
 
     session: Mapped[AuthoringSessionModel] = relationship(back_populates="messages")
+
+
+class AuthoringGenerationLogModel(Base):
+    __tablename__ = "authoring_generation_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("authoring_sessions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(32))
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    session: Mapped[AuthoringSessionModel] = relationship(back_populates="generation_logs")
 
 class WorkflowDefinitionModel(Base):
     __tablename__ = "workflow_definitions"

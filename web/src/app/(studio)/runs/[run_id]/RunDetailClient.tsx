@@ -12,12 +12,29 @@ import { InspectorPanel } from '@/components/ui/InspectorPanel';
 
 const ATTENTION_STATUSES = new Set(['blocked', 'failed', 'timed_out', 'rework_limit', 'stopped']);
 
+type DriveResult = {
+  run_id: string;
+  status: string;
+  stop_reason: string;
+  steps: Array<Record<string, unknown>>;
+};
+
+type PreviewPanelState =
+  | { kind: 'artifact'; data: any }
+  | { kind: 'log'; data: any };
+
 export function RunDetailClient({ runId }: { runId: string }) {
   const t = useTranslations('runs');
   const queryClient = useQueryClient();
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedNode, setSelectedNode] = useState<{ node_id: string; round_no: number } | null>(null);
   const [inspectorData, setInspectorData] = useState<unknown>(null);
+  const [driveMaxSteps, setDriveMaxSteps] = useState('100');
+  const [driveResult, setDriveResult] = useState<DriveResult | null>(null);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [previewState, setPreviewState] = useState<PreviewPanelState | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const runQuery = useQuery({
     queryKey: ['run', runId],
@@ -66,6 +83,50 @@ export function RunDetailClient({ runId }: { runId: string }) {
     onSuccess: refresh,
   });
 
+  const driveMutation = useMutation({
+    mutationFn: async () => {
+      const parsed = Number.parseInt(driveMaxSteps, 10);
+      if (Number.isNaN(parsed) || parsed <= 0) {
+        throw new Error(t('drive.invalidSteps'));
+      }
+      return api.driveRun(runId, { max_steps: parsed });
+    },
+    onSuccess: async (payload) => {
+      setDriveResult(payload);
+      setDriveError(null);
+      await refresh();
+    },
+    onError: (mutationError) => {
+      setDriveError((mutationError as Error).message);
+    },
+  });
+
+  const loadArtifactPreview = async (artifactId: string, version: string) => {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const payload = await api.previewRunArtifact(runId, artifactId, version);
+      setPreviewState({ kind: 'artifact', data: payload });
+    } catch (mutationError) {
+      setPreviewError((mutationError as Error).message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const loadLogPreview = async (path: string) => {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const payload = await api.previewRunLog(runId, path);
+      setPreviewState({ kind: 'log', data: payload });
+    } catch (mutationError) {
+      setPreviewError((mutationError as Error).message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const run = runQuery.data;
   const overview = overviewQuery.data;
   const nodeRound = nodeRoundQuery.data;
@@ -84,6 +145,49 @@ export function RunDetailClient({ runId }: { runId: string }) {
     (item) => item.node_id === selectedNode?.node_id && item.round_no === selectedNode?.round_no
   );
   const canRetry = selectedLatest ? ATTENTION_STATUSES.has(selectedLatest.status) : false;
+  const canDrive = run.run.status !== 'completed' && run.run.status !== 'stopped';
+  const previewPayload = previewState?.data?.preview;
+  const previewTitle =
+    previewState && previewState.kind === 'artifact'
+      ? `${previewState.data.artifact_id}@${previewState.data.version}`
+      : previewState?.data?.path ?? '';
+  const previewSubtitle =
+    previewState && previewState.kind === 'artifact'
+      ? `${previewState.data.kind} · ${previewState.data.storage_uri}`
+      : t('preview.logSubtitle');
+
+  const renderPreviewContent = (preview: any) => {
+    if (!preview) {
+      return null;
+    }
+    if (preview.kind === 'json') {
+      return (
+        <pre className="whitespace-pre-wrap break-all text-xs leading-6 text-stone-900">
+          {prettyJson(preview.content)}
+        </pre>
+      );
+    }
+    if (preview.kind === 'text') {
+      return (
+        <pre className="whitespace-pre-wrap break-all text-xs leading-6 text-stone-900">
+          {preview.content}
+        </pre>
+      );
+    }
+    if (preview.kind === 'directory') {
+      return (
+        <div className="space-y-2 text-xs text-stone-700">
+          <p>{t('preview.directory')}</p>
+          <ul className="list-disc pl-4">
+            {(preview.entries || []).map((entry: string) => (
+              <li key={entry}>{entry}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+    return <p className="text-xs text-stone-700">{t('preview.binary')}</p>;
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -165,6 +269,49 @@ export function RunDetailClient({ runId }: { runId: string }) {
                 <p className="mt-2 text-sm">{overview.latest_nodes.length}</p>
               </div>
             </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('drive.title')}</p>
+            <p className="mt-2 text-xs text-stone-500">{t('drive.description')}</p>
+            <div className="mt-4">
+              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
+                {t('drive.maxSteps')}
+              </label>
+              <input
+                className="mt-2 w-full rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 outline-none"
+                value={driveMaxSteps}
+                onChange={(event) => setDriveMaxSteps(event.target.value)}
+                placeholder="100"
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => driveMutation.mutate()}
+                disabled={!canDrive || driveMutation.isPending}
+                className="rounded-full bg-stone-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+              >
+                {t('drive.button')}
+              </button>
+              {driveResult ? (
+                <button
+                  type="button"
+                  onClick={() => setInspectorData(driveResult)}
+                  className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-500"
+                >
+                  {t('drive.inspect')}
+                </button>
+              ) : null}
+            </div>
+            {driveError ? <p className="mt-3 text-xs text-rose-700">{driveError}</p> : null}
+            {driveResult ? (
+              <div className="mt-4 rounded-3xl bg-stone-50 px-4 py-3 text-xs text-stone-700">
+                <p>{t('drive.result', { status: driveResult.status })}</p>
+                <p>{t('drive.stopReason', { reason: driveResult.stop_reason })}</p>
+                <p>{t('drive.steps', { count: driveResult.steps.length })}</p>
+              </div>
+            ) : null}
           </section>
         </aside>
 
@@ -258,7 +405,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
                           <button
                             key={`${artifact.artifact_id}-${artifact.version}`}
                             type="button"
-                            onClick={() => setInspectorData(artifact)}
+                            onClick={() => loadArtifactPreview(artifact.artifact_id, artifact.version)}
                             className="w-full rounded-3xl border border-stone-200 px-4 py-4 text-left transition hover:border-stone-400"
                           >
                             <p className="text-sm font-medium text-stone-900">
@@ -281,7 +428,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
                           <button
                             key={`${ref.kind}-${ref.path}`}
                             type="button"
-                            onClick={() => setInspectorData(ref)}
+                            onClick={() => loadLogPreview(ref.path)}
                             className="w-full rounded-3xl border border-stone-200 px-4 py-4 text-left transition hover:border-stone-400"
                           >
                             <p className="text-sm font-medium text-stone-900">{ref.kind}</p>
@@ -304,7 +451,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
                     <button
                       key={`${artifact.artifact_id}-${artifact.version}`}
                       type="button"
-                      onClick={() => setInspectorData(artifact)}
+                      onClick={() => loadArtifactPreview(artifact.artifact_id, artifact.version)}
                       className="w-full rounded-[1.75rem] border border-stone-200 px-5 py-4 text-left transition hover:border-amber-500"
                     >
                       <div className="flex items-center justify-between gap-3">
@@ -338,6 +485,57 @@ export function RunDetailClient({ runId }: { runId: string }) {
           </div>
         </section>
       </div>
+
+      {previewState ? (
+        <section className="border-t border-stone-200 bg-white px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('preview.title')}</p>
+              <h3 className="mt-2 text-lg font-semibold text-stone-900">{previewTitle}</h3>
+              <p className="mt-2 text-xs text-stone-500">{previewSubtitle}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPreviewState(null)}
+              className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-500"
+            >
+              {t('preview.close')}
+            </button>
+          </div>
+          {previewLoading ? (
+            <p className="mt-4 text-xs text-stone-500">{t('preview.loading')}</p>
+          ) : previewError ? (
+            <p className="mt-4 text-xs text-rose-700">{previewError}</p>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {previewPayload?.truncated ? (
+                <p className="text-xs text-amber-700">
+                  {t('preview.truncated', { limit: previewPayload.limit_bytes })}
+                </p>
+              ) : null}
+              <div className="rounded-[1.5rem] border border-stone-200 bg-stone-50 p-4">
+                {renderPreviewContent(previewPayload)}
+              </div>
+              {previewState.kind === 'artifact' ? (
+                <details className="rounded-[1.5rem] border border-stone-200 bg-white p-4">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-stone-600">
+                    {t('preview.manifest')}
+                  </summary>
+                  <pre className="mt-3 whitespace-pre-wrap break-all text-xs text-stone-700">
+                    {prettyJson(previewState.data.manifest)}
+                  </pre>
+                </details>
+              ) : null}
+              {previewPayload?.path ? (
+                <p className="text-xs text-stone-500">
+                  {t('preview.path')}: {previewPayload.path}
+                </p>
+              ) : null}
+            </div>
+          )}
+        </section>
+      ) : null}
+
 
       {inspectorData !== null && (
         <InspectorPanel

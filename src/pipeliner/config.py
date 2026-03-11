@@ -15,6 +15,9 @@ class Settings:
     default_timeout: str = field(
         default_factory=lambda: os.getenv("PIPELINER_DEFAULT_TIMEOUT", "30m")
     )
+    authoring_timeout: str = field(
+        default_factory=lambda: os.getenv("PIPELINER_AUTHORING_TIMEOUT", "20m")
+    )
     default_max_rework_rounds: int = field(
         default_factory=lambda: int(os.getenv("PIPELINER_DEFAULT_MAX_REWORK_ROUNDS", "3"))
     )
@@ -35,6 +38,12 @@ class Settings:
     claude_validator_cmd: str = field(
         default_factory=lambda: os.getenv(
             "PIPELINER_CLAUDE_VALIDATOR_CMD",
+            "claude -p --permission-mode bypassPermissions",
+        )
+    )
+    claude_authoring_cmd: str = field(
+        default_factory=lambda: os.getenv(
+            "PIPELINER_CLAUDE_AUTHORING_CMD",
             "claude -p --permission-mode bypassPermissions",
         )
     )

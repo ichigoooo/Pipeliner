@@ -63,6 +63,8 @@ export interface WorkflowDetail {
   lint_report: LintReport;
 }
 
+export interface AuthoringSource { type: string | null; payload: Record<string, unknown> | null; }
+
 export interface AuthoringSession {
   session_id: string;
   title: string;
@@ -311,6 +313,30 @@ export const api = {
         method: 'POST',
       }
     ),
+  generateDraft: async (
+    sessionId: string,
+    payload: { instruction: string; spec?: Record<string, unknown> }
+  ) =>
+    request<AuthoringDraft>(`authoring/sessions/${sessionId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createAuthoringSessionFromVersion: async (payload: { workflow_id: string; version: string; title?: string; intent_brief?: string }) =>
+    request<{ session_id: string; title: string; status: string; latest_revision: number }>(
+      'authoring/sessions/from-version',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+  createAuthoringSessionFromRun: async (payload: { run_id: string; node_id?: string; round_no?: number; title?: string; intent_brief?: string }) =>
+    request<{ session_id: string; title: string; status: string; latest_revision: number }>(
+      'authoring/sessions/from-run',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
   listRuns: async () => request<{ runs: RunSummary[] }>('runs'),
   startRun: async (workflowId: string, version: string, inputs: Record<string, unknown>) =>
     request<{ run_id: string; status: string; workspace_root: string }>('runs', {
@@ -344,5 +370,20 @@ export const api = {
         body: JSON.stringify({ rework_brief: reworkBrief ?? null }),
       }
     ),
+  driveRun: async (
+    runId: string,
+    payload: { max_steps?: number; executor_command_template?: string; validator_command_template?: string }
+  ) =>
+    request<{ run_id: string; status: string; stop_reason: string; steps: Record<string, unknown>[] }>(
+      `runs/${runId}/drive`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+  previewRunArtifact: async (runId: string, artifactId: string, version: string) =>
+    request<any>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/preview`),
+  previewRunLog: async (runId: string, path: string) =>
+    request<any>(`runs/${runId}/logs/preview?path=${encodeURIComponent(path)}`),
   getSettings: async () => request<{ settings: SettingsSnapshot }>('settings'),
 };

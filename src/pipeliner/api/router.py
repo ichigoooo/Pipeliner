@@ -28,10 +28,13 @@ from pipeliner.services.errors import (
     ValidationError,
 )
 from pipeliner.config import get_settings
+from pipeliner.services.run_driver import RunDriver
 from pipeliner.services.run_service import RunService
 from pipeliner.services.workflow_service import WorkflowService
+from pipeliner.services.authoring_agent import AuthoringAgent
 from pipeliner.services.authoring_service import AuthoringService
 from pipeliner.services.settings_service import SettingsService
+from pipeliner.services.preview_service import PreviewService
 from pipeliner.ui.views import render_index, render_run_view, render_workflow_view
 
 router = APIRouter()
@@ -71,8 +74,34 @@ class AuthoringDraftSaveRequest(BaseModel):
     instruction: str | None = None
 
 
+class AuthoringGenerateRequest(BaseModel):
+    instruction: str
+    spec: dict[str, Any] | None = None
+
+
+class AuthoringSessionFromVersionRequest(BaseModel):
+    workflow_id: str
+    version: str
+    title: str | None = None
+    intent_brief: str | None = None
+
+
+class AuthoringSessionFromRunRequest(BaseModel):
+    run_id: str
+    node_id: str | None = None
+    round_no: int | None = None
+    title: str | None = None
+    intent_brief: str | None = None
+
+
 class RunRetryRequest(BaseModel):
     rework_brief: dict[str, Any] | None = None
+
+
+class RunDriveRequest(BaseModel):
+    max_steps: int = Field(default=100, ge=1, le=500)
+    executor_command_template: str | None = None
+    validator_command_template: str | None = None
 
 
 def get_database(request: Request) -> Database:
@@ -94,10 +123,29 @@ def _workflow_service(session: Session) -> WorkflowService:
     return WorkflowService(WorkflowRepository(session))
 
 
-def _authoring_service(session: Session) -> AuthoringService:
+def _authoring_service(session: Session, request: Request) -> AuthoringService:
     return AuthoringService(
         AuthoringRepository(session),
         WorkflowService(WorkflowRepository(session)),
+        authoring_agent=AuthoringAgent(request.app.state.settings),
+    )
+
+
+def _run_driver(session: Session, request: Request) -> RunDriver:
+    return RunDriver(
+        RunRepository(session),
+        WorkflowRepository(session),
+        CallbackRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+
+
+def _preview_service(session: Session, request: Request) -> PreviewService:
+    return PreviewService(
+        RunRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
     )
 
 
@@ -172,6 +220,7 @@ def _authoring_draft_payload(draft) -> dict[str, Any]:
         "lint_warnings": draft.lint_warnings,
         "workflow_id": draft.spec_json.get("metadata", {}).get("workflow_id"),
         "version": draft.spec_json.get("metadata", {}).get("version"),
+        "source": draft.source_json,
         "created_at": draft.created_at.isoformat() if draft.created_at else None,
     }
 
@@ -199,9 +248,10 @@ def ui_index(request: Request, session: SessionDep) -> str:
 @router.post("/api/authoring/sessions")
 def create_authoring_session(
     request_body: AuthoringSessionCreateRequest,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     authoring_session = service.create_session(
         title=request_body.title,
         intent_brief=request_body.intent_brief,
@@ -215,12 +265,146 @@ def create_authoring_session(
     }
 
 
+@router.post("/api/authoring/sessions/from-version")
+def create_authoring_session_from_version(
+    request_body: AuthoringSessionFromVersionRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    workflow_repo = WorkflowRepository(session)
+    workflow_version = workflow_repo.get_version(
+        request_body.workflow_id,
+        request_body.version,
+    )
+    if workflow_version is None:
+        raise NotFoundError(
+            f"未找到 workflow version: {request_body.workflow_id}@{request_body.version}"
+        )
+    spec = workflow_version.spec_json
+    metadata = spec.get("metadata", {}) if isinstance(spec, dict) else {}
+    title = request_body.title or f"{metadata.get('title') or request_body.workflow_id} Iteration"
+    intent_brief = (
+        request_body.intent_brief
+        or metadata.get("purpose")
+        or f"Iterate {request_body.workflow_id}@{request_body.version}"
+    )
+    source = {
+        "type": "workflow_version",
+        "payload": {
+            "workflow_id": request_body.workflow_id,
+            "version": request_body.version,
+            "created_at": workflow_version.created_at.isoformat()
+            if workflow_version.created_at
+            else None,
+        },
+    }
+    service = _authoring_service(session, request)
+    authoring_session = service.create_session(
+        title=title,
+        intent_brief=intent_brief,
+        base_spec=spec,
+        source=source,
+    )
+    latest_draft = service.get_latest_draft(authoring_session.id)
+    return {
+        "session_id": authoring_session.id,
+        "title": authoring_session.title,
+        "status": authoring_session.status,
+        "latest_revision": latest_draft.revision,
+        "source": source,
+    }
+
+
+@router.post("/api/authoring/sessions/from-run")
+def create_authoring_session_from_run(
+    request_body: AuthoringSessionFromRunRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    run_repo = RunRepository(session)
+    run = run_repo.get_run(request_body.run_id)
+    if run is None:
+        raise NotFoundError(f"未找到 run: {request_body.run_id}")
+    workflow_version = WorkflowRepository(session).get_version(
+        run.workflow_id,
+        run.workflow_version,
+    )
+    if workflow_version is None:
+        raise NotFoundError(f"未找到 workflow version: {run.workflow_id}@{run.workflow_version}")
+
+    selected_node = None
+    if request_body.node_id:
+        if request_body.round_no is not None:
+            selected_node = run_repo.get_node_run(
+                run.id,
+                request_body.node_id,
+                request_body.round_no,
+            )
+        else:
+            selected_node = run_repo.get_latest_node_run(run.id, request_body.node_id)
+        if selected_node is None:
+            raise NotFoundError(f"未找到 node run: {request_body.node_id}")
+    else:
+        attention_statuses = {
+            "blocked",
+            "failed",
+            "timed_out",
+            "rework_limit",
+            "stopped",
+        }
+        latest = run_repo.list_latest_node_runs(run.id)
+        attention_nodes = [item for item in latest.values() if item.status in attention_statuses]
+        attention_nodes.sort(key=lambda item: item.updated_at or item.created_at)
+        selected_node = attention_nodes[-1] if attention_nodes else None
+
+    if selected_node is None:
+        raise ValidationError("未找到需要迭代的 attention 节点")
+
+    spec = workflow_version.spec_json
+    metadata = spec.get("metadata", {}) if isinstance(spec, dict) else {}
+    title = request_body.title or f"{metadata.get('title') or run.workflow_id} Iteration"
+    intent_brief = (
+        request_body.intent_brief
+        or metadata.get("purpose")
+        or f"Iterate {run.workflow_id}@{run.workflow_version} from run {run.id}"
+    )
+    source = {
+        "type": "attention_run",
+        "payload": {
+            "run_id": run.id,
+            "workflow_id": run.workflow_id,
+            "version": run.workflow_version,
+            "node_id": selected_node.node_id,
+            "round_no": selected_node.round_no,
+            "status": selected_node.status,
+            "rework_brief": selected_node.rework_brief_json,
+            "stop_reason": selected_node.stop_reason,
+        },
+    }
+    service = _authoring_service(session, request)
+    authoring_session = service.create_session(
+        title=title,
+        intent_brief=intent_brief,
+        base_spec=spec,
+        source=source,
+    )
+    latest_draft = service.get_latest_draft(authoring_session.id)
+    return {
+        "session_id": authoring_session.id,
+        "title": authoring_session.title,
+        "status": authoring_session.status,
+        "latest_revision": latest_draft.revision,
+        "source": source,
+    }
+
+
 @router.get("/api/authoring/sessions")
 def list_authoring_sessions(
+    request: Request,
     session: SessionDep,
     status: str | None = None,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     sessions = service.list_sessions(status=status)
     return {
         "sessions": [
@@ -233,6 +417,11 @@ def list_authoring_sessions(
                 "published_workflow_id": s.published_workflow_id,
                 "published_version": s.published_version,
                 "published_revision": s.published_revision,
+                "source": (
+                    {"type": s.source_type, "payload": s.source_payload_json}
+                    if s.source_type or s.source_payload_json
+                    else None
+                ),
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "updated_at": s.updated_at.isoformat() if s.updated_at else None,
             }
@@ -244,9 +433,10 @@ def list_authoring_sessions(
 @router.get("/api/authoring/sessions/{session_id}")
 def get_authoring_session(
     session_id: str,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     authoring_session = service.get_session(session_id)
     return {
         "session_id": authoring_session.id,
@@ -261,6 +451,11 @@ def get_authoring_session(
             if authoring_session.published_at
             else None
         ),
+        "source": (
+            {"type": authoring_session.source_type, "payload": authoring_session.source_payload_json}
+            if authoring_session.source_type or authoring_session.source_payload_json
+            else None
+        ),
     }
 
 
@@ -268,9 +463,10 @@ def get_authoring_session(
 def save_authoring_draft(
     session_id: str,
     request_body: AuthoringDraftSaveRequest,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     draft = service.save_draft(
         session_id,
         request_body.spec,
@@ -283,21 +479,41 @@ def save_authoring_draft(
 def continue_authoring_session(
     session_id: str,
     request_body: AuthoringDraftSaveRequest,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
     if not request_body.instruction:
         raise ValidationError("continue authoring 需要 instruction")
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     draft = service.continue_session(session_id, request_body.instruction, request_body.spec)
+    return _authoring_draft_payload(draft)
+
+
+@router.post("/api/authoring/sessions/{session_id}/generate")
+def generate_authoring_draft(
+    session_id: str,
+    request_body: AuthoringGenerateRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    if not request_body.instruction:
+        raise ValidationError("generate authoring 需要 instruction")
+    service = _authoring_service(session, request)
+    draft = service.generate_draft(
+        session_id,
+        request_body.instruction,
+        base_spec=request_body.spec,
+    )
     return _authoring_draft_payload(draft)
 
 
 @router.get("/api/authoring/sessions/{session_id}/drafts/latest")
 def get_latest_authoring_draft(
     session_id: str,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     draft = service.get_latest_draft(session_id)
     return _authoring_draft_payload(draft)
 
@@ -306,9 +522,10 @@ def get_latest_authoring_draft(
 def get_authoring_draft(
     session_id: str,
     revision: int,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     draft = service.get_draft(session_id, revision)
     return _authoring_draft_payload(draft)
 
@@ -316,9 +533,10 @@ def get_authoring_draft(
 @router.get("/api/authoring/sessions/{session_id}/drafts")
 def list_authoring_drafts(
     session_id: str,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     drafts = service.list_drafts(session_id)
     return {"drafts": [_authoring_draft_payload(item) for item in drafts]}
 
@@ -326,9 +544,10 @@ def list_authoring_drafts(
 @router.get("/api/authoring/sessions/{session_id}/messages")
 def list_authoring_messages(
     session_id: str,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     items = service.list_messages(session_id)
     return {
         "messages": [
@@ -351,10 +570,11 @@ def list_authoring_messages(
 @router.post("/api/authoring/sessions/{session_id}/publish")
 def publish_authoring_session(
     session_id: str,
+    request: Request,
     session: SessionDep,
     revision: int | None = None,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     if revision is None:
         latest = service.get_latest_draft(session_id)
         revision = latest.revision
@@ -365,9 +585,10 @@ def publish_authoring_session(
 def derive_draft_graph_projection(
     session_id: str,
     revision: int,
+    request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    service = _authoring_service(session)
+    service = _authoring_service(session, request)
     draft = service.get_draft(session_id, revision)
     return {
         "session_id": draft.session_id,
@@ -577,6 +798,23 @@ def get_run(
     }
 
 
+@router.post("/api/runs/{run_id}/drive")
+def drive_run(
+    run_id: str,
+    request_body: RunDriveRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    driver = _run_driver(session, request)
+    result = driver.drive(
+        run_id=run_id,
+        executor_command_template=request_body.executor_command_template,
+        validator_command_template=request_body.validator_command_template,
+        max_steps=request_body.max_steps,
+    )
+    return result
+
+
 @router.get("/api/runs/{run_id}/debug/overview")
 def get_run_debug_overview(
     run_id: str,
@@ -704,6 +942,29 @@ def get_run_artifacts(
             for item in service.list_run_artifacts(run_id)
         ]
     }
+
+
+@router.get("/api/runs/{run_id}/artifacts/{artifact_id}/versions/{version}/preview")
+def preview_run_artifact(
+    run_id: str,
+    artifact_id: str,
+    version: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _preview_service(session, request)
+    return service.preview_artifact(run_id, artifact_id, version)
+
+
+@router.get("/api/runs/{run_id}/logs/preview")
+def preview_run_log(
+    run_id: str,
+    path: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _preview_service(session, request)
+    return service.preview_log(run_id, path)
 
 
 @router.get("/ui/runs/{run_id}", response_class=HTMLResponse)

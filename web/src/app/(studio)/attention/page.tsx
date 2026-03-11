@@ -1,19 +1,32 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
-import { formatTimestamp } from '@/lib/format';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function AttentionQueuePage() {
   const t = useTranslations('attention');
   const tc = useTranslations('common');
+  const router = useRouter();
+  const [iterationError, setIterationError] = useState<string | null>(null);
   const attentionQuery = useQuery({
     queryKey: ['attention-runs'],
     queryFn: api.listAttentionRuns,
     refetchInterval: 5_000,
+  });
+
+  const iterateMutation = useMutation({
+    mutationFn: (runId: string) => api.createAuthoringSessionFromRun({ run_id: runId }),
+    onSuccess: (payload) => {
+      router.push(`/authoring?session=${payload.session_id}`);
+    },
+    onError: (mutationError) => {
+      setIterationError((mutationError as Error).message);
+    },
   });
 
   const runs = attentionQuery.data?.runs ?? [];
@@ -23,6 +36,8 @@ export default function AttentionQueuePage() {
       <div className="mb-8">
         <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('description')}</h1>
+        <p className="mt-2 text-xs text-stone-500">{t('iterateHint')}</p>
+        {iterationError ? <p className="mt-2 text-xs text-rose-700">{iterationError}</p> : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -45,9 +60,22 @@ export default function AttentionQueuePage() {
             <p className="mt-4 rounded-3xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {run.stop_reason || t('description')}
             </p>
-            <p className="mt-3 text-xs uppercase tracking-[0.18em] text-stone-500">
-              {tc('refresh')}: {run.actions.join(', ')}
-            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-stone-500">
+                {tc('refresh')}: {run.actions.join(', ')}
+              </p>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  iterateMutation.mutate(run.run_id);
+                }}
+                className="rounded-full border border-amber-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
+              >
+                {t('iterate')}
+              </button>
+            </div>
           </Link>
         ))}
         {runs.length === 0 ? (

@@ -42,10 +42,13 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - 注册 `workflow spec`
 - 启动 `run`
 - 查看 run、node、artifact、callback 状态
+- 在 Studio 里调用 Claude 生成草案并形成新 revision
 - 用真实 `Claude` 执行 executor 节点
 - 用真实 `Claude` 执行 validator 节点
 - 用 `run drive` 自动顺序驱动整个 run
 - 在 `blocked`、`failed`、`timed_out`、`rework_limit` 时停在人工介入边界
+- 从已发布版本或 attention run 发起迭代会话
+- 预览 artifact payload 与 run log 片段
 - 使用 Workflow Studio 完成 authoring、workflow 浏览、run 调试与 settings 溯源
 
 ## 技术栈
@@ -128,14 +131,18 @@ npm run start
 
 ### Workflow Studio（推荐入口）
 
+详细步骤见 `docs/studio-usage.md`。
+
 1. 打开 `http://localhost:3000`
-2. 进入 `/authoring` 创建 authoring session
-3. 在右侧编辑 canonical spec，保存或继续会话
+2. 进入 `/authoring` 创建 authoring session（或从版本/attention 发起迭代）
+3. 在右侧编辑 canonical spec，保存、继续或使用 Claude 生成新草案
 4. lint 通过后发布为 workflow version
 5. 在 `/workflows` 选择版本并点击 `Start Run`
 6. 在 `/runs` 或 `/runs/{run_id}` 查看 timeline、callbacks、artifacts、context 与 log refs
-7. 在 `/attention` 处理中断状态并执行 retry/stop
-8. 在 `/settings` 查看运行时配置与来源
+7. 在 run 详情中执行自动驱动，查看 stop reason 与步骤摘要
+8. 点击 artifact / log 预览内容（超限会提示路径）
+9. 在 `/attention` 处理中断状态并执行 retry/stop/迭代
+10. 在 `/settings` 查看运行时配置与来源
 
 ### 最小 CLI 使用流
 
@@ -172,6 +179,8 @@ uv run pipeliner validator dispatch <run_id> <node_id> <validator_id>
 ```bash
 export PIPELINER_CLAUDE_EXECUTOR_CMD='claude -p --permission-mode bypassPermissions'
 export PIPELINER_CLAUDE_VALIDATOR_CMD='claude -p --permission-mode bypassPermissions'
+export PIPELINER_CLAUDE_AUTHORING_CMD='claude -p --permission-mode bypassPermissions'
+export PIPELINER_AUTHORING_TIMEOUT='20m'
 ```
 
 支持模板占位符：`{prompt_file}`、`{task_file}`、`{work_dir}`。

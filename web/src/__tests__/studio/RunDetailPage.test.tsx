@@ -22,6 +22,9 @@ vi.mock('@/lib/api', () => ({
     getNodeRound: vi.fn(),
     stopRun: vi.fn(),
     retryNode: vi.fn(),
+    driveRun: vi.fn(),
+    previewRunArtifact: vi.fn(),
+    previewRunLog: vi.fn(),
   },
 }));
 
@@ -104,8 +107,21 @@ describe('RunDetailPage', () => {
           payload: { detail: 'failed' },
         },
       ],
-      artifacts: [],
-      log_refs: [],
+      artifacts: [
+        {
+          artifact_id: 'artifact_1',
+          version: 'v1',
+          kind: 'json',
+          storage_uri: 'runs/run_1/artifacts/artifact_1@v1',
+          digest: 'abc',
+        },
+      ],
+      log_refs: [
+        {
+          path: 'nodes/draft_article/rounds/1/executor.log',
+          kind: 'executor',
+        },
+      ],
     });
     mockedApi.stopRun.mockResolvedValue({ run_id: 'run_1', status: 'stopped', stop_reason: 'manual_stop' });
     mockedApi.retryNode.mockResolvedValue({
@@ -113,6 +129,38 @@ describe('RunDetailPage', () => {
       node_id: 'draft_article',
       round_no: 2,
       status: 'waiting_executor',
+    });
+    mockedApi.driveRun.mockResolvedValue({
+      run_id: 'run_1',
+      status: 'completed',
+      stop_reason: 'terminal_state',
+      steps: [],
+    });
+    mockedApi.previewRunArtifact.mockResolvedValue({
+      artifact_id: 'artifact_1',
+      version: 'v1',
+      kind: 'json',
+      storage_uri: 'runs/run_1/artifacts/artifact_1@v1',
+      manifest: { artifact_id: 'artifact_1', version: 'v1' },
+      preview: {
+        kind: 'json',
+        content: { ok: true },
+        truncated: false,
+        size_bytes: 10,
+        limit_bytes: 200000,
+        path: '/tmp/artifact.json',
+      },
+    });
+    mockedApi.previewRunLog.mockResolvedValue({
+      path: 'nodes/draft_article/rounds/1/executor.log',
+      preview: {
+        kind: 'text',
+        content: 'hello log',
+        truncated: false,
+        size_bytes: 8,
+        limit_bytes: 200000,
+        path: '/tmp/executor.log',
+      },
     });
 
     renderWithClient(<RunDetailClient runId="run_1" />);
@@ -127,5 +175,12 @@ describe('RunDetailPage', () => {
     fireEvent.click(screen.getByText('Inspect raw context'));
     expect(screen.getByText('Run Inspector')).toBeInTheDocument();
     expect(screen.getByText(/context_value/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Drive'));
+    expect(await screen.findByText('Result status: completed')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('artifact_1@v1'));
+    expect(await screen.findByText('Artifact / Log Preview')).toBeInTheDocument();
+    expect(screen.getByText(/ok/)).toBeInTheDocument();
   });
 });

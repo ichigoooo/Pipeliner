@@ -114,9 +114,22 @@
     "revision": "Revision",
     "canonicalSpec": "Canonical workflow spec",
     "instruction": "Authoring instruction",
+    "field": {
+      "sessionTitle": "Session title",
+      "intentBrief": "Intent brief"
+    },
     "placeholder": {
       "sessionTitle": "Session title",
       "intentBrief": "Intent brief"
+    },
+    "help": {
+      "newSession": "Create a new authoring session to produce a workflow draft.",
+      "sessionTitle": "Human-readable name to identify this session.",
+      "intentBrief": "One-sentence goal with inputs/outputs and acceptance criteria.",
+      "instruction": "Describe what to change or refine in the current draft.",
+      "canonicalSpec": "This is the only canonical source. All views derive from this JSON.",
+      "messages": "System messages and publish events for this session.",
+      "revisionHistory": "Each save/continue creates a new revision you can revisit."
     },
     "summary": {
       "sessions": "Sessions",
@@ -136,13 +149,15 @@
     "empty": {
       "noSession": "No session selected",
       "selectSession": "Create or select a session from the left first.",
-      "workspaceHint": "Select a session to view synchronized cards / graph / spec / lint views."
+      "workspaceHint": "Select a session to view synchronized cards / graph / spec / lint views.",
+      "instruction": "Instruction is required for generation."
     },
     "published": "Published as",
     "selectedSession": "Selected Session",
     "updated": "Updated",
     "total": "{count} total",
-    "revisionInfo": "Revision {revision} · updated {time}"
+    "revisionInfo": "Revision {revision} · updated {time}",
+    "generate": "Generate with Claude"
   },
   "workflows": {
     "title": "Workflows",
@@ -167,7 +182,9 @@
     "launchRun": "Launch Run",
     "cancel": "Cancel",
     "jsonObjectRequired": "Input must be a JSON object",
-    "parseFailed": "Failed to parse input"
+    "parseFailed": "Failed to parse input",
+    "iterate": "Iterate",
+    "iterateHint": "Create a new authoring session from this published version."
   },
   "runs": {
     "title": "Runs",
@@ -204,6 +221,28 @@
       "nodeDetail": "Node Detail",
       "artifacts": "Artifacts",
       "raw": "Raw"
+    },
+    "drive": {
+      "title": "Auto drive",
+      "description": "Dispatch nodes in order until terminal state or max steps.",
+      "maxSteps": "Max steps",
+      "button": "Drive",
+      "inspect": "Inspect",
+      "result": "Result status: {status}",
+      "stopReason": "Stop reason: {reason}",
+      "steps": "Steps executed: {count}",
+      "invalidSteps": "Max steps must be a positive integer"
+    },
+    "preview": {
+      "title": "Artifact / Log Preview",
+      "close": "Close",
+      "loading": "Loading preview...",
+      "truncated": "Preview truncated at {limit} bytes. Use the workspace path to open the full file.",
+      "directory": "Directory entries",
+      "binary": "Binary file cannot be previewed.",
+      "manifest": "Artifact manifest",
+      "path": "Workspace path",
+      "logSubtitle": "Run log preview"
     }
   },
   "workflow": {
@@ -262,6 +301,8 @@
     "actions": {
       "retry": "Retry",
       "stop": "Stop"
-    }
+    },
+    "iterate": "Iterate",
+    "iterateHint": "Start an authoring session from an attention run to refine the workflow."
   }
 }

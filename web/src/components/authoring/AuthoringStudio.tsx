@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { api, AuthoringDraft, AuthoringSession } from '@/lib/api';
@@ -15,6 +16,8 @@ function parseSpec(value: string) {
 
 export function AuthoringStudio() {
   const t = useTranslations('authoring');
+  const searchParams = useSearchParams();
+  const sessionFromQuery = searchParams.get('session');
   const queryClient = useQueryClient();
   const sessionsQuery = useQuery({
     queryKey: ['authoring-sessions'],
@@ -24,6 +27,7 @@ export function AuthoringStudio() {
 
   const sessions = sessionsQuery.data?.sessions ?? [];
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [queryApplied, setQueryApplied] = useState(false);
   const [title, setTitle] = useState('Developer Workflow Studio');
   const [intentBrief, setIntentBrief] = useState(
     'Author a developer-first pipeline with inspectable drafts and settings provenance.'
@@ -35,10 +39,15 @@ export function AuthoringStudio() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (sessionFromQuery && !queryApplied) {
+      setSelectedSessionId(sessionFromQuery);
+      setQueryApplied(true);
+      return;
+    }
     if (!selectedSessionId && sessions.length > 0) {
       setSelectedSessionId(sessions[0].session_id);
     }
-  }, [sessions, selectedSessionId]);
+  }, [queryApplied, sessionFromQuery, sessions, selectedSessionId]);
 
   const sessionDetailQuery = useQuery({
     queryKey: ['authoring-session', selectedSessionId],
@@ -103,6 +112,15 @@ export function AuthoringStudio() {
   const continueMutation = useMutation({
     mutationFn: ({ sessionId, draft, note }: { sessionId: string; draft: Record<string, unknown>; note: string }) =>
       api.continueSession(sessionId, { spec: draft, instruction: note }),
+    onSuccess: async (payload) => {
+      setRawSpec(prettyJson(payload.spec_json));
+      await invalidateSession(payload.session_id);
+    },
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: ({ sessionId, draft, note }: { sessionId: string; draft: Record<string, unknown>; note: string }) =>
+      api.generateDraft(sessionId, { spec: draft, instruction: note }),
     onSuccess: async (payload) => {
       setRawSpec(prettyJson(payload.spec_json));
       await invalidateSession(payload.session_id);
@@ -178,15 +196,36 @@ export function AuthoringStudio() {
     }
   };
 
+  const submitGenerate = async () => {
+    if (!selectedSessionId) {
+      setError(t('empty.selectSession'));
+      return;
+    }
+    if (!instruction.trim()) {
+      setError(t('empty.instruction'));
+      return;
+    }
+
+    setError(null);
+    try {
+      const draft = parseSpec(rawSpec);
+      await generateMutation.mutateAsync({
+        sessionId: selectedSessionId,
+        draft,
+        note: instruction,
+      });
+    } catch (mutationError) {
+      setError((mutationError as Error).message);
+    }
+  };
+
   return (
-    <div className="grid h-full gap-4 p-4 xl:grid-cols-[320px_minmax(0,420px)_minmax(0,1fr)]">
+    <div className="grid h-full min-h-0 gap-4 overflow-hidden p-4 xl:grid-cols-[280px_minmax(520px,1.25fr)_minmax(320px,1fr)]">
       <section className="flex min-h-0 flex-col rounded-[2rem] border border-stone-200 bg-stone-950 p-5 text-white shadow-xl">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-stone-400">{t('title')}</p>
           <h1 className="mt-3 text-2xl font-semibold">{t('subtitle')}</h1>
-          <p className="mt-3 text-sm leading-6 text-stone-300">
-            {t('description')}
-          </p>
+          <p className="mt-3 text-sm leading-6 text-stone-300">{t('description')}</p>
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
@@ -197,27 +236,6 @@ export function AuthoringStudio() {
             </div>
           ))}
         </div>
-
-        <form className="mt-6 space-y-3" onSubmit={submitCreateSession}>
-          <input
-            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm outline-none placeholder:text-stone-500"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder={t('placeholder.sessionTitle')}
-          />
-          <textarea
-            className="min-h-28 w-full rounded-3xl border border-white/10 bg-white/10 px-4 py-3 text-sm outline-none placeholder:text-stone-500"
-            value={intentBrief}
-            onChange={(event) => setIntentBrief(event.target.value)}
-            placeholder={t('placeholder.intentBrief')}
-          />
-          <button
-            type="submit"
-            className="w-full rounded-full bg-amber-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-          >
-            {t('createSession')}
-          </button>
-        </form>
 
         <div className="mt-6 min-h-0 flex-1 overflow-auto">
           <div className="mb-3 flex items-center justify-between">
@@ -253,77 +271,125 @@ export function AuthoringStudio() {
         </div>
       </section>
 
-      <section className="grid min-h-0 grid-rows-[auto_auto_1fr] gap-4">
-        <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('selectedSession')}</p>
-              <h2 className="mt-2 text-xl font-semibold text-stone-900">
-                {currentSession?.title || t('empty.noSession')}
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-stone-600">
-                {currentSession?.intent_brief || t('empty.selectSession')}
-              </p>
-            </div>
-            {currentSession?.published_workflow_id ? (
-              <div className="rounded-3xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                {t('published')} {currentSession.published_workflow_id}@{currentSession.published_version}
+      <section className="flex min-h-0 flex-col overflow-hidden">
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_auto_auto_1fr] gap-4 overflow-auto pb-4 pr-2">
+          <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('newSession')}</p>
+            <p className="mt-2 text-xs text-stone-500">{t('help.newSession')}</p>
+            <form className="mt-4 space-y-4" onSubmit={submitCreateSession}>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
+                  {t('field.sessionTitle')}
+                </label>
+                <p className="text-xs text-stone-500">{t('help.sessionTitle')}</p>
+                <input
+                  className="h-11 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 text-sm text-stone-900 outline-none placeholder:text-stone-400"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder={t('placeholder.sessionTitle')}
+                />
               </div>
-            ) : null}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
+                  {t('field.intentBrief')}
+                </label>
+                <p className="text-xs text-stone-500">{t('help.intentBrief')}</p>
+                <textarea
+                  className="min-h-28 w-full rounded-3xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-900 outline-none placeholder:text-stone-400"
+                  value={intentBrief}
+                  onChange={(event) => setIntentBrief(event.target.value)}
+                  placeholder={t('placeholder.intentBrief')}
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full rounded-full bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
+              >
+                {t('createSession')}
+              </button>
+            </form>
           </div>
-        </div>
 
-        <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
-          <label className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
-            {t('instruction')}
-          </label>
-          <textarea
-            className="mt-3 min-h-24 w-full rounded-3xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-900 outline-none"
-            value={instruction}
-            onChange={(event) => setInstruction(event.target.value)}
-          />
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => submitDraft('save')}
-              className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
-            >
-              {t('saveDraft')}
-            </button>
-            <button
-              type="button"
-              onClick={() => submitDraft('continue')}
-              className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
-            >
-              {t('continue')}
-            </button>
-            <button
-              type="button"
-              disabled={!selectedSessionId || !activeDraft || !canPublish}
-              onClick={() =>
-                selectedSessionId &&
-                activeDraft &&
-                publishMutation.mutate({ sessionId: selectedSessionId, revision: activeDraft.revision })
-              }
-              className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200"
-            >
-              {t('publish')}
-            </button>
+          <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('selectedSession')}</p>
+                <h2 className="mt-2 text-xl font-semibold text-stone-900">
+                  {currentSession?.title || t('empty.noSession')}
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-stone-600">
+                  {currentSession?.intent_brief || t('empty.selectSession')}
+                </p>
+              </div>
+              {currentSession?.published_workflow_id ? (
+                <div className="rounded-3xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  {t('published')} {currentSession.published_workflow_id}@{currentSession.published_version}
+                </div>
+              ) : null}
+            </div>
           </div>
-          {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
-        </div>
 
-        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <label className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
+              {t('instruction')}
+            </label>
+            <p className="mt-2 text-xs text-stone-500">{t('help.instruction')}</p>
+            <textarea
+              className="mt-3 min-h-28 w-full rounded-3xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-900 outline-none"
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+            />
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => submitDraft('save')}
+                className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
+              >
+                {t('saveDraft')}
+              </button>
+              <button
+                type="button"
+                onClick={() => submitDraft('continue')}
+                className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
+              >
+                {t('continue')}
+              </button>
+              <button
+                type="button"
+                onClick={submitGenerate}
+                disabled={!selectedSessionId || generateMutation.isPending}
+                className="rounded-full border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900 transition hover:border-amber-400 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+              >
+                {t('generate')}
+              </button>
+              <button
+                type="button"
+                disabled={!selectedSessionId || !activeDraft || !canPublish}
+                onClick={() =>
+                  selectedSessionId &&
+                  activeDraft &&
+                  publishMutation.mutate({ sessionId: selectedSessionId, revision: activeDraft.revision })
+                }
+                className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200"
+              >
+                {t('publish')}
+              </button>
+            </div>
+            {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
+          </div>
+
+          <div className="grid min-h-0 gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="flex min-h-0 flex-col rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('canonicalSpec')}</p>
+                <p className="mt-2 text-xs text-stone-500">{t('help.canonicalSpec')}</p>
                 <p className="mt-2 text-sm text-stone-600">
                   {t('revisionInfo', { revision: activeDraft?.revision ?? '-', time: formatTimestamp(activeDraft?.created_at) })}
                 </p>
               </div>
             </div>
-            <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-[1.75rem] border border-stone-200 bg-stone-50">
+            <div className="mt-4 min-h-[320px] flex-1 overflow-hidden rounded-[1.75rem] border border-stone-200 bg-stone-50">
               <CodeMirror
                 value={rawSpec}
                 extensions={[json()]}
@@ -335,11 +401,12 @@ export function AuthoringStudio() {
             </div>
           </div>
 
-          <div className="grid min-h-0 gap-4">
+          <div className="grid min-h-0 grid-rows-[minmax(220px,1fr)_minmax(220px,1fr)] gap-4">
             <div className="min-h-0 overflow-auto rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
                 {t('messages')}
               </h3>
+              <p className="mt-2 text-xs text-stone-500">{t('help.messages')}</p>
               <div className="mt-4 space-y-3">
                 {messages.map((message) => (
                   <div
@@ -364,6 +431,7 @@ export function AuthoringStudio() {
               <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
                 {t('revisionHistory')}
               </h3>
+              <p className="mt-2 text-xs text-stone-500">{t('help.revisionHistory')}</p>
               <div className="mt-4 space-y-3">
                 {draftList.map((draft) => (
                   <button
@@ -386,6 +454,7 @@ export function AuthoringStudio() {
               </div>
             </div>
           </div>
+        </div>
         </div>
       </section>
 

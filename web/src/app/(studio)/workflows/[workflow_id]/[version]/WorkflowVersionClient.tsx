@@ -20,6 +20,7 @@ export function WorkflowVersionClient({
   const [showStart, setShowStart] = useState(false);
   const [inputsJson, setInputsJson] = useState('{\n  \n}');
   const [error, setError] = useState<string | null>(null);
+  const [iterationError, setIterationError] = useState<string | null>(null);
   const workflowQuery = useQuery({
     queryKey: ['workflow', workflowId, version],
     queryFn: () => api.getWorkflow(workflowId, version),
@@ -33,6 +34,20 @@ export function WorkflowVersionClient({
     },
     onError: (mutationError) => {
       setError((mutationError as Error).message);
+    },
+  });
+
+  const iterateMutation = useMutation({
+    mutationFn: () =>
+      api.createAuthoringSessionFromVersion({
+        workflow_id: workflowId,
+        version,
+      }),
+    onSuccess: (payload) => {
+      router.push(`/authoring?session=${payload.session_id}`);
+    },
+    onError: (mutationError) => {
+      setIterationError((mutationError as Error).message);
     },
   });
 
@@ -69,6 +84,13 @@ export function WorkflowVersionClient({
             </div>
             <button
               type="button"
+              onClick={() => iterateMutation.mutate()}
+              className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
+            >
+              {t('iterate')}
+            </button>
+            <button
+              type="button"
               onClick={() => setShowStart((value) => !value)}
               className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
             >
@@ -76,6 +98,8 @@ export function WorkflowVersionClient({
             </button>
           </div>
         </div>
+        <p className="mt-3 text-xs text-stone-500">{t('iterateHint')}</p>
+        {iterationError ? <p className="mt-2 text-xs text-rose-700">{iterationError}</p> : null}
         {showStart ? (
           <div className="mt-4 rounded-[2rem] border border-stone-200 bg-white p-4 shadow-sm">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">

@@ -114,9 +114,22 @@
     "revision": "版本",
     "canonicalSpec": "规范工作流定义",
     "instruction": "创作指令",
+    "field": {
+      "sessionTitle": "会话标题",
+      "intentBrief": "Intent Brief（意图简介）"
+    },
     "placeholder": {
       "sessionTitle": "会话标题",
       "intentBrief": "意图简介"
+    },
+    "help": {
+      "newSession": "创建一个新的创作会话，用于生成 workflow 草案。",
+      "sessionTitle": "用于区分会话的显示名称，例如“内容审核流程实验”。",
+      "intentBrief": "一句话说明目标、输入输出与验收标准，作为草案的创建依据。",
+      "instruction": "告诉系统这次要如何修改或补全规范草案。",
+      "canonicalSpec": "这是唯一机器真源。所有视图都从这份 JSON 派生。",
+      "messages": "记录系统与创作会话的消息与发布事件。",
+      "revisionHistory": "每次保存或继续都会生成一个版本，可回溯查看。"
     },
     "summary": {
       "sessions": "会话数",
@@ -136,13 +149,15 @@
     "empty": {
       "noSession": "未选择会话",
       "selectSession": "请先从左侧创建或选择一个会话。",
-      "workspaceHint": "选择一个会话以查看同步的 cards / graph / spec / lint 视图。"
+      "workspaceHint": "选择一个会话以查看同步的 cards / graph / spec / lint 视图。",
+      "instruction": "请先填写生成指令。"
     },
     "published": "已发布为",
     "selectedSession": "已选会话",
     "updated": "更新于",
     "total": "共 {count} 个",
-    "revisionInfo": "版本 {revision} · 更新于 {time}"
+    "revisionInfo": "版本 {revision} · 更新于 {time}",
+    "generate": "Claude 生成"
   },
   "workflows": {
     "title": "工作流",
@@ -167,7 +182,9 @@
     "launchRun": "启动运行",
     "cancel": "取消",
     "jsonObjectRequired": "输入必须是 JSON 对象",
-    "parseFailed": "解析输入失败"
+    "parseFailed": "解析输入失败",
+    "iterate": "发起迭代",
+    "iterateHint": "从当前版本创建新的 authoring 会话继续迭代。"
   },
   "runs": {
     "title": "运行",
@@ -204,6 +221,28 @@
       "nodeDetail": "节点详情",
       "artifacts": "产物",
       "raw": "原始数据"
+    },
+    "drive": {
+      "title": "自动驱动",
+      "description": "按顺序调度可执行节点，直到终态或达到步数上限。",
+      "maxSteps": "最大步数",
+      "button": "自动驱动",
+      "inspect": "查看详情",
+      "result": "结果状态：{status}",
+      "stopReason": "停止原因：{reason}",
+      "steps": "执行步骤：{count}",
+      "invalidSteps": "最大步数必须为正整数"
+    },
+    "preview": {
+      "title": "产物/日志预览",
+      "close": "关闭",
+      "loading": "正在加载预览...",
+      "truncated": "预览已截断（上限 {limit} 字节），请使用 workspace 路径查看完整文件。",
+      "directory": "目录列表",
+      "binary": "二进制文件无法预览。",
+      "manifest": "Artifact Manifest",
+      "path": "Workspace 路径",
+      "logSubtitle": "运行日志预览"
     }
   },
   "workflow": {
@@ -262,6 +301,8 @@
     "actions": {
       "retry": "重试",
       "stop": "停止"
-    }
+    },
+    "iterate": "发起迭代",
+    "iterateHint": "从 attention run 创建新的 authoring 会话以修订 workflow。"
   }
 }
