@@ -1,0 +1,63 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "iteration_flow",
+    "title": "Iteration Flow",
+    "purpose": "Verify iteration flow",
+    "version": "v1.0.0",
+    "tags": [
+      "studio"
+    ]
+  },
+  "inputs": [],
+  "outputs": [],
+  "nodes": [
+    {
+      "node_id": "draft_article",
+      "title": "Draft Article",
+      "purpose": "Draft content",
+      "archetype": "draft-content",
+      "depends_on": [],
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "article_draft",
+          "shape": "markdown",
+          "summary": "Generated draft"
+        }
+      ],
+      "executor": {
+        "skill": "draft-wechat-article"
+      },
+      "validators": [
+        {
+          "validator_id": "content-review",
+          "skill": "review-wechat-article"
+        }
+      ],
+      "acceptance": {
+        "done_means": "Produce a coherent draft",
+        "pass_condition": [
+          "Clear structure"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": [
+          "article_draft"
+        ]
+      }
+    }
+  ],
+  "defaults": {
+    "runtime_guards": {
+      "timeout": "30m",
+      "max_rework_rounds": 3,
+      "blocked_requires_manual": true,
+      "failure_requires_manual": true
+    }
+  },
+  "extensions": {}
+}

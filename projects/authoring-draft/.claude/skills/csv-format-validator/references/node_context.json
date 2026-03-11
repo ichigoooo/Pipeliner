@@ -1,0 +1,75 @@
+{
+  "workflow": {
+    "workflow_id": "authoring-draft",
+    "title": "古籍文本整理自动工作流",
+    "version": "draft"
+  },
+  "skill": {
+    "name": "csv-format-validator",
+    "role": "validator",
+    "validator_id": "csv-format-check"
+  },
+  "node_id": "csv_generation",
+  "node_spec": {
+    "node_id": "csv_generation",
+    "title": "CSV 文件生成",
+    "purpose": "按照标准格式要求生成 CSV 文件，包含完整的表头（著作标题,篇章标题,段落序号,段落内容,作者,著作类型,内容分类,朝代,著作简介,篇章类型,创作年份），确保编码为 UTF-8，分隔符为英文逗号",
+    "archetype": "generate-output",
+    "depends_on": [
+      "structure_analysis"
+    ],
+    "inputs": [
+      {
+        "name": "structured_data",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "structure_analysis",
+          "output": "structured_data"
+        },
+        "shape": "structured_data",
+        "required": true,
+        "summary": "包含完整元数据和段落内容的结构化数据"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "csv_file",
+        "shape": "file",
+        "summary": "生成的标准格式 CSV 文件"
+      }
+    ],
+    "executor": {
+      "skill": "classical-csv-generator"
+    },
+    "validators": [
+      {
+        "validator_id": "csv-format-check",
+        "skill": "csv-format-validator"
+      },
+      {
+        "validator_id": "csv-schema-check",
+        "skill": "csv-schema-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "已生成符合标准格式的 CSV 文件",
+      "pass_condition": [
+        "CSV 编码为 UTF-8",
+        "表头包含所有必填字段",
+        "分隔符为英文逗号",
+        "段落序号可正确转为整数",
+        "数据行与输入段落一致"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "csv_file"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:26:09.764712+00:00"
+}

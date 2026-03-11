@@ -1,0 +1,15 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "authoring-generate",
+    "title": "Authoring Generate",
+    "purpose": "Generate a workflow draft",
+    "version": "draft",
+    "tags": [
+      "authoring-session"
+    ]
+  },
+  "inputs": [],
+  "outputs": [],
+  "nodes": []
+}

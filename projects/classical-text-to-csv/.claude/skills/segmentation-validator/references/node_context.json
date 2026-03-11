@@ -1,0 +1,55 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "segmentation-validator",
+    "role": "validator",
+    "validator_id": "validator_1"
+  },
+  "node_id": "node_2",
+  "node_spec": {
+    "id": "semantic-segmentation",
+    "name": "语义分段",
+    "description": "根据语义（大致三到五句话或语义块）进行合理、灵活的分段，不完全基于原始换行符",
+    "executor": {
+      "skill": "semantic-text-segmentation"
+    },
+    "inputs": [
+      {
+        "name": "cleaned_text",
+        "from_node": {
+          "node_id": "text-preprocess",
+          "output_name": "cleaned_text"
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "name": "passages",
+        "shape": "array",
+        "summary": "分段后的段落数组，每个元素包含序号和内容"
+      },
+      {
+        "name": "segmentation_notes",
+        "shape": "array",
+        "summary": "分段说明，记录每个分段点的语义依据"
+      }
+    ],
+    "acceptance": {
+      "done_means": "文本已按语义完成合理分段",
+      "pass_condition": "passages 数组元素数量合理（每段3-5句话或一个语义块），无内容遗漏，segmentation_notes 说明清晰"
+    },
+    "validators": [
+      {
+        "id": "segmentation-quality-check",
+        "name": "分段质量检查",
+        "skill": "segmentation-validator",
+        "description": "验证分段是否合理，是否存在过长或过短的段落，内容是否完整"
+      }
+    ]
+  },
+  "updated_at": "2026-03-11T11:27:34.623983+00:00"
+}

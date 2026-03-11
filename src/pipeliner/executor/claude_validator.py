@@ -29,6 +29,7 @@ from pipeliner.protocols.callback import (
 from pipeliner.protocols.workflow import NodeValidatorSpec, WorkflowNodeSpec
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.errors import ConflictError, InvalidStateError, NotFoundError
+from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.run_service import RunService
 from pipeliner.types import ExecutionStatus, NodeRunStatus, VerdictStatus
 
@@ -72,6 +73,7 @@ class ClaudeValidatorDispatcher:
             artifact_repo,
             self.settings,
         )
+        self.project_initializer = ProjectInitializer(self.settings)
 
     def dispatch(
         self,
@@ -107,6 +109,7 @@ class ClaudeValidatorDispatcher:
             node_id,
             node_run.round_no,
         )
+        project_root = self.project_initializer.ensure_project_root(run.workflow_id)
         context_path = dirs["validators_dir"] / f"{validator_id}.json"
         if not context_path.exists():
             raise NotFoundError(f"validator context 文件不存在: {context_path}")
@@ -141,7 +144,7 @@ class ClaudeValidatorDispatcher:
         try:
             process = subprocess.run(
                 command,
-                cwd=dirs["validators_dir"],
+                cwd=project_root,
                 capture_output=True,
                 text=True,
                 input=prompt_text,

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections import Counter
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pipeliner.protocols.guards import RuntimeGuards
+from pipeliner.skills.naming import validate_skill_name
 from pipeliner.types import GateMode
 
 
@@ -146,6 +149,20 @@ class WorkflowSpec(BaseModel):
         output_names = [item.name for item in self.outputs]
         if len(set(output_names)) != len(output_names):
             raise ValueError("workflow outputs 存在重复 name")
+        skill_names: list[str] = []
+        for node in self.nodes:
+            validate_skill_name(node.executor.skill, context=f"节点 {node.node_id} executor")
+            skill_names.append(node.executor.skill)
+            for validator in node.validators:
+                validate_skill_name(
+                    validator.skill,
+                    context=f"节点 {node.node_id} validator {validator.validator_id}",
+                )
+                skill_names.append(validator.skill)
+        duplicates = [name for name, count in Counter(skill_names).items() if count > 1]
+        if duplicates:
+            duplicates.sort()
+            raise ValueError(f"workflow skills 存在重复: {', '.join(duplicates)}")
         return self
 
     def runtime_guards_or_default(self) -> RuntimeGuards:

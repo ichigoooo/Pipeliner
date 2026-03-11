@@ -1,0 +1,57 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "processing-report-generator",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "node_4",
+  "node_spec": {
+    "id": "generate-report",
+    "name": "生成处理报告",
+    "description": "汇总处理过程中的所有信息和统计数据，生成完整报告",
+    "executor": {
+      "skill": "processing-report-generator"
+    },
+    "inputs": [
+      {
+        "name": "corrections_made",
+        "from_node": {
+          "node_id": "text-preprocess",
+          "output_name": "corrections_made"
+        }
+      },
+      {
+        "name": "segmentation_notes",
+        "from_node": {
+          "node_id": "semantic-segmentation",
+          "output_name": "segmentation_notes"
+        }
+      },
+      {
+        "name": "csv_structure",
+        "from_node": {
+          "node_id": "csv-generate",
+          "output_name": "csv_structure"
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "name": "processing_report",
+        "shape": "object",
+        "summary": "处理报告对象，包含修正项、分段说明、CSV 结构信息"
+      }
+    ],
+    "acceptance": {
+      "done_means": "处理报告已生成",
+      "pass_condition": "processing_report 包含所有处理阶段的详细信息，结构清晰"
+    },
+    "validators": []
+  },
+  "updated_at": "2026-03-11T11:27:34.625496+00:00"
+}

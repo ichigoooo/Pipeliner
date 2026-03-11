@@ -1,0 +1,15 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "studio-e2e",
+    "title": "Studio E2E",
+    "purpose": "Author a workflow and verify the studio flow.",
+    "version": "draft",
+    "tags": [
+      "authoring-session"
+    ]
+  },
+  "inputs": [],
+  "outputs": [],
+  "nodes": []
+}

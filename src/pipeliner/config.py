@@ -47,6 +47,9 @@ class Settings:
             "claude -p --permission-mode bypassPermissions",
         )
     )
+    projects_root: Path = field(
+        default_factory=lambda: Path(os.getenv("PIPELINER_PROJECTS_ROOT", "projects")).resolve()
+    )
     app_name: str = "Pipeliner"
     run_root: Path = field(init=False)
     database_path: Path = field(init=False)
@@ -61,6 +64,7 @@ class Settings:
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.run_root.mkdir(parents=True, exist_ok=True)
+        self.projects_root.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache(maxsize=1)

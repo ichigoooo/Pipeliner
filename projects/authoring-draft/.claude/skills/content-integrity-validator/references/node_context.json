@@ -1,0 +1,74 @@
+{
+  "workflow": {
+    "workflow_id": "authoring-draft",
+    "title": "古籍文本整理自动工作流",
+    "version": "draft"
+  },
+  "skill": {
+    "name": "content-integrity-validator",
+    "role": "validator",
+    "validator_id": "content-integrity-check"
+  },
+  "node_id": "semantic_segmentation",
+  "node_spec": {
+    "node_id": "semantic_segmentation",
+    "title": "语义分段",
+    "purpose": "根据语义块进行合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段，确保段落便于后续阅读时比对翻译",
+    "archetype": "segment-content",
+    "depends_on": [
+      "text_preprocessing"
+    ],
+    "inputs": [
+      {
+        "name": "preprocessed_text",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_preprocessing",
+          "output": "preprocessed_text"
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "预处理后的文本"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "segmented_passages",
+        "shape": "structured_data",
+        "summary": "语义分段后的段落列表，每段包含序号和内容"
+      }
+    ],
+    "executor": {
+      "skill": "semantic-text-segmentation"
+    },
+    "validators": [
+      {
+        "validator_id": "segmentation-quality-check",
+        "skill": "segmentation-quality-validator"
+      },
+      {
+        "validator_id": "content-integrity-check",
+        "skill": "content-integrity-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "文本已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
+      "pass_condition": [
+        "分段基于语义而非原始换行符",
+        "每段长度适中（3-5 句话或一个语义块）",
+        "原文内容无遗漏、无错误修改",
+        "段落序号连续正确"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "segmented_passages"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:26:09.763627+00:00"
+}

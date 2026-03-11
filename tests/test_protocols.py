@@ -54,3 +54,28 @@ def test_reject_unknown_workflow_schema_version(client, workflow_fixture) -> Non
         workflow_fixture["schema_version"] = "pipeliner.workflow/v2alpha1"
         with pytest.raises(ValueError):
             service.validate_spec(workflow_fixture)
+
+
+def test_reject_invalid_skill_name(client, workflow_fixture) -> None:
+    with client.app.state.db.session() as session:
+        service = WorkflowService(WorkflowRepository(session))
+        workflow_fixture["nodes"][0]["executor"]["skill"] = "Bad_Skill"
+        with pytest.raises(ValueError):
+            service.validate_spec(workflow_fixture)
+
+
+def test_reject_reserved_skill_name(client, workflow_fixture) -> None:
+    with client.app.state.db.session() as session:
+        service = WorkflowService(WorkflowRepository(session))
+        workflow_fixture["nodes"][0]["executor"]["skill"] = "workflow-authoring"
+        with pytest.raises(ValueError):
+            service.validate_spec(workflow_fixture)
+
+
+def test_reject_duplicate_skill_names(client, workflow_fixture) -> None:
+    with client.app.state.db.session() as session:
+        service = WorkflowService(WorkflowRepository(session))
+        duplicate = workflow_fixture["nodes"][0]["executor"]["skill"]
+        workflow_fixture["nodes"][1]["validators"][0]["skill"] = duplicate
+        with pytest.raises(ValueError):
+            service.validate_spec(workflow_fixture)

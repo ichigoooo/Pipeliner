@@ -13,7 +13,7 @@ from pipeliner.storage.local_fs import WorkspaceManager
 
 @pytest.fixture()
 def settings(tmp_path: Path) -> Settings:
-    return Settings(data_dir=tmp_path / ".pipeliner")
+    return Settings(data_dir=tmp_path / ".pipeliner", projects_root=tmp_path / "projects")
 
 
 @pytest.fixture()

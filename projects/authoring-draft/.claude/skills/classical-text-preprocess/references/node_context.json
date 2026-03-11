@@ -1,0 +1,67 @@
+{
+  "workflow": {
+    "workflow_id": "authoring-draft",
+    "title": "古籍文本整理自动工作流",
+    "version": "draft"
+  },
+  "skill": {
+    "name": "classical-text-preprocess",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "text_preprocessing",
+  "node_spec": {
+    "node_id": "text_preprocessing",
+    "title": "文本预处理",
+    "purpose": "对原始文本进行 OCR 错误修正和格式整理，修复明显的格式错误、特殊符号和标点符号重复等问题，但保持原文内容完整不遗漏",
+    "archetype": "preprocess-content",
+    "depends_on": [],
+    "inputs": [
+      {
+        "name": "source_text",
+        "from": {
+          "kind": "workflow_input",
+          "name": "source_text",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "原始文本文档"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "preprocessed_text",
+        "shape": "file",
+        "summary": "预处理后的文本，修正 OCR 错误和格式问题"
+      }
+    ],
+    "executor": {
+      "skill": "classical-text-preprocess"
+    },
+    "validators": [
+      {
+        "validator_id": "ocr-correction-check",
+        "skill": "ocr-correction-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "文本已完成 OCR 错误修正和基本格式整理",
+      "pass_condition": [
+        "已修复明显的 OCR 识别错误",
+        "已整理格式错误和特殊符号重复",
+        "原文内容无遗漏、无错误修改"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "preprocessed_text"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:26:09.762954+00:00"
+}

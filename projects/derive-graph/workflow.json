@@ -1,0 +1,15 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "derive-graph",
+    "title": "Derive Graph",
+    "purpose": "Need synchronized package",
+    "version": "draft",
+    "tags": [
+      "authoring-session"
+    ]
+  },
+  "inputs": [],
+  "outputs": [],
+  "nodes": []
+}

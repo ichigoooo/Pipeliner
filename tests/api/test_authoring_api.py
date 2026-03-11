@@ -100,6 +100,16 @@ def test_authoring_session_lifecycle(client: TestClient) -> None:
     assert save_response.status_code == 200
     assert save_response.json()["revision"] == 2
     assert save_response.json()["graph"]["nodes"][0]["id"] == "draft_article"
+    project_root = client.app.state.settings.projects_root / "test_wf"
+    assert (project_root / ".claude" / "skills" / "draft-wechat-article" / "SKILL.md").exists()
+    assert (
+        project_root
+        / ".claude"
+        / "skills"
+        / "review-wechat-article"
+        / "references"
+        / "node_context.json"
+    ).exists()
 
     continue_response = client.post(
         f"/api/authoring/sessions/{session_id}/continue",

@@ -1,0 +1,101 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "structure-completeness-validator",
+    "role": "validator",
+    "validator_id": "structure-completeness-check"
+  },
+  "node_id": "analyze-document",
+  "node_spec": {
+    "node_id": "analyze-document",
+    "title": "文档结构分析",
+    "purpose": "分析输入文档的结构，识别著作标题、篇章层级、作者信息、段落边界等元数据，为后续处理提供结构框架",
+    "archetype": "analysis",
+    "depends_on": [],
+    "inputs": [
+      {
+        "name": "source_text",
+        "from": {
+          "kind": "workflow_input",
+          "name": "source_text",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "text",
+        "required": true,
+        "summary": "原始文本文档内容"
+      },
+      {
+        "name": "work_title",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_title",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "著作标题"
+      },
+      {
+        "name": "author_name",
+        "from": {
+          "kind": "workflow_input",
+          "name": "author_name",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "作者名称"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "document_structure",
+        "shape": "json",
+        "summary": "文档结构分析结果，包含章节层级、段落边界、元数据提取"
+      },
+      {
+        "name": "extracted_metadata",
+        "shape": "json",
+        "summary": "提取的元数据：作者、朝代、篇章标题列表等"
+      }
+    ],
+    "executor": {
+      "skill": "document-structure-analyzer"
+    },
+    "validators": [
+      {
+        "validator_id": "structure-completeness-check",
+        "skill": "structure-completeness-validator"
+      },
+      {
+        "validator_id": "metadata-extraction-check",
+        "skill": "metadata-extraction-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "文档结构分析完成，成功提取章节层级和元数据",
+      "pass_condition": [
+        "识别出至少一个有效的篇章标题",
+        "段落边界划分合理",
+        "元数据提取准确"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "document_structure",
+        "extracted_metadata"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:09:35.352161+00:00"
+}

@@ -38,6 +38,7 @@ class AuthoringAgent:
         intent_brief: str,
         instruction: str,
         base_spec: dict[str, Any],
+        project_dir: Path | None = None,
     ) -> AuthoringAgentResult:
         work_dir = self._ensure_work_dir(session_id)
         prompt_path = work_dir / "authoring_prompt.md"
@@ -53,7 +54,13 @@ class AuthoringAgent:
             "base_spec": base_spec,
             "result_file": str(result_path),
         }
-        prompt_text = self._render_prompt(intent_brief, instruction, base_spec, result_path)
+        prompt_text = self._render_prompt(
+            intent_brief,
+            instruction,
+            base_spec,
+            result_path,
+            project_dir,
+        )
 
         task_path.write_text(
             json.dumps(task_payload, ensure_ascii=False, indent=2),
@@ -70,11 +77,11 @@ class AuthoringAgent:
         try:
             process = subprocess.run(
                 command,
-                cwd=work_dir,
+                cwd=project_dir or work_dir,
                 capture_output=True,
                 text=True,
                 input=prompt_text,
-                env=self._authoring_env(task_path, result_path),
+                env=self._authoring_env(task_path, result_path, project_dir),
                 timeout=timeout,
                 check=False,
             )
@@ -146,7 +153,7 @@ class AuthoringAgent:
             result_file=str(result_path),
             work_dir=str(work_dir),
         )
-        command = shlex.split(formatted)
+        command = [self._resolve_repo_relative_path(part) for part in shlex.split(formatted)]
         if (
             "{prompt_file}" not in template
             and "{task_file}" not in template
@@ -155,10 +162,31 @@ class AuthoringAgent:
             command.append(str(prompt_path))
         return command
 
-    def _authoring_env(self, task_path: Path, result_path: Path) -> dict[str, str]:
+    def _resolve_repo_relative_path(self, part: str) -> str:
+        if not part or part.startswith("-"):
+            return part
+        candidate = Path(part)
+        if candidate.is_absolute():
+            return part
+        if "/" not in part and not part.endswith(".py") and not part.startswith("."):
+            return part
+        repo_root = Path(__file__).resolve().parents[3]
+        repo_candidate = repo_root / part
+        if repo_candidate.exists():
+            return str(repo_candidate)
+        return part
+
+    def _authoring_env(
+        self,
+        task_path: Path,
+        result_path: Path,
+        project_dir: Path | None,
+    ) -> dict[str, str]:
         env = dict(os.environ)
         env["PIPELINER_AUTHORING_TASK_FILE"] = str(task_path)
         env["PIPELINER_AUTHORING_RESULT_FILE"] = str(result_path)
+        if project_dir:
+            env["PIPELINER_PROJECT_DIR"] = str(project_dir)
         return env
 
     def _load_result_payload(self, result_path: Path, stdout: str) -> dict[str, Any]:
@@ -187,18 +215,42 @@ class AuthoringAgent:
         instruction: str,
         base_spec: dict[str, Any],
         result_path: Path,
+        project_dir: Path | None,
     ) -> str:
         spec_text = json.dumps(base_spec, ensure_ascii=False, indent=2)
+        project_hint = (
+            f"项目目录：{project_dir}\n" if project_dir else "项目目录：未指定（使用当前工作目录）\n"
+        )
         return (
             "# Pipeliner Authoring Task\n\n"
             "你是 workflow authoring agent。基于 intent brief 与 instruction 生成新的 workflow spec。\n\n"
             f"- intent brief: {intent_brief}\n"
             f"- instruction: {instruction}\n"
             f"- result file: {result_path}\n\n"
+            f"{project_hint}\n"
+            "技能使用指引：\n"
+            "- 创建或更新 workflow spec：使用 workflow-authoring skill。\n"
+            "- 基于 attention/rework 进行迭代：使用 workflow-iteration skill。\n"
+            "- 校验/审阅 spec：使用 workflow-review skill。\n\n"
+            "节点技能约束：\n"
+            "- 每个节点必须绑定 executor.skill 与 validators[].skill。\n"
+            "- skill 名称为 kebab-case，且在 workflow 内唯一。\n"
+            "- 新增节点或 validator 时，为其绑定新的 skill 名称并保持与 .claude/skills 一致。\n\n"
+            "提交约束：\n"
+            "- 最终提交必须写入 result file，并可被校验脚本验证通过。\n"
+            "- 如果无法通过脚本校验，停止输出并说明原因。\n\n"
+            "回调要求：\n"
+            "- 生成完成后必须运行脚本执行回调：\n"
+            "  python scripts/authoring/report_callback.py "
+            "--suggestion \"...\" --explanation \"...\" --risk \"...\"\n"
+            "- suggestion/explanation/risk 必须与本次工作结果相关。\n\n"
             "基础 spec（JSON）：\n"
             f"{spec_text}\n\n"
             "要求：\n"
             "1. 输出必须是完整的 JSON object，符合 pipeliner.workflow/v1alpha1。\n"
             "2. 不要输出 Markdown 或解释，只输出 JSON。\n"
-            "3. 如果支持，请同时把结果写入 result file。\n"
+            "3. inputs / outputs / nodes / validators 必须是对象数组。\n"
+            "4. 每个 node 输出必须包含 name / shape / summary。\n"
+            "5. 每个 node 必须包含 acceptance {done_means, pass_condition}。\n"
+            "6. 如果支持，请同时把结果写入 result file。\n"
         )

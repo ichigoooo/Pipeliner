@@ -1,0 +1,182 @@
+{
+  "workflow": {
+    "workflow_id": "authoring-draft",
+    "title": "古籍文本整理自动工作流",
+    "version": "draft"
+  },
+  "skill": {
+    "name": "structure-completeness-validator",
+    "role": "validator",
+    "validator_id": "structure-completeness-check"
+  },
+  "node_id": "structure_analysis",
+  "node_spec": {
+    "node_id": "structure_analysis",
+    "title": "结构分析与元数据整合",
+    "purpose": "提取并整合元数据信息，包括著作标题、篇章标题、作者、朝代、著作类型、内容分类等，为 CSV 生成准备完整数据结构",
+    "archetype": "analyze-structure",
+    "depends_on": [
+      "semantic_segmentation"
+    ],
+    "inputs": [
+      {
+        "name": "segmented_passages",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "semantic_segmentation",
+          "output": "segmented_passages"
+        },
+        "shape": "structured_data",
+        "required": true,
+        "summary": "语义分段后的段落列表"
+      },
+      {
+        "name": "work_title",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_title",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "著作标题"
+      },
+      {
+        "name": "chapter_title",
+        "from": {
+          "kind": "workflow_input",
+          "name": "chapter_title",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "篇章标题"
+      },
+      {
+        "name": "author",
+        "from": {
+          "kind": "workflow_input",
+          "name": "author",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "作者"
+      },
+      {
+        "name": "work_type",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_type",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "著作类型"
+      },
+      {
+        "name": "category",
+        "from": {
+          "kind": "workflow_input",
+          "name": "category",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "内容分类"
+      },
+      {
+        "name": "era",
+        "from": {
+          "kind": "workflow_input",
+          "name": "era",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "朝代"
+      },
+      {
+        "name": "description",
+        "from": {
+          "kind": "workflow_input",
+          "name": "description",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "著作简介"
+      },
+      {
+        "name": "chapter_category",
+        "from": {
+          "kind": "workflow_input",
+          "name": "chapter_category",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "篇章类型"
+      },
+      {
+        "name": "creation_year",
+        "from": {
+          "kind": "workflow_input",
+          "name": "creation_year",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "integer",
+        "required": false,
+        "summary": "创作年份"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "structured_data",
+        "shape": "structured_data",
+        "summary": "包含完整元数据和段落内容的结构化数据"
+      }
+    ],
+    "executor": {
+      "skill": "document-structure-analyzer"
+    },
+    "validators": [
+      {
+        "validator_id": "metadata-extraction-check",
+        "skill": "metadata-extraction-validator"
+      },
+      {
+        "validator_id": "structure-completeness-check",
+        "skill": "structure-completeness-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "已提取并整合所有元数据，数据结构完整",
+      "pass_condition": [
+        "著作标题和篇章标题已正确设置",
+        "所有元数据字段已按规则整合",
+        "段落序号连续无重复",
+        "数据结构符合 CSV 生成要求"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "structured_data"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:26:09.764316+00:00"
+}

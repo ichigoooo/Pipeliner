@@ -1,0 +1,94 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "classical-csv-generator",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "node_3",
+  "node_spec": {
+    "id": "csv-generate",
+    "name": "CSV 生成",
+    "description": "按照标准 CSV 格式生成输出文件，包含完整表头和所有字段",
+    "executor": {
+      "skill": "classical-csv-generator"
+    },
+    "inputs": [
+      {
+        "name": "passages",
+        "from_node": {
+          "node_id": "semantic-segmentation",
+          "output_name": "passages"
+        }
+      },
+      {
+        "name": "work_title",
+        "from_workflow_input": "work_title"
+      },
+      {
+        "name": "chapter_title",
+        "from_workflow_input": "chapter_title"
+      },
+      {
+        "name": "author",
+        "from_workflow_input": "author"
+      },
+      {
+        "name": "work_type",
+        "from_workflow_input": "work_type"
+      },
+      {
+        "name": "category",
+        "from_workflow_input": "category"
+      },
+      {
+        "name": "era",
+        "from_workflow_input": "era"
+      },
+      {
+        "name": "chapter_category",
+        "from_workflow_input": "chapter_category"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "csv_content",
+        "shape": "string",
+        "summary": "生成的 CSV 文件内容，UTF-8 编码，包含表头"
+      },
+      {
+        "name": "passage_count",
+        "shape": "integer",
+        "summary": "生成的段落数量"
+      },
+      {
+        "name": "csv_structure",
+        "shape": "object",
+        "summary": "CSV 结构信息，包含列名和行数"
+      }
+    ],
+    "acceptance": {
+      "done_means": "CSV 文件已按标准格式生成",
+      "pass_condition": "csv_content 包含完整表头（著作标题,篇章标题,段落序号,段落内容等），段落序号连续且无重复，内容正确填充"
+    },
+    "validators": [
+      {
+        "id": "csv-format-check",
+        "name": "CSV 格式检查",
+        "skill": "csv-format-validator",
+        "description": "验证 CSV 格式是否符合导入规范，表头是否完整，编码是否正确"
+      },
+      {
+        "id": "content-integrity-check",
+        "name": "内容完整性检查",
+        "skill": "content-integrity-validator",
+        "description": "验证原文内容是否完整无遗漏，段落序号是否正确"
+      }
+    ]
+  },
+  "updated_at": "2026-03-11T11:27:34.624355+00:00"
+}

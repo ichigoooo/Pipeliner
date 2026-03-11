@@ -61,6 +61,18 @@ def test_iteration_from_version_and_run(client: TestClient) -> None:
     assert from_version.status_code == 200
     payload = from_version.json()
     assert payload["source"]["type"] == "workflow_version"
+    project_root = client.app.state.settings.projects_root / "iteration_flow"
+    assert (
+        project_root / ".claude" / "skills" / "draft-wechat-article" / "SKILL.md"
+    ).exists()
+    assert (
+        project_root
+        / ".claude"
+        / "skills"
+        / "review-wechat-article"
+        / "references"
+        / "node_context.json"
+    ).exists()
 
     run_response = client.post(
         "/api/runs",
@@ -85,3 +97,6 @@ def test_iteration_from_version_and_run(client: TestClient) -> None:
     run_payload = from_run.json()
     assert run_payload["source"]["type"] == "attention_run"
     assert run_payload["source"]["payload"]["run_id"] == run_id
+    assert (
+        project_root / ".claude" / "skills" / "draft-wechat-article" / "SKILL.md"
+    ).exists()

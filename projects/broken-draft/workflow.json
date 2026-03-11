@@ -1,0 +1,15 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "broken-draft",
+    "title": "Broken Draft",
+    "purpose": "Try invalid publish",
+    "version": "draft",
+    "tags": [
+      "authoring-session"
+    ]
+  },
+  "inputs": [],
+  "outputs": [],
+  "nodes": []
+}

@@ -144,7 +144,7 @@ npm run start
 9. 在 `/attention` 处理中断状态并执行 retry/stop/迭代
 10. 在 `/settings` 查看运行时配置与来源
 
-### 最小 CLI 使用流
+每个 workflow 会在 `projects/<workflow_id>/` 下生成工程目录，并自动创建 `.claude/skills/`。Authoring 生成时会优先使用这些 skills（workflow-authoring / workflow-iteration / workflow-review）。+### 最小 CLI 使用流
 
 1. 注册 workflow spec
 2. 启动 run，并写入 workflow inputs
@@ -181,6 +181,13 @@ export PIPELINER_CLAUDE_EXECUTOR_CMD='claude -p --permission-mode bypassPermissi
 export PIPELINER_CLAUDE_VALIDATOR_CMD='claude -p --permission-mode bypassPermissions'
 export PIPELINER_CLAUDE_AUTHORING_CMD='claude -p --permission-mode bypassPermissions'
 export PIPELINER_AUTHORING_TIMEOUT='20m'
+```
+
+如需对 Claude 输出做强校验，可使用包装脚本：
+
+```bash
+export PIPELINER_CLAUDE_AUTHORING_CMD='python scripts/authoring/claude_authoring_wrapper.py --prompt-file {prompt_file} --task-file {task_file} --result-file {result_file} --work-dir {work_dir}'
+export PIPELINER_CLAUDE_AUTHORING_INNER_CMD='claude -p --permission-mode bypassPermissions'
 ```
 
 支持模板占位符：`{prompt_file}`、`{task_file}`、`{work_dir}`。

@@ -1,0 +1,90 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "studio_e2e",
+    "version": "v0.1.0",
+    "title": "Studio E2E",
+    "purpose": "Verify developer workflow",
+    "tags": [
+      "studio"
+    ]
+  },
+  "inputs": [
+    {
+      "name": "topic",
+      "shape": "string",
+      "required": true,
+      "summary": "Topic to write about"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "article",
+      "from": {
+        "node_id": "draft_article",
+        "output": "article_draft"
+      },
+      "shape": "markdown",
+      "required": true,
+      "summary": "Draft article"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "draft_article",
+      "title": "Draft Article",
+      "purpose": "Create a first draft",
+      "archetype": "draft-content",
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "topic",
+          "from": {
+            "kind": "workflow_input",
+            "name": "topic"
+          },
+          "shape": "string",
+          "required": true,
+          "summary": "Topic context"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "article_draft",
+          "shape": "markdown",
+          "summary": "Generated draft"
+        }
+      ],
+      "executor": {
+        "skill": "draft-wechat-article"
+      },
+      "validators": [
+        {
+          "validator_id": "content-review",
+          "skill": "review-wechat-article"
+        }
+      ],
+      "acceptance": {
+        "done_means": "Produce a coherent draft",
+        "pass_condition": [
+          "Clear structure"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": [
+          "article_draft"
+        ]
+      }
+    }
+  ],
+  "defaults": {
+    "runtime_guards": {
+      "timeout": "30m",
+      "max_rework_rounds": 3
+    }
+  },
+  "extensions": {}
+}

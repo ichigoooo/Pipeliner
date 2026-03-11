@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -40,6 +41,10 @@ def main() -> int:
         else:
             path.mkdir(parents=True, exist_ok=True)
             (path / "index.txt").write_text("mock directory output\n", encoding="utf-8")
+
+    marker = os.getenv("PIPELINER_TEST_CWD_FILE")
+    if marker:
+        Path(marker).write_text(os.getcwd(), encoding="utf-8")
 
     return 0
 

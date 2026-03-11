@@ -1,0 +1,165 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "csv-format-validator",
+    "role": "validator",
+    "validator_id": "csv-format-check"
+  },
+  "node_id": "generate-csv",
+  "node_spec": {
+    "node_id": "generate-csv",
+    "title": "生成 CSV 文件",
+    "purpose": "根据分段结果和元数据生成符合标准格式的 CSV 文件，包含完整的表头和数据行",
+    "archetype": "generation",
+    "depends_on": [
+      "semantic-segmentation"
+    ],
+    "inputs": [
+      {
+        "name": "segmented_passages",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "semantic-segmentation",
+          "output": "segmented_passages"
+        },
+        "shape": "json",
+        "required": true,
+        "summary": "分段后的段落列表"
+      },
+      {
+        "name": "extracted_metadata",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "analyze-document",
+          "output": "extracted_metadata"
+        },
+        "shape": "json",
+        "required": true,
+        "summary": "提取的元数据"
+      },
+      {
+        "name": "work_title",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_title",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "著作标题"
+      },
+      {
+        "name": "author_name",
+        "from": {
+          "kind": "workflow_input",
+          "name": "author_name",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "作者名称"
+      },
+      {
+        "name": "work_type",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_type",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "著作类型"
+      },
+      {
+        "name": "category",
+        "from": {
+          "kind": "workflow_input",
+          "name": "category",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "内容分类"
+      },
+      {
+        "name": "era",
+        "from": {
+          "kind": "workflow_input",
+          "name": "era",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "朝代"
+      },
+      {
+        "name": "chapter_type",
+        "from": {
+          "kind": "workflow_input",
+          "name": "chapter_type",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "篇章类型"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "csv_output",
+        "shape": "text",
+        "summary": "生成的 CSV 文件内容（UTF-8 编码）"
+      },
+      {
+        "name": "csv_metadata",
+        "shape": "json",
+        "summary": "CSV 元数据：行数、列数、校验信息等"
+      }
+    ],
+    "executor": {
+      "skill": "csv-generator"
+    },
+    "validators": [
+      {
+        "validator_id": "csv-format-check",
+        "skill": "csv-format-validator"
+      },
+      {
+        "validator_id": "csv-schema-check",
+        "skill": "csv-schema-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "CSV 文件生成完成，符合标准格式要求",
+      "pass_condition": [
+        "CSV 包含正确的表头行",
+        "必填字段（著作标题、篇章标题、段落序号、段落内容）齐全",
+        "段落序号为整数且无重复",
+        "段落内容不为空",
+        "UTF-8 编码格式正确"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "csv_output",
+        "csv_metadata"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:09:35.354782+00:00"
+}

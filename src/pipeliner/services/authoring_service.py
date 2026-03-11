@@ -7,6 +7,7 @@ from typing import Any
 from pipeliner.persistence.models import AuthoringDraftModel, AuthoringMessageModel, AuthoringSessionModel
 from pipeliner.persistence.repositories import AuthoringRepository
 from pipeliner.services.authoring_agent import AuthoringAgent, AuthoringAgentError
+from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.errors import NotFoundError, ValidationError
 from pipeliner.services.workflow_service import WorkflowService
 
@@ -17,10 +18,12 @@ class AuthoringService:
         repo: AuthoringRepository,
         workflow_service: WorkflowService,
         authoring_agent: AuthoringAgent | None = None,
+        project_initializer: ProjectInitializer | None = None,
     ) -> None:
         self.repo = repo
         self.workflow_service = workflow_service
         self.authoring_agent = authoring_agent or AuthoringAgent()
+        self.project_initializer = project_initializer or ProjectInitializer()
 
     def create_session(
         self,
@@ -44,7 +47,16 @@ class AuthoringService:
         )
         self.repo.add_message(session.id, role="user", content=intent_brief)
         bootstrap_spec = base_spec or self._bootstrap_spec(title, intent_brief)
-        projection = self.workflow_service.project_spec(bootstrap_spec)
+        metadata = bootstrap_spec.get("metadata", {}) if isinstance(bootstrap_spec, dict) else {}
+        workflow_id = metadata.get("workflow_id") or session_id
+        normalized_spec = self.project_initializer.ensure_node_skills(workflow_id, bootstrap_spec)
+        self.project_initializer.ensure_project(
+            workflow_id,
+            title=metadata.get("title") or title,
+            intent_brief=metadata.get("purpose") or intent_brief,
+            base_spec=normalized_spec,
+        )
+        projection = self.workflow_service.project_spec(normalized_spec)
         self.repo.create_draft(
             session_id=session.id,
             revision=1,
@@ -73,6 +85,19 @@ class AuthoringService:
         instruction: str | None = None,
     ) -> AuthoringDraftModel:
         session = self.get_session(session_id)
+        metadata = raw_spec.get("metadata", {}) if isinstance(raw_spec, dict) else {}
+        workflow_id = (
+            metadata.get("workflow_id")
+            or session.published_workflow_id
+            or session_id
+        )
+        raw_spec = self.project_initializer.ensure_node_skills(workflow_id, raw_spec)
+        self.project_initializer.ensure_project(
+            workflow_id,
+            title=metadata.get("title") or session.title,
+            intent_brief=metadata.get("purpose") or session.intent_brief,
+            base_spec=raw_spec,
+        )
 
         try:
             # We attempt to validate to get lint warnings, but we still save it even if it has errors.
@@ -176,14 +201,37 @@ class AuthoringService:
     ) -> AuthoringDraftModel:
         session = self.get_session(session_id)
         current_spec = base_spec or self.get_latest_draft(session_id).spec_json
+        metadata = current_spec.get("metadata", {}) if isinstance(current_spec, dict) else {}
+        workflow_id = metadata.get("workflow_id") or session.published_workflow_id or session_id
+        project_root = self.project_initializer.ensure_project(
+            workflow_id,
+            title=metadata.get("title"),
+            intent_brief=metadata.get("purpose"),
+            base_spec=current_spec,
+        )
         try:
             result = self.authoring_agent.generate(
                 session_id=session_id,
                 intent_brief=session.intent_brief,
                 instruction=instruction,
                 base_spec=current_spec,
+                project_dir=project_root,
             )
-            draft = self.save_draft(session_id, result.spec_json, instruction=instruction)
+            result_spec = self.project_initializer.ensure_node_skills(workflow_id, result.spec_json)
+            result_spec = self._ensure_depends_on(result_spec)
+            try:
+                self.workflow_service.validate_spec(result_spec)
+            except Exception as exc:
+                self.repo.create_generation_log(
+                    session_id,
+                    revision=None,
+                    status="failed",
+                    duration_ms=result.metadata.get("duration_ms"),
+                    error_message=f"authoring spec invalid: {exc}",
+                    metadata_json=result.metadata,
+                )
+                raise ValidationError(f"Claude 生成结果不是合法的 workflow spec: {exc}") from exc
+            draft = self.save_draft(session_id, result_spec, instruction=instruction)
             self.repo.create_generation_log(
                 session_id,
                 revision=draft.revision,
@@ -203,6 +251,41 @@ class AuthoringService:
                 metadata_json=exc.metadata,
             )
             raise ValidationError(str(exc)) from exc
+
+    def _ensure_depends_on(self, raw_spec: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(raw_spec, dict):
+            return raw_spec
+        raw_nodes = raw_spec.get("nodes")
+        if not isinstance(raw_nodes, list):
+            return raw_spec
+        node_ids = {
+            node.get("node_id")
+            for node in raw_nodes
+            if isinstance(node, dict) and node.get("node_id")
+        }
+        for node in raw_nodes:
+            if not isinstance(node, dict):
+                continue
+            depends_on = node.get("depends_on")
+            if not isinstance(depends_on, list):
+                depends_on = []
+            depends_set = {dep for dep in depends_on if isinstance(dep, str)}
+            for input_spec in node.get("inputs", []):
+                if not isinstance(input_spec, dict):
+                    continue
+                source = input_spec.get("from")
+                if not isinstance(source, dict):
+                    continue
+                if source.get("kind") != "node_output":
+                    continue
+                upstream = source.get("node_id")
+                if not upstream or upstream not in node_ids:
+                    continue
+                if upstream not in depends_set:
+                    depends_on.append(upstream)
+                    depends_set.add(upstream)
+            node["depends_on"] = depends_on
+        return raw_spec
 
     def _build_source_payload(self, session: AuthoringSessionModel) -> dict[str, Any] | None:
         if session.source_type or session.source_payload_json:

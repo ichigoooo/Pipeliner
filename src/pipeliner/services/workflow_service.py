@@ -103,6 +103,16 @@ class WorkflowService:
             outputs = node.get("outputs", [])
             validators = node.get("validators", [])
             executor = node.get("executor", {})
+            if not isinstance(depends_on, list):
+                depends_on = []
+            if not isinstance(inputs, list):
+                inputs = []
+            if not isinstance(outputs, list):
+                outputs = []
+            if not isinstance(validators, list):
+                validators = []
+            if not isinstance(executor, dict):
+                executor = {}
             cards.append(
                 {
                     "node_id": node_id,

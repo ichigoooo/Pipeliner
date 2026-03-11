@@ -27,6 +27,7 @@ from pipeliner.protocols.workflow import WorkflowNodeSpec
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.artifact_service import ArtifactService
 from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
+from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.run_service import RunService
 from pipeliner.types import (
     ActorRole,
@@ -70,6 +71,7 @@ class ClaudeExecutorDispatcher:
             self.settings,
         )
         self.artifact_service = ArtifactService(artifact_repo, run_repo, self.settings)
+        self.project_initializer = ProjectInitializer(self.settings)
 
     def dispatch(
         self,
@@ -96,6 +98,7 @@ class ClaudeExecutorDispatcher:
             node_run.round_no,
         )
         executor_dir = dirs["executor_dir"]
+        project_root = self.project_initializer.ensure_project_root(run.workflow_id)
         context_path = executor_dir / "context.json"
         if not context_path.exists():
             raise NotFoundError(f"executor context 文件不存在: {context_path}")
@@ -139,7 +142,7 @@ class ClaudeExecutorDispatcher:
         try:
             process = subprocess.run(
                 command,
-                cwd=executor_dir,
+                cwd=project_root,
                 capture_output=True,
                 text=True,
                 input=prompt_text,

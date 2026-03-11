@@ -1,0 +1,63 @@
+{
+  "workflow": {
+    "workflow_id": "test_wf",
+    "title": "Test WF",
+    "version": "v1.0.0"
+  },
+  "skill": {
+    "name": "draft-wechat-article",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "draft_article",
+  "node_spec": {
+    "node_id": "draft_article",
+    "title": "Draft Article",
+    "purpose": "Create a first draft",
+    "archetype": "draft-content",
+    "depends_on": [],
+    "inputs": [
+      {
+        "name": "topic",
+        "from": {
+          "kind": "workflow_input",
+          "name": "topic"
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "Topic context"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "article_draft",
+        "shape": "markdown",
+        "summary": "Generated draft"
+      }
+    ],
+    "executor": {
+      "skill": "draft-wechat-article"
+    },
+    "validators": [
+      {
+        "validator_id": "content-review",
+        "skill": "review-wechat-article"
+      }
+    ],
+    "acceptance": {
+      "done_means": "Produce a coherent draft",
+      "pass_condition": [
+        "Clear structure"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "article_draft"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T10:44:45.361068+00:00"
+}

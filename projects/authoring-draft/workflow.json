@@ -1,0 +1,528 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "authoring-draft",
+    "title": "古籍文本整理自动工作流",
+    "purpose": "将文本文档处理成标准格式的 csv 文件，格式要求说明如下：\n# 文字类 CSV 导入指南（管理员客户端）\n\n本文档对应当前实现（back/admin_client）的批量导入（单文件 CSV）流程，适用于文字类内容（非漫画）。\n\n## 1. 适用范围\n\n- 导入入口：管理员客户端 批量导入（单文件 CSV）\n- 适用内容：原著 / 作者合集 / 朝代选集 / 主题选集\n- 不适用：漫画 / manga\n\n如果 CSV 中出现漫画类型，验证会报错：MANGA_SINGLE_FILE_NOT_SUPPORTED，并提示改用漫画导入（图片目录 + CSV）。\n\n## 2. 数据层级与导入单元\n\n单文件 CSV 的一行表示一个段落，导入后结构为：\n\n- Work（著作）\n- Chapter（篇章）\n- Passage（段落）\n\n层级关系：Work -> Chapter -> Passage\n\n## 3. CSV 文件要求\n\n- 编码：UTF-8（建议 UTF-8 with BOM 也可）\n- 分隔符：英文逗号 ,\n- 第一行必须是表头\n- 文件扩展名：.csv\n\n必填表头（4 个）：\n\n著作标题,篇章标题,段落序号,段落内容\n\n推荐完整表头（与模板一致）：\n\n著作标题,篇章标题,段落序号,段落内容,译文,注释,名句,背景,解析,作者,著作类型,内容分类,朝代,著作简介,篇章类型,创作年份\n\n模板位置：back/admin_client/examples/csv_templates/single_file_template.csv\n\n## 4. 字段说明与后端映射\n\n| CSV 字段 | 必填 | 导入目标 | 说明 |\n|---|---|---|---|\n| 著作标题 | 是 | work.title | 同名视为同一著作 |\n| 篇章标题 | 是 | chapter.title | 同一著作下同名视为同一篇章 |\n| 段落序号 | 是 | passage.sequence | 必须是整数 |\n| 段落内容 | 是 | passage.content | 不能为空 |\n| 译文 | 否 | passage.translation | 文本 |\n| 注释 | 否 | passage.annotations | 解析为列表：词:义,词:义 |\n| 名句 | 否 | passage.highlight_quotes | 逗号分隔字符串列表 |\n| 背景 | 否 | passage.background_story | 文本 |\n| 解析 | 否 | passage.explanation | 文本 |\n| 作者 | 否 | work.author_id | 通过作者名查 ID |\n| 著作类型 | 否 | work.work_type | 为空时默认 original |\n| 内容分类 | 否 | work.category | 为空时默认 poetry |\n| 朝代 | 否 | work.era | 文本 |\n| 著作简介 | 否 | work.description | 文本 |\n| 篇章类型 | 否 | chapter.category | 枚举映射 |\n| 创作年份 | 否 | chapter.creation_year | 可转为整数时写入 |\n\n## 5. 枚举值（当前实现）\n\n著作类型（著作类型）支持：\n\n- 中文：原著、作者合集、朝代选集、主题选集\n- 英文：original、author_collection、era_collection、theme_collection\n\n著作分类（内容分类）支持：\n\n- 中文：诗、词、散文、论著、综合\n- 英文：poetry、ci、prose、treatise、mixed\n\n篇章类型（篇章类型）支持：\n\n- 中文：诗、词、文、赋、论\n- 英文：shi、ci、wen、fu、lun\n\n## 6. 同名数据合并规则（非常重要）\n\n解析阶段对同一 著作标题 / 篇章标题 的行为：\n\n- 著作级字段（作者、著作类型、内容分类、朝代、简介）：取第一个非空值\n- 篇章级字段（篇章类型、创作年份）：取第一个非空值\n- 后续行即使填了不同值，也不会覆盖前面已确定的值\n\n建议：同一著作/篇章的元数据保持一致，避免看起来填了但未生效的误解。\n\n## 7. 校验流程\n\n### 7.1 解析校验\n\n- 表头存在且包含必填字段\n- 段落序号 可转整数\n- 空的 著作标题/篇章标题 行会被跳过\n\n### 7.2 一致性校验\n\n- 段落内容不能为空\n- 同一篇章内 段落序号 不能重复\n- 序号不连续会给 warning（不阻断）\n\n### 7.3 业务校验\n\n- 枚举值是否合法\n- 创作年份 是否可转整数\n- 若检测到 漫画/manga，直接报错并阻断单文件导入\n\n## 8. 管理端使用步骤（当前 UI）\n\n1. 启动客户端并登录。\n2. 进入 批量导入（单文件 CSV）。\n3. 下载模板并填写 CSV。\n4. 选择 CSV，点击验证文件。\n5. 若出现缺失作者，进入作者配置步骤，补齐后点下一步。\n6. 在验证结果页确认通过后，点击开始导入。\n7. 导入完成后查看统计并抽检。\n\n补充说明（当前版本行为）：\n\n- 界面存在作者必须在库中存在（否则报错）选项，但单文件导入流程会统一走缺失作者补全步骤。\n- 即：验证阶段不会直接因作者不存在而终止，而是提示你先创建缺失作者，再继续导入。\n\n## 9. 导入行为（与幂等相关）\n\n- 导入前会分页拉取已存在作者/著作/篇章（全量，不只第一页）。\n- 跳过已存在的著作和篇章（默认勾选）时：\n  - 已存在著作：跳过\n  - 已存在篇章：跳过\n- 关闭该选项后：会尝试新建同名著作/篇章，可能导致重复数据或后端报错。\n- 段落始终走创建，不会按 chapter_id + sequence 去重。\n\n这意味着：重复导入同一 CSV 可能新增重复段落。测试时请特别注意。\n\n## 10. 最小可用示例\n\n著作标题,篇章标题,段落序号,段落内容,作者,著作类型,内容分类,篇章类型,创作年份\n测试诗词集,第一篇,1,这是第一段,测试作者,作者合集,诗,诗,2026\n测试诗词集,第一篇,2,这是第二段,,,,,\n\n## 11. 测试清单（建议每次导入后执行）\n\n1. 管理端检查：著作数量、篇章数量、段落数量是否符合预期。\n2. 前端检查：书城卡片、目录页、阅读页是否能完整展示。\n3. 回归检查：重复导入同一文件时，确认是否产生了预期外重复段落。\n4. 错误检查：导入进度中的失败条目是否为可接受范围。\n\n## 12. 持续运维建议\n\n1. 将每批导入 CSV 纳入版本管理（按日期/批次归档）。\n2. 大批量导入前先做数据库备份（尤其生产环境）。\n3. 先小批量验证（1 个著作）再全量导入。\n4. 统一作者命名规范，避免同人多写法导致关联失败。\n5. 默认保持跳过已存在著作和篇章开启，减少重复创建风险。\n6. 导入后记录：CSV 文件版本、导入时间、导入统计、异常行。\n\n要求，原文不允许有遗漏、错误。除去明显存在 OCR 识别导致的格式错误、特殊符号和标点符号重复等问题可以进行自动整理以外，不能对原始文本进行修改和省略。\n其中，分段不应该完全基于原始文本换行符，而是根据语大致三到五句话或者语义块进行合理、灵活的分段，方便后续阅读时比对翻译。",
+    "version": "draft",
+    "tags": [
+      "authoring-session"
+    ]
+  },
+  "inputs": [
+    {
+      "name": "source_text",
+      "shape": "file",
+      "required": true,
+      "summary": "原始文本文档路径，包含需要处理的古籍文本内容"
+    },
+    {
+      "name": "work_title",
+      "shape": "string",
+      "required": true,
+      "summary": "著作标题，CSV 必填字段"
+    },
+    {
+      "name": "chapter_title",
+      "shape": "string",
+      "required": true,
+      "summary": "篇章标题，CSV 必填字段"
+    },
+    {
+      "name": "author",
+      "shape": "string",
+      "required": false,
+      "summary": "作者名称，可选"
+    },
+    {
+      "name": "work_type",
+      "shape": "string",
+      "required": false,
+      "summary": "著作类型：原著/作者合集/朝代选集/主题选集，默认 original"
+    },
+    {
+      "name": "category",
+      "shape": "string",
+      "required": false,
+      "summary": "内容分类：诗/词/散文/论著/综合，默认 poetry"
+    },
+    {
+      "name": "era",
+      "shape": "string",
+      "required": false,
+      "summary": "朝代信息，可选"
+    },
+    {
+      "name": "description",
+      "shape": "string",
+      "required": false,
+      "summary": "著作简介，可选"
+    },
+    {
+      "name": "chapter_category",
+      "shape": "string",
+      "required": false,
+      "summary": "篇章类型：诗/词/文/赋/论"
+    },
+    {
+      "name": "creation_year",
+      "shape": "integer",
+      "required": false,
+      "summary": "创作年份，整数"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "output_csv",
+      "from": {
+        "node_id": "csv_generation",
+        "output": "csv_file"
+      },
+      "shape": "file",
+      "required": true,
+      "summary": "最终生成的标准格式 CSV 文件"
+    },
+    {
+      "name": "processing_report",
+      "from": {
+        "node_id": "final_validation",
+        "output": "report"
+      },
+      "shape": "file",
+      "required": false,
+      "summary": "处理报告，包含分段统计和质量检查摘要"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "text_preprocessing",
+      "title": "文本预处理",
+      "purpose": "对原始文本进行 OCR 错误修正和格式整理，修复明显的格式错误、特殊符号和标点符号重复等问题，但保持原文内容完整不遗漏",
+      "archetype": "preprocess-content",
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "source_text",
+          "from": {
+            "kind": "workflow_input",
+            "name": "source_text",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "file",
+          "required": true,
+          "summary": "原始文本文档"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "preprocessed_text",
+          "shape": "file",
+          "summary": "预处理后的文本，修正 OCR 错误和格式问题"
+        }
+      ],
+      "executor": {
+        "skill": "classical-text-preprocess"
+      },
+      "validators": [
+        {
+          "validator_id": "ocr-correction-check",
+          "skill": "ocr-correction-validator"
+        }
+      ],
+      "acceptance": {
+        "done_means": "文本已完成 OCR 错误修正和基本格式整理",
+        "pass_condition": [
+          "已修复明显的 OCR 识别错误",
+          "已整理格式错误和特殊符号重复",
+          "原文内容无遗漏、无错误修改"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": [
+          "preprocessed_text"
+        ]
+      }
+    },
+    {
+      "node_id": "semantic_segmentation",
+      "title": "语义分段",
+      "purpose": "根据语义块进行合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段，确保段落便于后续阅读时比对翻译",
+      "archetype": "segment-content",
+      "depends_on": [
+        "text_preprocessing"
+      ],
+      "inputs": [
+        {
+          "name": "preprocessed_text",
+          "from": {
+            "kind": "node_output",
+            "name": null,
+            "node_id": "text_preprocessing",
+            "output": "preprocessed_text"
+          },
+          "shape": "file",
+          "required": true,
+          "summary": "预处理后的文本"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "segmented_passages",
+          "shape": "structured_data",
+          "summary": "语义分段后的段落列表，每段包含序号和内容"
+        }
+      ],
+      "executor": {
+        "skill": "semantic-text-segmentation"
+      },
+      "validators": [
+        {
+          "validator_id": "segmentation-quality-check",
+          "skill": "segmentation-quality-validator"
+        },
+        {
+          "validator_id": "content-integrity-check",
+          "skill": "content-integrity-validator"
+        }
+      ],
+      "acceptance": {
+        "done_means": "文本已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
+        "pass_condition": [
+          "分段基于语义而非原始换行符",
+          "每段长度适中（3-5 句话或一个语义块）",
+          "原文内容无遗漏、无错误修改",
+          "段落序号连续正确"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": [
+          "segmented_passages"
+        ]
+      }
+    },
+    {
+      "node_id": "structure_analysis",
+      "title": "结构分析与元数据整合",
+      "purpose": "提取并整合元数据信息，包括著作标题、篇章标题、作者、朝代、著作类型、内容分类等，为 CSV 生成准备完整数据结构",
+      "archetype": "analyze-structure",
+      "depends_on": [
+        "semantic_segmentation"
+      ],
+      "inputs": [
+        {
+          "name": "segmented_passages",
+          "from": {
+            "kind": "node_output",
+            "name": null,
+            "node_id": "semantic_segmentation",
+            "output": "segmented_passages"
+          },
+          "shape": "structured_data",
+          "required": true,
+          "summary": "语义分段后的段落列表"
+        },
+        {
+          "name": "work_title",
+          "from": {
+            "kind": "workflow_input",
+            "name": "work_title",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": true,
+          "summary": "著作标题"
+        },
+        {
+          "name": "chapter_title",
+          "from": {
+            "kind": "workflow_input",
+            "name": "chapter_title",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": true,
+          "summary": "篇章标题"
+        },
+        {
+          "name": "author",
+          "from": {
+            "kind": "workflow_input",
+            "name": "author",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": false,
+          "summary": "作者"
+        },
+        {
+          "name": "work_type",
+          "from": {
+            "kind": "workflow_input",
+            "name": "work_type",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": false,
+          "summary": "著作类型"
+        },
+        {
+          "name": "category",
+          "from": {
+            "kind": "workflow_input",
+            "name": "category",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": false,
+          "summary": "内容分类"
+        },
+        {
+          "name": "era",
+          "from": {
+            "kind": "workflow_input",
+            "name": "era",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": false,
+          "summary": "朝代"
+        },
+        {
+          "name": "description",
+          "from": {
+            "kind": "workflow_input",
+            "name": "description",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": false,
+          "summary": "著作简介"
+        },
+        {
+          "name": "chapter_category",
+          "from": {
+            "kind": "workflow_input",
+            "name": "chapter_category",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "string",
+          "required": false,
+          "summary": "篇章类型"
+        },
+        {
+          "name": "creation_year",
+          "from": {
+            "kind": "workflow_input",
+            "name": "creation_year",
+            "node_id": null,
+            "output": null
+          },
+          "shape": "integer",
+          "required": false,
+          "summary": "创作年份"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "structured_data",
+          "shape": "structured_data",
+          "summary": "包含完整元数据和段落内容的结构化数据"
+        }
+      ],
+      "executor": {
+        "skill": "document-structure-analyzer"
+      },
+      "validators": [
+        {
+          "validator_id": "metadata-extraction-check",
+          "skill": "metadata-extraction-validator"
+        },
+        {
+          "validator_id": "structure-completeness-check",
+          "skill": "structure-completeness-validator"
+        }
+      ],
+      "acceptance": {
+        "done_means": "已提取并整合所有元数据，数据结构完整",
+        "pass_condition": [
+          "著作标题和篇章标题已正确设置",
+          "所有元数据字段已按规则整合",
+          "段落序号连续无重复",
+          "数据结构符合 CSV 生成要求"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": [
+          "structured_data"
+        ]
+      }
+    },
+    {
+      "node_id": "csv_generation",
+      "title": "CSV 文件生成",
+      "purpose": "按照标准格式要求生成 CSV 文件，包含完整的表头（著作标题,篇章标题,段落序号,段落内容,作者,著作类型,内容分类,朝代,著作简介,篇章类型,创作年份），确保编码为 UTF-8，分隔符为英文逗号",
+      "archetype": "generate-output",
+      "depends_on": [
+        "structure_analysis"
+      ],
+      "inputs": [
+        {
+          "name": "structured_data",
+          "from": {
+            "kind": "node_output",
+            "name": null,
+            "node_id": "structure_analysis",
+            "output": "structured_data"
+          },
+          "shape": "structured_data",
+          "required": true,
+          "summary": "包含完整元数据和段落内容的结构化数据"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "csv_file",
+          "shape": "file",
+          "summary": "生成的标准格式 CSV 文件"
+        }
+      ],
+      "executor": {
+        "skill": "classical-csv-generator"
+      },
+      "validators": [
+        {
+          "validator_id": "csv-format-check",
+          "skill": "csv-format-validator"
+        },
+        {
+          "validator_id": "csv-schema-check",
+          "skill": "csv-schema-validator"
+        }
+      ],
+      "acceptance": {
+        "done_means": "已生成符合标准格式的 CSV 文件",
+        "pass_condition": [
+          "CSV 编码为 UTF-8",
+          "表头包含所有必填字段",
+          "分隔符为英文逗号",
+          "段落序号可正确转为整数",
+          "数据行与输入段落一致"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": [
+          "csv_file"
+        ]
+      }
+    },
+    {
+      "node_id": "final_validation",
+      "title": "最终质量验证",
+      "purpose": "对生成的 CSV 进行全面的质量检查，包括内容完整性验证、格式规范验证，并生成处理报告",
+      "archetype": "validate-output",
+      "depends_on": [
+        "csv_generation"
+      ],
+      "inputs": [
+        {
+          "name": "csv_file",
+          "from": {
+            "kind": "node_output",
+            "name": null,
+            "node_id": "csv_generation",
+            "output": "csv_file"
+          },
+          "shape": "file",
+          "required": true,
+          "summary": "生成的 CSV 文件"
+        },
+        {
+          "name": "segmented_passages",
+          "from": {
+            "kind": "node_output",
+            "name": null,
+            "node_id": "semantic_segmentation",
+            "output": "segmented_passages"
+          },
+          "shape": "structured_data",
+          "required": true,
+          "summary": "原始分段数据，用于比对验证"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "validated_csv",
+          "shape": "file",
+          "summary": "验证通过的 CSV 文件"
+        },
+        {
+          "name": "report",
+          "shape": "file",
+          "summary": "处理报告，包含分段统计和质量检查结果"
+        }
+      ],
+      "executor": {
+        "skill": "output-validator"
+      },
+      "validators": [
+        {
+          "validator_id": "completeness-check",
+          "skill": "completeness-validator"
+        },
+        {
+          "validator_id": "quality-check",
+          "skill": "quality-validator"
+        }
+      ],
+      "acceptance": {
+        "done_means": "CSV 文件已通过全面质量验证",
+        "pass_condition": [
+          "原文内容无遗漏",
+          "无错误修改",
+          "格式完全符合规范",
+          "段落序号连续无重复",
+          "元数据完整准确"
+        ]
+      },
+      "gate": {
+        "mode": "all_validators_pass"
+      },
+      "handoff": {
+        "outputs": [
+          "validated_csv",
+          "report"
+        ]
+      }
+    }
+  ],
+  "defaults": {
+    "runtime_guards": {
+      "timeout": "30m",
+      "max_rework_rounds": 3,
+      "blocked_requires_manual": true,
+      "failure_requires_manual": true
+    }
+  },
+  "extensions": {}
+}

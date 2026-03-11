@@ -1,0 +1,15 @@
+{
+  "schema_version": "pipeliner.workflow/v1alpha1",
+  "metadata": {
+    "workflow_id": "test-session",
+    "title": "Test Session",
+    "purpose": "Create a draft workflow for content generation",
+    "version": "draft",
+    "tags": [
+      "authoring-session"
+    ]
+  },
+  "inputs": [],
+  "outputs": [],
+  "nodes": []
+}

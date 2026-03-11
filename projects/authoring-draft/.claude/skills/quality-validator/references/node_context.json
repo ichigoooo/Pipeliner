@@ -1,0 +1,94 @@
+{
+  "workflow": {
+    "workflow_id": "authoring-draft",
+    "title": "古籍文本整理自动工作流",
+    "version": "draft"
+  },
+  "skill": {
+    "name": "quality-validator",
+    "role": "validator",
+    "validator_id": "quality-check"
+  },
+  "node_id": "final_validation",
+  "node_spec": {
+    "node_id": "final_validation",
+    "title": "最终质量验证",
+    "purpose": "对生成的 CSV 进行全面的质量检查，包括内容完整性验证、格式规范验证，并生成处理报告",
+    "archetype": "validate-output",
+    "depends_on": [
+      "csv_generation",
+      "semantic_segmentation"
+    ],
+    "inputs": [
+      {
+        "name": "csv_file",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "csv_generation",
+          "output": "csv_file"
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "生成的 CSV 文件"
+      },
+      {
+        "name": "segmented_passages",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "semantic_segmentation",
+          "output": "segmented_passages"
+        },
+        "shape": "structured_data",
+        "required": true,
+        "summary": "原始分段数据，用于比对验证"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "validated_csv",
+        "shape": "file",
+        "summary": "验证通过的 CSV 文件"
+      },
+      {
+        "name": "report",
+        "shape": "file",
+        "summary": "处理报告，包含分段统计和质量检查结果"
+      }
+    ],
+    "executor": {
+      "skill": "output-validator"
+    },
+    "validators": [
+      {
+        "validator_id": "completeness-check",
+        "skill": "completeness-validator"
+      },
+      {
+        "validator_id": "quality-check",
+        "skill": "quality-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "CSV 文件已通过全面质量验证",
+      "pass_condition": [
+        "原文内容无遗漏",
+        "无错误修改",
+        "格式完全符合规范",
+        "段落序号连续无重复",
+        "元数据完整准确"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "validated_csv",
+        "report"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:26:09.765284+00:00"
+}

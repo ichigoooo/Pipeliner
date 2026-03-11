@@ -1,0 +1,117 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "output-validator",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "validate-output",
+  "node_spec": {
+    "node_id": "validate-output",
+    "title": "输出校验",
+    "purpose": "对最终 CSV 输出进行全面校验，确保符合所有规范要求，生成处理报告",
+    "archetype": "validation",
+    "depends_on": [
+      "generate-csv"
+    ],
+    "inputs": [
+      {
+        "name": "csv_output",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "generate-csv",
+          "output": "csv_output"
+        },
+        "shape": "text",
+        "required": true,
+        "summary": "生成的 CSV 文件内容"
+      },
+      {
+        "name": "correction_log",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "preprocess-text",
+          "output": "correction_log"
+        },
+        "shape": "json",
+        "required": true,
+        "summary": "文本预处理修正记录"
+      },
+      {
+        "name": "segmentation_stats",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "semantic-segmentation",
+          "output": "segmentation_stats"
+        },
+        "shape": "json",
+        "required": true,
+        "summary": "分段统计信息"
+      },
+      {
+        "name": "source_text",
+        "from": {
+          "kind": "workflow_input",
+          "name": "source_text",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "text",
+        "required": true,
+        "summary": "原始文本文档，用于完整性校验"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "validation_report",
+        "shape": "json",
+        "summary": "完整的校验报告，包含质量评分、错误列表、警告列表、统计信息"
+      },
+      {
+        "name": "quality_score",
+        "shape": "number",
+        "summary": "整体质量评分（0-100）"
+      }
+    ],
+    "executor": {
+      "skill": "output-validator"
+    },
+    "validators": [
+      {
+        "validator_id": "completeness-check",
+        "skill": "completeness-validator"
+      },
+      {
+        "validator_id": "quality-check",
+        "skill": "quality-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "输出校验完成，CSV 文件符合所有规范要求",
+      "pass_condition": [
+        "原文完整性验证通过（无遗漏、无错误修改）",
+        "CSV 格式符合规范",
+        "所有必填字段齐全",
+        "段落序号正确无重复",
+        "质量评分达到可接受标准"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "validation_report",
+        "quality_score"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:09:35.355455+00:00"
+}

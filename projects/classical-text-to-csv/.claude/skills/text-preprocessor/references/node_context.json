@@ -1,0 +1,92 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "text-preprocessor",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "preprocess-text",
+  "node_spec": {
+    "node_id": "preprocess-text",
+    "title": "文本预处理",
+    "purpose": "修复 OCR 识别导致的格式错误、特殊符号和标点符号重复等问题，保持原文内容不变，仅做格式规范化",
+    "archetype": "transformation",
+    "depends_on": [
+      "analyze-document"
+    ],
+    "inputs": [
+      {
+        "name": "source_text",
+        "from": {
+          "kind": "workflow_input",
+          "name": "source_text",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "text",
+        "required": true,
+        "summary": "原始文本文档内容"
+      },
+      {
+        "name": "document_structure",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "analyze-document",
+          "output": "document_structure"
+        },
+        "shape": "json",
+        "required": true,
+        "summary": "文档结构分析结果"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cleaned_text",
+        "shape": "text",
+        "summary": "预处理后的文本，修复了 OCR 错误和格式问题"
+      },
+      {
+        "name": "correction_log",
+        "shape": "json",
+        "summary": "修正记录日志，记录所有自动修正的内容和位置"
+      }
+    ],
+    "executor": {
+      "skill": "text-preprocessor"
+    },
+    "validators": [
+      {
+        "validator_id": "ocr-fix-check",
+        "skill": "ocr-correction-validator"
+      },
+      {
+        "validator_id": "content-integrity-check",
+        "skill": "content-integrity-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "文本预处理完成，OCR 错误已修复，原文完整性得到保持",
+      "pass_condition": [
+        "明显 OCR 错误已修正",
+        "标点符号重复问题已处理",
+        "特殊符号格式已规范",
+        "原文内容无遗漏或错误修改"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "cleaned_text",
+        "correction_log"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:09:35.352782+00:00"
+}

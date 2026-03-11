@@ -525,6 +525,26 @@ Node Card
 
 ---
 
+### 7. Skill 规范与目录布局（Claude Code）
+
+为保证 Skill 在 Claude Code 中可发现、可触发、可复用，当前确认以下约束：
+
+- Skill 必须是目录，入口文件必须命名为 `SKILL.md`，大小写严格一致。
+- `SKILL.md` 顶部必须包含 YAML frontmatter。`name` 建议显式填写，若省略则使用目录名。
+- `name` 仅允许小写字母、数字与连字符，最长 64 字符，不允许包含 XML 标签或保留词（如 `anthropic`、`claude`）。
+- `description` 必须同时说明“做什么”和“何时使用”，最长 1024 字符，禁止 XML 标签。
+- 默认允许 Claude 自动触发，必要时可通过 `disable-model-invocation: true` 禁止模型自动触发，仅允许用户用 `/skill-name` 手动触发。
+- 对仅用于背景知识的 Skill，可设置 `user-invocable: false`，让用户无法手动触发。
+- Skill 可包含 `scripts/`、`references/`、`assets/` 等支持文件。脚本应使用 `${CLAUDE_SKILL_DIR}` 作为相对根路径，避免依赖运行目录。
+
+目录布局与发现规则：
+
+- 每个 workflow 对应一个项目目录：`projects/<workflow_id>/`。
+- 该目录内固定创建 `.claude/skills/`，用于放置该 workflow 的专属 Skill。
+- `workflow-authoring` 作为固定基础 Skill，所有 workflow 共享一致逻辑。
+- 针对不同类型工作，可在该目录下新增专属 Skill，以便 Claude 按任务选择合适的执行策略。
+- Claude Code 会从当前工作目录向上发现 `.claude/skills/`，也会自动发现子目录内的 `.claude/skills/`，适配多包或子工程结构。
+
 ## 六、产物优先，而不是上下文优先（已确定）
 
 Pipeliner 的边界对象应优先是“产物”，而不是“上下文”。

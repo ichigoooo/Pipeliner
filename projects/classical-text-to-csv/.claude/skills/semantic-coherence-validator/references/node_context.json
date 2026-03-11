@@ -1,0 +1,92 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.1.0"
+  },
+  "skill": {
+    "name": "semantic-coherence-validator",
+    "role": "validator",
+    "validator_id": "semantic-coherence-check"
+  },
+  "node_id": "semantic-segmentation",
+  "node_spec": {
+    "node_id": "semantic-segmentation",
+    "title": "语义分段",
+    "purpose": "根据语义进行合理分段，每段包含 3-5 句话或一个完整语义块，不完全基于原始换行符，方便后续阅读时比对翻译",
+    "archetype": "transformation",
+    "depends_on": [
+      "preprocess-text"
+    ],
+    "inputs": [
+      {
+        "name": "cleaned_text",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "preprocess-text",
+          "output": "cleaned_text"
+        },
+        "shape": "text",
+        "required": true,
+        "summary": "预处理后的文本"
+      },
+      {
+        "name": "document_structure",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "analyze-document",
+          "output": "document_structure"
+        },
+        "shape": "json",
+        "required": true,
+        "summary": "文档结构分析结果"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "segmented_passages",
+        "shape": "json",
+        "summary": "分段后的段落列表，每个段落包含序号、内容、所属篇章等信息"
+      },
+      {
+        "name": "segmentation_stats",
+        "shape": "json",
+        "summary": "分段统计信息：总段落数、平均每段句子数等"
+      }
+    ],
+    "executor": {
+      "skill": "semantic-segmentation"
+    },
+    "validators": [
+      {
+        "validator_id": "segmentation-quality-check",
+        "skill": "segmentation-quality-validator"
+      },
+      {
+        "validator_id": "semantic-coherence-check",
+        "skill": "semantic-coherence-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "语义分段完成，段落按 3-5 句话或语义块合理划分",
+      "pass_condition": [
+        "每段包含 3-5 句话或一个完整语义块",
+        "段落边界符合语义完整性",
+        "段落序号连续无重复",
+        "原文无遗漏"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "segmented_passages",
+        "segmentation_stats"
+      ]
+    }
+  },
+  "updated_at": "2026-03-11T14:09:35.354334+00:00"
+}

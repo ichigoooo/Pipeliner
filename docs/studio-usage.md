@@ -28,6 +28,9 @@
 - Node Detail 可查看 callbacks、artifacts、log refs 与 raw context。
 - Preview 面板支持 JSON/Text/目录预览，binary 会提示不可预览。
 
+## 节点 Skill 与项目目录
+
+每个 workflow 都对应 `projects/<workflow_id>/` 目录。保存草案、Claude 生成或迭代时，会为节点 executor/validator 创建或补齐 `.claude/skills/<skill>`，`SKILL.md` 仅在缺失时生成且不会覆盖手工编辑内容，`references/node_context.json` 在每次草案更新时同步节点上下文。运行期 executor/validator 在项目目录中执行，以确保技能自动发现。 
 ## 建议流程
 
 - Intent Brief 描述目标、输入输出与验收标准。

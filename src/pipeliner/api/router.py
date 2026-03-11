@@ -35,6 +35,8 @@ from pipeliner.services.authoring_agent import AuthoringAgent
 from pipeliner.services.authoring_service import AuthoringService
 from pipeliner.services.settings_service import SettingsService
 from pipeliner.services.preview_service import PreviewService
+from pipeliner.services.project_initializer import ProjectInitializer
+from pipeliner.services.report_service import ReportService
 from pipeliner.ui.views import render_index, render_run_view, render_workflow_view
 
 router = APIRouter()
@@ -98,6 +100,14 @@ class RunRetryRequest(BaseModel):
     rework_brief: dict[str, Any] | None = None
 
 
+class AuthoringReportRequest(BaseModel):
+    session_id: str
+    suggestion: str
+    explanation: str
+    risk: str
+    source: dict[str, Any] | None = None
+
+
 class RunDriveRequest(BaseModel):
     max_steps: int = Field(default=100, ge=1, le=500)
     executor_command_template: str | None = None
@@ -128,6 +138,7 @@ def _authoring_service(session: Session, request: Request) -> AuthoringService:
         AuthoringRepository(session),
         WorkflowService(WorkflowRepository(session)),
         authoring_agent=AuthoringAgent(request.app.state.settings),
+        project_initializer=ProjectInitializer(request.app.state.settings),
     )
 
 
@@ -505,6 +516,16 @@ def generate_authoring_draft(
         base_spec=request_body.spec,
     )
     return _authoring_draft_payload(draft)
+
+
+@router.post("/api/authoring/reports")
+def submit_authoring_report(
+    request_body: AuthoringReportRequest,
+    request: Request,
+) -> dict[str, Any]:
+    service = ReportService(request.app.state.settings)
+    result = service.save_authoring_report(request_body.model_dump(mode="json"))
+    return {"stored": result["stored"]}
 
 
 @router.get("/api/authoring/sessions/{session_id}/drafts/latest")
