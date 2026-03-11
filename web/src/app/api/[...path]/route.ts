@@ -45,3 +45,5 @@ export async function POST(
 ) {
   return forward(request, await context.params);
 }
+export const maxDuration = 900;  
+  
