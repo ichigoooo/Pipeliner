@@ -7,17 +7,15 @@
   "skill": {
     "name": "ocr-correction-validator",
     "role": "validator",
-    "validator_id": "ocr-fix-check"
+    "validator_id": "ocr-correction-check"
   },
-  "node_id": "preprocess-text",
+  "node_id": "text_preprocessing",
   "node_spec": {
-    "node_id": "preprocess-text",
+    "node_id": "text_preprocessing",
     "title": "文本预处理",
-    "purpose": "修复 OCR 识别导致的格式错误、特殊符号和标点符号重复等问题，保持原文内容不变，仅做格式规范化",
-    "archetype": "transformation",
-    "depends_on": [
-      "analyze-document"
-    ],
+    "purpose": "对原始文本进行 OCR 错误修正和格式整理，修复明显的格式错误、特殊符号和标点符号重复等问题，但保持原文内容完整不遗漏",
+    "archetype": "preprocess-content",
+    "depends_on": [],
     "inputs": [
       {
         "name": "source_text",
@@ -27,55 +25,33 @@
           "node_id": null,
           "output": null
         },
-        "shape": "text",
+        "shape": "file",
         "required": true,
-        "summary": "原始文本文档内容"
-      },
-      {
-        "name": "document_structure",
-        "from": {
-          "kind": "node_output",
-          "name": null,
-          "node_id": "analyze-document",
-          "output": "document_structure"
-        },
-        "shape": "json",
-        "required": true,
-        "summary": "文档结构分析结果"
+        "summary": "原始文本文档"
       }
     ],
     "outputs": [
       {
-        "name": "cleaned_text",
-        "shape": "text",
-        "summary": "预处理后的文本，修复了 OCR 错误和格式问题"
-      },
-      {
-        "name": "correction_log",
-        "shape": "json",
-        "summary": "修正记录日志，记录所有自动修正的内容和位置"
+        "name": "preprocessed_text",
+        "shape": "file",
+        "summary": "预处理后的文本，修正 OCR 错误和格式问题"
       }
     ],
     "executor": {
-      "skill": "text-preprocessor"
+      "skill": "classical-text-preprocess"
     },
     "validators": [
       {
-        "validator_id": "ocr-fix-check",
+        "validator_id": "ocr-correction-check",
         "skill": "ocr-correction-validator"
-      },
-      {
-        "validator_id": "content-integrity-check",
-        "skill": "content-integrity-validator"
       }
     ],
     "acceptance": {
-      "done_means": "文本预处理完成，OCR 错误已修复，原文完整性得到保持",
+      "done_means": "文本已完成 OCR 错误修正和基本格式整理",
       "pass_condition": [
-        "明显 OCR 错误已修正",
-        "标点符号重复问题已处理",
-        "特殊符号格式已规范",
-        "原文内容无遗漏或错误修改"
+        "已修复明显的 OCR 识别错误",
+        "已整理格式错误和特殊符号重复",
+        "原文内容无遗漏、无错误修改"
       ]
     },
     "gate": {
@@ -83,10 +59,9 @@
     },
     "handoff": {
       "outputs": [
-        "cleaned_text",
-        "correction_log"
+        "preprocessed_text"
       ]
     }
   },
-  "updated_at": "2026-03-11T14:09:35.353089+00:00"
+  "updated_at": "2026-03-12T07:54:04.151119+00:00"
 }

@@ -385,3 +385,20 @@ class AuthoringRepository:
         self.session.add(log)
         self.session.flush()
         return log
+
+    def list_generation_logs(self, session_id: str) -> list[AuthoringGenerationLogModel]:
+        stmt = (
+            select(AuthoringGenerationLogModel)
+            .where(AuthoringGenerationLogModel.session_id == session_id)
+            .order_by(AuthoringGenerationLogModel.created_at.desc(), AuthoringGenerationLogModel.id.desc())
+        )
+        return list(self.session.scalars(stmt))
+
+    def get_generation_log(self, session_id: str, revision: int) -> AuthoringGenerationLogModel | None:
+        stmt = (
+            select(AuthoringGenerationLogModel)
+            .where(AuthoringGenerationLogModel.session_id == session_id)
+            .where(AuthoringGenerationLogModel.revision == revision)
+            .order_by(AuthoringGenerationLogModel.created_at.desc(), AuthoringGenerationLogModel.id.desc())
+        )
+        return self.session.scalars(stmt).first()

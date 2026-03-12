@@ -9,25 +9,27 @@
     "role": "validator",
     "validator_id": "structure-completeness-check"
   },
-  "node_id": "analyze-document",
+  "node_id": "structure_analysis",
   "node_spec": {
-    "node_id": "analyze-document",
-    "title": "文档结构分析",
-    "purpose": "分析输入文档的结构，识别著作标题、篇章层级、作者信息、段落边界等元数据，为后续处理提供结构框架",
-    "archetype": "analysis",
-    "depends_on": [],
+    "node_id": "structure_analysis",
+    "title": "结构分析与元数据整合",
+    "purpose": "提取并整合元数据信息，包括著作标题、篇章标题、作者、朝代、著作类型、内容分类等，为 CSV 生成准备完整数据结构",
+    "archetype": "analyze-structure",
+    "depends_on": [
+      "semantic_segmentation"
+    ],
     "inputs": [
       {
-        "name": "source_text",
+        "name": "segmented_passages",
         "from": {
-          "kind": "workflow_input",
-          "name": "source_text",
-          "node_id": null,
-          "output": null
+          "kind": "node_output",
+          "name": null,
+          "node_id": "semantic_segmentation",
+          "output": "segmented_passages"
         },
-        "shape": "text",
+        "shape": "structured_data",
         "required": true,
-        "summary": "原始文本文档内容"
+        "summary": "语义分段后的段落列表"
       },
       {
         "name": "work_title",
@@ -42,28 +44,107 @@
         "summary": "著作标题"
       },
       {
-        "name": "author_name",
+        "name": "chapter_title",
         "from": {
           "kind": "workflow_input",
-          "name": "author_name",
+          "name": "chapter_title",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "篇章标题"
+      },
+      {
+        "name": "author",
+        "from": {
+          "kind": "workflow_input",
+          "name": "author",
           "node_id": null,
           "output": null
         },
         "shape": "string",
         "required": false,
-        "summary": "作者名称"
+        "summary": "作者"
+      },
+      {
+        "name": "work_type",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_type",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "著作类型"
+      },
+      {
+        "name": "category",
+        "from": {
+          "kind": "workflow_input",
+          "name": "category",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "内容分类"
+      },
+      {
+        "name": "era",
+        "from": {
+          "kind": "workflow_input",
+          "name": "era",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "朝代"
+      },
+      {
+        "name": "description",
+        "from": {
+          "kind": "workflow_input",
+          "name": "description",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "著作简介"
+      },
+      {
+        "name": "chapter_category",
+        "from": {
+          "kind": "workflow_input",
+          "name": "chapter_category",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "篇章类型"
+      },
+      {
+        "name": "creation_year",
+        "from": {
+          "kind": "workflow_input",
+          "name": "creation_year",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "integer",
+        "required": false,
+        "summary": "创作年份"
       }
     ],
     "outputs": [
       {
-        "name": "document_structure",
-        "shape": "json",
-        "summary": "文档结构分析结果，包含章节层级、段落边界、元数据提取"
-      },
-      {
-        "name": "extracted_metadata",
-        "shape": "json",
-        "summary": "提取的元数据：作者、朝代、篇章标题列表等"
+        "name": "structured_data",
+        "shape": "structured_data",
+        "summary": "包含完整元数据和段落内容的结构化数据"
       }
     ],
     "executor": {
@@ -71,20 +152,21 @@
     },
     "validators": [
       {
-        "validator_id": "structure-completeness-check",
-        "skill": "structure-completeness-validator"
-      },
-      {
         "validator_id": "metadata-extraction-check",
         "skill": "metadata-extraction-validator"
+      },
+      {
+        "validator_id": "structure-completeness-check",
+        "skill": "structure-completeness-validator"
       }
     ],
     "acceptance": {
-      "done_means": "文档结构分析完成，成功提取章节层级和元数据",
+      "done_means": "已提取并整合所有元数据，数据结构完整",
       "pass_condition": [
-        "识别出至少一个有效的篇章标题",
-        "段落边界划分合理",
-        "元数据提取准确"
+        "著作标题和篇章标题已正确设置",
+        "所有元数据字段已按规则整合",
+        "段落序号连续无重复",
+        "数据结构符合 CSV 生成要求"
       ]
     },
     "gate": {
@@ -92,10 +174,9 @@
     },
     "handoff": {
       "outputs": [
-        "document_structure",
-        "extracted_metadata"
+        "structured_data"
       ]
     }
   },
-  "updated_at": "2026-03-11T14:09:35.352161+00:00"
+  "updated_at": "2026-03-12T07:54:04.152361+00:00"
 }

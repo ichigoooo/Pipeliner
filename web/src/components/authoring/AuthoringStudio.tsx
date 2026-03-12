@@ -15,6 +15,12 @@ function parseSpec(value: string) {
   return JSON.parse(value) as Record<string, unknown>;
 }
 
+function buildClaudeCallId(prefix: string) {
+  const timestamp = Date.now();
+  const nonce = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${timestamp}_${nonce}`;
+}
+
 export function AuthoringStudio() {
   const t = useTranslations('authoring');
   const tClaude = useTranslations('claudeTerminal');
@@ -83,7 +89,9 @@ export function AuthoringStudio() {
       return;
     }
     setRawSpec(prettyJson(draftQuery.data.spec_json));
-  }, [draftQuery.data?.revision]);
+    const callId = draftQuery.data.claude_call_id;
+    setClaudeCallId((current) => (callId ? callId : current));
+  }, [draftQuery.data?.revision, draftQuery.data?.claude_call_id]);
 
   useEffect(() => {
     setClaudeCallId(null);
@@ -117,7 +125,7 @@ export function AuthoringStudio() {
   });
 
   const continueMutation = useMutation({
-    mutationFn: ({ sessionId, draft, note }: { sessionId: string; draft: Record<string, unknown>; note: string }) =>
+    mutationFn: ({ sessionId, draft, note, callId }: { sessionId: string; draft: Record<string, unknown>; note: string; callId?: string }) =>
       api.continueSession(sessionId, { spec: draft, instruction: note }),
     onSuccess: async (payload) => {
       setRawSpec(prettyJson(payload.spec_json));
@@ -126,10 +134,19 @@ export function AuthoringStudio() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: ({ sessionId, draft, note }: { sessionId: string; draft: Record<string, unknown>; note: string }) =>
-      api.generateDraft(sessionId, { spec: draft, instruction: note }),
+    mutationFn: ({
+      sessionId,
+      draft,
+      note,
+      callId,
+    }: {
+      sessionId: string;
+      draft: Record<string, unknown>;
+      note: string;
+      callId?: string;
+    }) => api.generateDraft(sessionId, { spec: draft, instruction: note, claude_call_id: callId }),
     onSuccess: async (payload) => {
-      setClaudeCallId(payload.claude_call_id ? payload.claude_call_id : null);
+      setClaudeCallId((current) => (payload.claude_call_id ? payload.claude_call_id : current));
       setRawSpec(prettyJson(payload.spec_json));
       await invalidateSession(payload.session_id);
     },
@@ -217,13 +234,15 @@ export function AuthoringStudio() {
     }
 
     setError(null);
-    setClaudeCallId(null);
     try {
       const draft = parseSpec(rawSpec);
+      const callId = buildClaudeCallId('claude_authoring');
+      setClaudeCallId(callId);
       await generateMutation.mutateAsync({
         sessionId: selectedSessionId,
         draft,
         note: instruction,
+        callId,
       });
     } catch (mutationError) {
       setError((mutationError as Error).message);

@@ -91,11 +91,19 @@ class ClaudeCallStore:
         role: str,
         context: dict[str, Any],
         command: list[str] | None,
+        call_id: str | None = None,
     ) -> ClaudeCallSession:
         self.cleanup()
-        call_id = self._build_call_id(role)
-        log_path = self.base_dir / f"{call_id}.log"
-        meta_path = self.base_dir / f"{call_id}.json"
+        if call_id:
+            self._validate_call_id(call_id)
+            log_path = self.base_dir / f"{call_id}.log"
+            meta_path = self.base_dir / f"{call_id}.json"
+            if log_path.exists() or meta_path.exists():
+                raise ValidationError("call_id 已存在")
+        else:
+            call_id = self._build_call_id(role)
+            log_path = self.base_dir / f"{call_id}.log"
+            meta_path = self.base_dir / f"{call_id}.json"
         started_at = datetime.now(timezone.utc)
         payload = {
             "call_id": call_id,

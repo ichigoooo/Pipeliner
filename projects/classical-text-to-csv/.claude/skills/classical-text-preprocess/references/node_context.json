@@ -9,44 +9,59 @@
     "role": "executor",
     "validator_id": null
   },
-  "node_id": "node_1",
+  "node_id": "text_preprocessing",
   "node_spec": {
-    "id": "text-preprocess",
-    "name": "文本预处理",
-    "description": "清理 OCR 识别导致的格式错误、特殊符号和标点符号重复等问题，保留原文内容完整性",
-    "executor": {
-      "skill": "classical-text-preprocess"
-    },
+    "node_id": "text_preprocessing",
+    "title": "文本预处理",
+    "purpose": "对原始文本进行 OCR 错误修正和格式整理，修复明显的格式错误、特殊符号和标点符号重复等问题，但保持原文内容完整不遗漏",
+    "archetype": "preprocess-content",
+    "depends_on": [],
     "inputs": [
       {
         "name": "source_text",
-        "from_workflow_input": "source_text"
+        "from": {
+          "kind": "workflow_input",
+          "name": "source_text",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "原始文本文档"
       }
     ],
     "outputs": [
       {
-        "name": "cleaned_text",
-        "shape": "string",
-        "summary": "清理后的文本内容"
-      },
-      {
-        "name": "corrections_made",
-        "shape": "array",
-        "summary": "修正项列表，记录所有自动修正的内容"
+        "name": "preprocessed_text",
+        "shape": "file",
+        "summary": "预处理后的文本，修正 OCR 错误和格式问题"
       }
     ],
-    "acceptance": {
-      "done_means": "文本已完成 OCR 错误清理和格式整理",
-      "pass_condition": "cleaned_text 不为空且长度合理，corrections_made 清晰记录修正项"
+    "executor": {
+      "skill": "classical-text-preprocess"
     },
     "validators": [
       {
-        "id": "preprocess-quality-check",
-        "name": "预处理质量检查",
-        "skill": "text-quality-validator",
-        "description": "验证文本预处理是否保留了原文核心内容，修正是否合理"
+        "validator_id": "ocr-correction-check",
+        "skill": "ocr-correction-validator"
       }
-    ]
+    ],
+    "acceptance": {
+      "done_means": "文本已完成 OCR 错误修正和基本格式整理",
+      "pass_condition": [
+        "已修复明显的 OCR 识别错误",
+        "已整理格式错误和特殊符号重复",
+        "原文内容无遗漏、无错误修改"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "preprocessed_text"
+      ]
+    }
   },
-  "updated_at": "2026-03-11T11:27:34.622761+00:00"
+  "updated_at": "2026-03-12T07:54:04.150825+00:00"
 }

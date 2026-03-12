@@ -39,6 +39,7 @@ class AuthoringAgent:
         instruction: str,
         base_spec: dict[str, Any],
         project_dir: Path | None = None,
+        claude_call_id: str | None = None,
     ) -> AuthoringAgentResult:
         work_dir = self._ensure_work_dir(session_id)
         prompt_path = work_dir / "authoring_prompt.md"
@@ -78,6 +79,7 @@ class AuthoringAgent:
                 "project_dir": str(project_dir) if project_dir else None,
             },
             command=command,
+            call_id=claude_call_id,
         )
         started_at = time.perf_counter()
         timeout = self._timeout_seconds()

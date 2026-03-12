@@ -4,6 +4,13 @@ TBD
 
 ## Requirements
 
+### Requirement: Iteration updates node skill packages when drafts change
+The system SHALL update node skill packages and references as part of workflow iteration.
+
+#### Scenario: Update skill references during iteration
+- **WHEN** an iteration creates a new draft revision with modified nodes
+- **THEN** the system refreshes the corresponding skill reference files for affected nodes
+
 ### Requirement: 支持从已发布版本创建迭代会话
 系统 SHALL 允许用户基于已发布的 workflow version 创建新的 authoring 会话，并将该版本作为草案基线。
 

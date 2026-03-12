@@ -198,6 +198,7 @@ class AuthoringService:
         instruction: str,
         *,
         base_spec: dict[str, Any] | None = None,
+        claude_call_id: str | None = None,
     ) -> tuple[AuthoringDraftModel, dict[str, Any]]:
         session = self.get_session(session_id)
         current_spec = base_spec or self.get_latest_draft(session_id).spec_json
@@ -216,6 +217,7 @@ class AuthoringService:
                 instruction=instruction,
                 base_spec=current_spec,
                 project_dir=project_root,
+                claude_call_id=claude_call_id,
             )
             result_spec = self.project_initializer.ensure_node_skills(workflow_id, result.spec_json)
             result_spec = self._ensure_depends_on(result_spec)

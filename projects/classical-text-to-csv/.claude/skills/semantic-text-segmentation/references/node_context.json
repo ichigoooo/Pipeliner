@@ -9,47 +9,66 @@
     "role": "executor",
     "validator_id": null
   },
-  "node_id": "node_2",
+  "node_id": "semantic_segmentation",
   "node_spec": {
-    "id": "semantic-segmentation",
-    "name": "语义分段",
-    "description": "根据语义（大致三到五句话或语义块）进行合理、灵活的分段，不完全基于原始换行符",
-    "executor": {
-      "skill": "semantic-text-segmentation"
-    },
+    "node_id": "semantic_segmentation",
+    "title": "语义分段",
+    "purpose": "根据语义块进行合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段，确保段落便于后续阅读时比对翻译",
+    "archetype": "segment-content",
+    "depends_on": [
+      "text_preprocessing"
+    ],
     "inputs": [
       {
-        "name": "cleaned_text",
-        "from_node": {
-          "node_id": "text-preprocess",
-          "output_name": "cleaned_text"
-        }
+        "name": "preprocessed_text",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_preprocessing",
+          "output": "preprocessed_text"
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "预处理后的文本"
       }
     ],
     "outputs": [
       {
-        "name": "passages",
-        "shape": "array",
-        "summary": "分段后的段落数组，每个元素包含序号和内容"
-      },
-      {
-        "name": "segmentation_notes",
-        "shape": "array",
-        "summary": "分段说明，记录每个分段点的语义依据"
+        "name": "segmented_passages",
+        "shape": "structured_data",
+        "summary": "语义分段后的段落列表，每段包含序号和内容"
       }
     ],
-    "acceptance": {
-      "done_means": "文本已按语义完成合理分段",
-      "pass_condition": "passages 数组元素数量合理（每段3-5句话或一个语义块），无内容遗漏，segmentation_notes 说明清晰"
+    "executor": {
+      "skill": "semantic-text-segmentation"
     },
     "validators": [
       {
-        "id": "segmentation-quality-check",
-        "name": "分段质量检查",
-        "skill": "segmentation-validator",
-        "description": "验证分段是否合理，是否存在过长或过短的段落，内容是否完整"
+        "validator_id": "segmentation-quality-check",
+        "skill": "segmentation-quality-validator"
+      },
+      {
+        "validator_id": "content-integrity-check",
+        "skill": "content-integrity-validator"
       }
-    ]
+    ],
+    "acceptance": {
+      "done_means": "文本已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
+      "pass_condition": [
+        "分段基于语义而非原始换行符",
+        "每段长度适中（3-5 句话或一个语义块）",
+        "原文内容无遗漏、无错误修改",
+        "段落序号连续正确"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "segmented_passages"
+      ]
+    }
   },
-  "updated_at": "2026-03-11T11:27:34.623611+00:00"
+  "updated_at": "2026-03-12T07:54:04.151323+00:00"
 }

@@ -9,60 +9,43 @@
     "role": "validator",
     "validator_id": "content-integrity-check"
   },
-  "node_id": "preprocess-text",
+  "node_id": "semantic_segmentation",
   "node_spec": {
-    "node_id": "preprocess-text",
-    "title": "文本预处理",
-    "purpose": "修复 OCR 识别导致的格式错误、特殊符号和标点符号重复等问题，保持原文内容不变，仅做格式规范化",
-    "archetype": "transformation",
+    "node_id": "semantic_segmentation",
+    "title": "语义分段",
+    "purpose": "根据语义块进行合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段，确保段落便于后续阅读时比对翻译",
+    "archetype": "segment-content",
     "depends_on": [
-      "analyze-document"
+      "text_preprocessing"
     ],
     "inputs": [
       {
-        "name": "source_text",
-        "from": {
-          "kind": "workflow_input",
-          "name": "source_text",
-          "node_id": null,
-          "output": null
-        },
-        "shape": "text",
-        "required": true,
-        "summary": "原始文本文档内容"
-      },
-      {
-        "name": "document_structure",
+        "name": "preprocessed_text",
         "from": {
           "kind": "node_output",
           "name": null,
-          "node_id": "analyze-document",
-          "output": "document_structure"
+          "node_id": "text_preprocessing",
+          "output": "preprocessed_text"
         },
-        "shape": "json",
+        "shape": "file",
         "required": true,
-        "summary": "文档结构分析结果"
+        "summary": "预处理后的文本"
       }
     ],
     "outputs": [
       {
-        "name": "cleaned_text",
-        "shape": "text",
-        "summary": "预处理后的文本，修复了 OCR 错误和格式问题"
-      },
-      {
-        "name": "correction_log",
-        "shape": "json",
-        "summary": "修正记录日志，记录所有自动修正的内容和位置"
+        "name": "segmented_passages",
+        "shape": "structured_data",
+        "summary": "语义分段后的段落列表，每段包含序号和内容"
       }
     ],
     "executor": {
-      "skill": "text-preprocessor"
+      "skill": "semantic-text-segmentation"
     },
     "validators": [
       {
-        "validator_id": "ocr-fix-check",
-        "skill": "ocr-correction-validator"
+        "validator_id": "segmentation-quality-check",
+        "skill": "segmentation-quality-validator"
       },
       {
         "validator_id": "content-integrity-check",
@@ -70,12 +53,12 @@
       }
     ],
     "acceptance": {
-      "done_means": "文本预处理完成，OCR 错误已修复，原文完整性得到保持",
+      "done_means": "文本已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
       "pass_condition": [
-        "明显 OCR 错误已修正",
-        "标点符号重复问题已处理",
-        "特殊符号格式已规范",
-        "原文内容无遗漏或错误修改"
+        "分段基于语义而非原始换行符",
+        "每段长度适中（3-5 句话或一个语义块）",
+        "原文内容无遗漏、无错误修改",
+        "段落序号连续正确"
       ]
     },
     "gate": {
@@ -83,10 +66,9 @@
     },
     "handoff": {
       "outputs": [
-        "cleaned_text",
-        "correction_log"
+        "segmented_passages"
       ]
     }
   },
-  "updated_at": "2026-03-11T14:09:35.353247+00:00"
+  "updated_at": "2026-03-12T07:54:04.151564+00:00"
 }

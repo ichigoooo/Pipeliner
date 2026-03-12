@@ -82,6 +82,7 @@ class AuthoringDraftSaveRequest(BaseModel):
 class AuthoringGenerateRequest(BaseModel):
     instruction: str
     spec: dict[str, Any] | None = None
+    claude_call_id: str | None = None
 
 
 class AuthoringSessionFromVersionRequest(BaseModel):
@@ -227,8 +228,8 @@ def _validator_dispatcher(
     )
 
 
-def _authoring_draft_payload(draft) -> dict[str, Any]:
-    return {
+def _authoring_draft_payload(draft, claude_call_id: str | None = None) -> dict[str, Any]:
+    payload = {
         "session_id": draft.session_id,
         "revision": draft.revision,
         "spec_json": draft.spec_json,
@@ -241,6 +242,33 @@ def _authoring_draft_payload(draft) -> dict[str, Any]:
         "source": draft.source_json,
         "created_at": draft.created_at.isoformat() if draft.created_at else None,
     }
+    if claude_call_id is not None:
+        payload["claude_call_id"] = claude_call_id
+    return payload
+
+
+def _extract_claude_call_id(metadata: dict[str, Any] | None) -> str | None:
+    if not isinstance(metadata, dict):
+        return None
+    call_id = metadata.get("claude_call_id")
+    if isinstance(call_id, str) and call_id:
+        return call_id
+    return None
+
+
+def _build_generation_call_map(
+    repo: AuthoringRepository,
+    session_id: str,
+) -> dict[int, str]:
+    mapping: dict[int, str] = {}
+    for log in repo.list_generation_logs(session_id):
+        revision = log.revision
+        if revision is None or revision in mapping:
+            continue
+        call_id = _extract_claude_call_id(log.metadata_json)
+        if call_id:
+            mapping[revision] = call_id
+    return mapping
 
 
 @router.get("/health")
@@ -490,7 +518,12 @@ def save_authoring_draft(
         request_body.spec,
         instruction=request_body.instruction,
     )
-    return _authoring_draft_payload(draft)
+    repo = AuthoringRepository(session)
+    call_log = repo.get_generation_log(session_id, draft.revision)
+    return _authoring_draft_payload(
+        draft,
+        _extract_claude_call_id(call_log.metadata_json if call_log else None),
+    )
 
 
 @router.post("/api/authoring/sessions/{session_id}/continue")
@@ -504,7 +537,12 @@ def continue_authoring_session(
         raise ValidationError("continue authoring 需要 instruction")
     service = _authoring_service(session, request)
     draft = service.continue_session(session_id, request_body.instruction, request_body.spec)
-    return _authoring_draft_payload(draft)
+    repo = AuthoringRepository(session)
+    call_log = repo.get_generation_log(session_id, draft.revision)
+    return _authoring_draft_payload(
+        draft,
+        _extract_claude_call_id(call_log.metadata_json if call_log else None),
+    )
 
 
 @router.post("/api/authoring/sessions/{session_id}/generate")
@@ -521,10 +559,9 @@ def generate_authoring_draft(
         session_id,
         request_body.instruction,
         base_spec=request_body.spec,
+        claude_call_id=request_body.claude_call_id,
     )
-    payload = _authoring_draft_payload(draft)
-    payload["claude_call_id"] = metadata.get("claude_call_id") if metadata else None
-    return payload
+    return _authoring_draft_payload(draft, _extract_claude_call_id(metadata))
 
 
 @router.post("/api/authoring/reports")
@@ -545,7 +582,12 @@ def get_latest_authoring_draft(
 ) -> dict[str, Any]:
     service = _authoring_service(session, request)
     draft = service.get_latest_draft(session_id)
-    return _authoring_draft_payload(draft)
+    repo = AuthoringRepository(session)
+    call_log = repo.get_generation_log(session_id, draft.revision)
+    return _authoring_draft_payload(
+        draft,
+        _extract_claude_call_id(call_log.metadata_json if call_log else None),
+    )
 
 
 @router.get("/api/authoring/sessions/{session_id}/drafts/{revision}")
@@ -557,7 +599,12 @@ def get_authoring_draft(
 ) -> dict[str, Any]:
     service = _authoring_service(session, request)
     draft = service.get_draft(session_id, revision)
-    return _authoring_draft_payload(draft)
+    repo = AuthoringRepository(session)
+    call_log = repo.get_generation_log(session_id, draft.revision)
+    return _authoring_draft_payload(
+        draft,
+        _extract_claude_call_id(call_log.metadata_json if call_log else None),
+    )
 
 
 @router.get("/api/authoring/sessions/{session_id}/drafts")
@@ -568,7 +615,14 @@ def list_authoring_drafts(
 ) -> dict[str, Any]:
     service = _authoring_service(session, request)
     drafts = service.list_drafts(session_id)
-    return {"drafts": [_authoring_draft_payload(item) for item in drafts]}
+    repo = AuthoringRepository(session)
+    call_map = _build_generation_call_map(repo, session_id)
+    return {
+        "drafts": [
+            _authoring_draft_payload(item, call_map.get(item.revision))
+            for item in drafts
+        ]
+    }
 
 
 @router.get("/api/authoring/sessions/{session_id}/messages")

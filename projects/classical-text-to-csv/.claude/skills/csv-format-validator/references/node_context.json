@@ -9,127 +9,38 @@
     "role": "validator",
     "validator_id": "csv-format-check"
   },
-  "node_id": "generate-csv",
+  "node_id": "csv_generation",
   "node_spec": {
-    "node_id": "generate-csv",
-    "title": "生成 CSV 文件",
-    "purpose": "根据分段结果和元数据生成符合标准格式的 CSV 文件，包含完整的表头和数据行",
-    "archetype": "generation",
+    "node_id": "csv_generation",
+    "title": "CSV 文件生成",
+    "purpose": "按照标准格式要求生成 CSV 文件，包含完整的表头（著作标题,篇章标题,段落序号,段落内容,作者,著作类型,内容分类,朝代,著作简介,篇章类型,创作年份），确保编码为 UTF-8，分隔符为英文逗号",
+    "archetype": "generate-output",
     "depends_on": [
-      "semantic-segmentation"
+      "structure_analysis"
     ],
     "inputs": [
       {
-        "name": "segmented_passages",
+        "name": "structured_data",
         "from": {
           "kind": "node_output",
           "name": null,
-          "node_id": "semantic-segmentation",
-          "output": "segmented_passages"
+          "node_id": "structure_analysis",
+          "output": "structured_data"
         },
-        "shape": "json",
+        "shape": "structured_data",
         "required": true,
-        "summary": "分段后的段落列表"
-      },
-      {
-        "name": "extracted_metadata",
-        "from": {
-          "kind": "node_output",
-          "name": null,
-          "node_id": "analyze-document",
-          "output": "extracted_metadata"
-        },
-        "shape": "json",
-        "required": true,
-        "summary": "提取的元数据"
-      },
-      {
-        "name": "work_title",
-        "from": {
-          "kind": "workflow_input",
-          "name": "work_title",
-          "node_id": null,
-          "output": null
-        },
-        "shape": "string",
-        "required": true,
-        "summary": "著作标题"
-      },
-      {
-        "name": "author_name",
-        "from": {
-          "kind": "workflow_input",
-          "name": "author_name",
-          "node_id": null,
-          "output": null
-        },
-        "shape": "string",
-        "required": false,
-        "summary": "作者名称"
-      },
-      {
-        "name": "work_type",
-        "from": {
-          "kind": "workflow_input",
-          "name": "work_type",
-          "node_id": null,
-          "output": null
-        },
-        "shape": "string",
-        "required": false,
-        "summary": "著作类型"
-      },
-      {
-        "name": "category",
-        "from": {
-          "kind": "workflow_input",
-          "name": "category",
-          "node_id": null,
-          "output": null
-        },
-        "shape": "string",
-        "required": false,
-        "summary": "内容分类"
-      },
-      {
-        "name": "era",
-        "from": {
-          "kind": "workflow_input",
-          "name": "era",
-          "node_id": null,
-          "output": null
-        },
-        "shape": "string",
-        "required": false,
-        "summary": "朝代"
-      },
-      {
-        "name": "chapter_type",
-        "from": {
-          "kind": "workflow_input",
-          "name": "chapter_type",
-          "node_id": null,
-          "output": null
-        },
-        "shape": "string",
-        "required": false,
-        "summary": "篇章类型"
+        "summary": "包含完整元数据和段落内容的结构化数据"
       }
     ],
     "outputs": [
       {
-        "name": "csv_output",
-        "shape": "text",
-        "summary": "生成的 CSV 文件内容（UTF-8 编码）"
-      },
-      {
-        "name": "csv_metadata",
-        "shape": "json",
-        "summary": "CSV 元数据：行数、列数、校验信息等"
+        "name": "csv_file",
+        "shape": "file",
+        "summary": "生成的标准格式 CSV 文件"
       }
     ],
     "executor": {
-      "skill": "csv-generator"
+      "skill": "classical-csv-generator"
     },
     "validators": [
       {
@@ -142,13 +53,13 @@
       }
     ],
     "acceptance": {
-      "done_means": "CSV 文件生成完成，符合标准格式要求",
+      "done_means": "已生成符合标准格式的 CSV 文件",
       "pass_condition": [
-        "CSV 包含正确的表头行",
-        "必填字段（著作标题、篇章标题、段落序号、段落内容）齐全",
-        "段落序号为整数且无重复",
-        "段落内容不为空",
-        "UTF-8 编码格式正确"
+        "CSV 编码为 UTF-8",
+        "表头包含所有必填字段",
+        "分隔符为英文逗号",
+        "段落序号可正确转为整数",
+        "数据行与输入段落一致"
       ]
     },
     "gate": {
@@ -156,10 +67,9 @@
     },
     "handoff": {
       "outputs": [
-        "csv_output",
-        "csv_metadata"
+        "csv_file"
       ]
     }
   },
-  "updated_at": "2026-03-11T14:09:35.354782+00:00"
+  "updated_at": "2026-03-12T07:54:04.152820+00:00"
 }

@@ -350,7 +350,7 @@ export const api = {
     ),
   generateDraft: async (
     sessionId: string,
-    payload: { instruction: string; spec?: Record<string, unknown> }
+    payload: { instruction: string; spec?: Record<string, unknown>; claude_call_id?: string }
   ) =>
     request<AuthoringDraft>(`authoring/sessions/${sessionId}/generate`, {
       method: 'POST',
