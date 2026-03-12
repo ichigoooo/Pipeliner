@@ -101,6 +101,34 @@ export interface AuthoringDraft {
   lint_report: LintReport;
   lint_warnings: string[];
   created_at: string | null;
+  claude_call_id?: string | null;
+}
+
+export interface ClaudeCallMetadata {
+  call_id: string;
+  role: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  exit_code: number | null;
+  error_message: string | null;
+  bytes_written: number;
+  truncated: boolean;
+  limit_bytes: number;
+  output_path: string;
+  command: string | null;
+  context: Record<string, unknown>;
+  redacted?: boolean;
+}
+
+export interface ClaudeCallPoll {
+  call_id: string;
+  offset: number;
+  chunk: string;
+  status: string;
+  done: boolean;
+  truncated?: boolean;
+  redacted?: boolean;
 }
 
 export interface RunSummary {
@@ -198,6 +226,13 @@ export interface NodeRoundDetail {
     path: string;
     kind: string;
   }>;
+  claude_calls?: {
+    executor_call_id: string | null;
+    validator_calls: Array<{
+      validator_id: string;
+      call_id: string;
+    }>;
+  };
 }
 
 export interface AttentionRun {
@@ -321,6 +356,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  getClaudeCall: async (callId: string) =>
+    request<ClaudeCallMetadata>(`claude-calls/${callId}`),
+  pollClaudeCall: async (callId: string, offset: number, limit = 20000) =>
+    request<ClaudeCallPoll>(`claude-calls/${callId}/poll?offset=${offset}&limit=${limit}`),
   createAuthoringSessionFromVersion: async (payload: { workflow_id: string; version: string; title?: string; intent_brief?: string }) =>
     request<{ session_id: string; title: string; status: string; latest_revision: number }>(
       'authoring/sessions/from-version',

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import time
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -33,6 +35,7 @@ from pipeliner.services.run_service import RunService
 from pipeliner.services.workflow_service import WorkflowService
 from pipeliner.services.authoring_agent import AuthoringAgent
 from pipeliner.services.authoring_service import AuthoringService
+from pipeliner.services.claude_call import ClaudeCallStore
 from pipeliner.services.settings_service import SettingsService
 from pipeliner.services.preview_service import PreviewService
 from pipeliner.services.project_initializer import ProjectInitializer
@@ -192,6 +195,10 @@ def _artifact_service(session: Session, request: Request) -> ArtifactService:
         RunRepository(session),
         request.app.state.settings,
     )
+
+
+def _claude_call_store(request: Request) -> ClaudeCallStore:
+    return ClaudeCallStore(request.app.state.settings)
 
 
 def _executor_dispatcher(
@@ -510,12 +517,14 @@ def generate_authoring_draft(
     if not request_body.instruction:
         raise ValidationError("generate authoring 需要 instruction")
     service = _authoring_service(session, request)
-    draft = service.generate_draft(
+    draft, metadata = service.generate_draft(
         session_id,
         request_body.instruction,
         base_spec=request_body.spec,
     )
-    return _authoring_draft_payload(draft)
+    payload = _authoring_draft_payload(draft)
+    payload["claude_call_id"] = metadata.get("claude_call_id") if metadata else None
+    return payload
 
 
 @router.post("/api/authoring/reports")
@@ -889,6 +898,35 @@ def get_run_node_debug_details(
                     }
                 )
 
+    def _read_call_id(path: Path) -> dict[str, Any] | None:
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        call_id = payload.get("call_id")
+        if not call_id:
+            return None
+        return payload
+
+    executor_call_payload = _read_call_id(round_dir / "executor" / "claude_call.json")
+    executor_call_id = executor_call_payload.get("call_id") if executor_call_payload else None
+    validator_calls: list[dict[str, str]] = []
+    validators_dir = round_dir / "validators"
+    if validators_dir.exists():
+        for file_path in sorted(validators_dir.glob("*.claude_call.json")):
+            payload = _read_call_id(file_path)
+            if not payload:
+                continue
+            validator_id = payload.get("validator_id") or file_path.name.split(".")[0]
+            validator_calls.append(
+                {
+                    "validator_id": validator_id,
+                    "call_id": payload["call_id"],
+                }
+            )
+
     return {
         "node_id": node_id,
         "round_no": round_no,
@@ -919,6 +957,10 @@ def get_run_node_debug_details(
             for item in artifacts
         ],
         "log_refs": log_refs,
+        "claude_calls": {
+            "executor_call_id": executor_call_id,
+            "validator_calls": validator_calls,
+        },
     }
 
 
@@ -1096,6 +1138,113 @@ def dispatch_validator(
 def get_settings_snapshot(request: Request, session: SessionDep) -> dict[str, Any]:
     service = _settings_service(session, request)
     return {"settings": service.build_snapshot()}
+
+
+@router.get("/api/claude-calls/{call_id}")
+def get_claude_call(call_id: str, request: Request) -> dict[str, Any]:
+    store = _claude_call_store(request)
+    metadata = store.load_metadata(call_id)
+    if not request.app.state.settings.claude_trace_enabled:
+        metadata["redacted"] = True
+    return metadata
+
+
+@router.get("/api/claude-calls/{call_id}/poll")
+def poll_claude_call(
+    call_id: str,
+    request: Request,
+    offset: int = 0,
+    limit: int = 20000,
+) -> dict[str, Any]:
+    store = _claude_call_store(request)
+    metadata = store.load_metadata(call_id)
+    status = metadata.get("status")
+    done = status != "running"
+    if not request.app.state.settings.claude_trace_enabled:
+        return {
+            "call_id": call_id,
+            "offset": offset,
+            "chunk": "",
+            "status": status,
+            "done": done,
+            "truncated": metadata.get("truncated", False),
+            "redacted": True,
+        }
+    chunk_bytes = store.read_chunk(call_id, offset, limit)
+    new_offset = offset + len(chunk_bytes)
+    return {
+        "call_id": call_id,
+        "offset": new_offset,
+        "chunk": chunk_bytes.decode("utf-8", errors="replace"),
+        "status": status,
+        "done": done,
+        "truncated": metadata.get("truncated", False),
+        "redacted": False,
+    }
+
+
+@router.get("/api/claude-calls/{call_id}/stream")
+def stream_claude_call(
+    call_id: str,
+    request: Request,
+    offset: int = 0,
+) -> StreamingResponse:
+    store = _claude_call_store(request)
+    settings = request.app.state.settings
+    metadata = store.load_metadata(call_id)
+    log_path = settings.data_dir / metadata["output_path"]
+
+    def event_stream():
+        current_offset = offset
+        if not settings.claude_trace_enabled:
+            payload = {
+                "call_id": call_id,
+                "offset": current_offset,
+                "chunk": "",
+                "status": metadata.get("status"),
+                "done": metadata.get("status") != "running",
+                "truncated": metadata.get("truncated", False),
+                "redacted": True,
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            return
+        if not log_path.exists():
+            raise NotFoundError(f"未找到 Claude 输出日志: {call_id}")
+        with log_path.open("rb") as handle:
+            if current_offset:
+                handle.seek(current_offset)
+            while True:
+                chunk = handle.read(4096)
+                if chunk:
+                    current_offset += len(chunk)
+                    payload = {
+                        "call_id": call_id,
+                        "offset": current_offset,
+                        "chunk": chunk.decode("utf-8", errors="replace"),
+                        "status": metadata.get("status"),
+                        "done": False,
+                        "truncated": metadata.get("truncated", False),
+                        "redacted": False,
+                    }
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    continue
+                latest = store.load_metadata(call_id)
+                status = latest.get("status")
+                if status != "running":
+                    payload = {
+                        "call_id": call_id,
+                        "offset": current_offset,
+                        "chunk": "",
+                        "status": status,
+                        "done": True,
+                        "truncated": latest.get("truncated", False),
+                        "redacted": False,
+                    }
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    break
+                time.sleep(0.5)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 def install_exception_handlers(app: FastAPI) -> None:

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import subprocess
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,6 +12,7 @@ from uuid import uuid4
 
 from pipeliner.config import Settings, get_settings
 from pipeliner.runtime.guards import parse_duration
+from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
 
 
 @dataclass(slots=True)
@@ -69,36 +69,32 @@ class AuthoringAgent:
         prompt_path.write_text(prompt_text, encoding="utf-8")
 
         command = self._build_command(prompt_path, task_path, result_path, work_dir)
+        call_store = ClaudeCallStore(self.settings)
+        call_session = call_store.start_call(
+            role="authoring",
+            context={
+                "session_id": session_id,
+                "work_dir": str(work_dir),
+                "project_dir": str(project_dir) if project_dir else None,
+            },
+            command=command,
+        )
         started_at = time.perf_counter()
-        exit_code: int | None = None
-        stdout = ""
-        stderr = ""
         timeout = self._timeout_seconds()
-        try:
-            process = subprocess.run(
-                command,
-                cwd=project_dir or work_dir,
-                capture_output=True,
-                text=True,
-                input=prompt_text,
-                env=self._authoring_env(task_path, result_path, project_dir),
-                timeout=timeout,
-                check=False,
-            )
-            exit_code = process.returncode
-            stdout = process.stdout or ""
-            stderr = process.stderr or ""
-        except FileNotFoundError as exc:
-            exit_code = 127
-            stderr = str(exc)
-        except subprocess.TimeoutExpired as exc:
-            exit_code = -1
-            stdout = exc.stdout or ""
-            stderr = exc.stderr or "authoring command timeout"
+        result = run_streamed_command(
+            command=command,
+            cwd=project_dir or work_dir,
+            env=self._authoring_env(task_path, result_path, project_dir),
+            input_text=prompt_text,
+            output_session=call_session,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            timeout=timeout,
+        )
+        exit_code = result.returncode
+        stdout = result.stdout
+        stderr = result.stderr
         duration_ms = int((time.perf_counter() - started_at) * 1000)
-
-        stdout_path.write_text(stdout, encoding="utf-8")
-        stderr_path.write_text(stderr, encoding="utf-8")
 
         metadata = {
             "command": " ".join(command),
@@ -109,11 +105,23 @@ class AuthoringAgent:
             "stderr_file": str(stderr_path),
             "exit_code": exit_code,
             "duration_ms": duration_ms,
+            "claude_call_id": call_session.call_id,
         }
+        error_message = None
+        if result.timed_out:
+            error_message = "authoring command timeout"
+        elif exit_code and exit_code != 0:
+            error_message = f"authoring command failed(exit={exit_code})"
+        call_session.complete(
+            status="completed" if exit_code == 0 else "failed",
+            exit_code=exit_code,
+            error_message=error_message,
+            duration_ms=duration_ms,
+        )
 
         if exit_code and exit_code != 0:
             raise AuthoringAgentError(
-                f"authoring command failed(exit={exit_code})",
+                error_message or f"authoring command failed(exit={exit_code})",
                 metadata,
             )
 

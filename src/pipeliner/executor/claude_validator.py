@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -31,6 +31,7 @@ from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.errors import ConflictError, InvalidStateError, NotFoundError
 from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.run_service import RunService
+from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
 from pipeliner.types import ExecutionStatus, NodeRunStatus, VerdictStatus
 
 
@@ -141,36 +142,56 @@ class ClaudeValidatorDispatcher:
             result_path,
             dirs["validators_dir"],
         )
-        try:
-            process = subprocess.run(
-                command,
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                input=prompt_text,
-                env=self._validator_env(task_path, context_path, result_path),
-                check=False,
-            )
-        except FileNotFoundError as exc:
-            process = subprocess.CompletedProcess(
-                args=command,
-                returncode=127,
-                stdout="",
-                stderr=str(exc),
-            )
-        stdout_path.write_text(process.stdout or "", encoding="utf-8")
-        stderr_path.write_text(process.stderr or "", encoding="utf-8")
+        call_store = ClaudeCallStore(self.settings)
+        call_session = call_store.start_call(
+            role="validator",
+            context={
+                "run_id": run.id,
+                "node_id": node.node_id,
+                "round_no": node_run.round_no,
+                "validator_id": validator.validator_id,
+            },
+            command=command,
+        )
+        self.run_service.workspace.write_json(
+            dirs["validators_dir"] / f"{validator_id}.claude_call.json",
+            {"call_id": call_session.call_id, "validator_id": validator_id},
+        )
+        started_at = time.perf_counter()
+        result = run_streamed_command(
+            command=command,
+            cwd=project_root,
+            env=self._validator_env(task_path, context_path, result_path),
+            input_text=prompt_text,
+            output_session=call_session,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+        )
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        error_message = None
+        if result.timed_out:
+            error_message = "validator command timeout"
+        elif result.returncode != 0:
+            error_message = f"validator command failed(exit={result.returncode})"
+        call_session.complete(
+            status="completed" if result.returncode == 0 else "failed",
+            exit_code=result.returncode,
+            error_message=error_message,
+            duration_ms=duration_ms,
+        )
 
-        if process.returncode != 0:
+        if result.returncode != 0:
             payload = self._build_failure_callback(
                 run_id=run.id,
                 node_id=node.node_id,
                 round_no=node_run.round_no,
                 validator_id=validator.validator_id,
-                message=f"validator command failed(exit={process.returncode})",
+                message=f"validator command failed(exit={result.returncode})",
             )
             result = self.runtime.submit_callback(payload)
-            return self._failure_result(run, node, node_run, payload.event_id, result)
+            response = self._failure_result(run, node, node_run, payload.event_id, result)
+            response["claude_call_id"] = call_session.call_id
+            return response
 
         if not result_path.exists():
             payload = self._build_failure_callback(
@@ -181,7 +202,9 @@ class ClaudeValidatorDispatcher:
                 message=f"validator 未生成结果文件: {result_path}",
             )
             result = self.runtime.submit_callback(payload)
-            return self._failure_result(run, node, node_run, payload.event_id, result)
+            response = self._failure_result(run, node, node_run, payload.event_id, result)
+            response["claude_call_id"] = call_session.call_id
+            return response
 
         try:
             result_payload = self._load_result_payload(result_path, context_path)
@@ -201,7 +224,9 @@ class ClaudeValidatorDispatcher:
                 message=f"validator 结果文件无效: {exc}",
             )
             result = self.runtime.submit_callback(payload)
-            return self._failure_result(run, node, node_run, payload.event_id, result)
+            response = self._failure_result(run, node, node_run, payload.event_id, result)
+            response["claude_call_id"] = call_session.call_id
+            return response
 
         result = self.runtime.submit_callback(callback_payload)
         return {
@@ -215,6 +240,7 @@ class ClaudeValidatorDispatcher:
                 else "completed"
             ),
             "event_id": callback_payload.event_id,
+            "claude_call_id": call_session.call_id,
             "runtime": result,
         }
 

@@ -9,6 +9,7 @@ import { prettyJson } from '@/lib/format';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { TabList } from '@/components/ui/TabList';
 import { InspectorPanel } from '@/components/ui/InspectorPanel';
+import { ClaudeTerminalPanel } from '@/components/claude/ClaudeTerminalPanel';
 
 const ATTENTION_STATUSES = new Set(['blocked', 'failed', 'timed_out', 'rework_limit', 'stopped']);
 
@@ -25,6 +26,7 @@ type PreviewPanelState =
 
 export function RunDetailClient({ runId }: { runId: string }) {
   const t = useTranslations('runs');
+  const tClaude = useTranslations('claudeTerminal');
   const queryClient = useQueryClient();
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedNode, setSelectedNode] = useState<{ node_id: string; round_no: number } | null>(null);
@@ -155,6 +157,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
     previewState && previewState.kind === 'artifact'
       ? `${previewState.data.kind} · ${previewState.data.storage_uri}`
       : t('preview.logSubtitle');
+
+  const claudeCalls = nodeRound?.claude_calls;
+  const validatorCalls = claudeCalls?.validator_calls || [];
 
   const renderPreviewContent = (preview: any) => {
     if (!preview) {
@@ -437,6 +442,20 @@ export function RunDetailClient({ runId }: { runId: string }) {
                         ))
                       )}
                     </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <ClaudeTerminalPanel
+                      callId={claudeCalls?.executor_call_id}
+                      title={tClaude('executorTitle')}
+                    />
+                    {validatorCalls.map((item) => (
+                      <ClaudeTerminalPanel
+                        key={item.call_id}
+                        callId={item.call_id}
+                        title={tClaude('validatorTitle', { id: item.validator_id })}
+                      />
+                    ))}
                   </div>
                 </aside>
               </div>

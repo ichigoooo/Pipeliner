@@ -245,6 +245,21 @@
       "logSubtitle": "Run log preview"
     }
   },
+  "claudeTerminal": {
+    "title": "Claude Terminal",
+    "authoringTitle": "Claude Authoring Terminal",
+    "executorTitle": "Claude Executor Terminal",
+    "validatorTitle": "Claude Validator Terminal · {id}",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "ready": "Call attached",
+    "empty": "No call yet",
+    "streaming": "Streaming",
+    "noOutput": "No output yet",
+    "redacted": "Output redacted.",
+    "truncated": "Output truncated",
+    "loadFailed": "Failed to load output"
+  },
   "workflow": {
     "tabs": {
       "graph": "Graph",

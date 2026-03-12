@@ -198,7 +198,7 @@ class AuthoringService:
         instruction: str,
         *,
         base_spec: dict[str, Any] | None = None,
-    ) -> AuthoringDraftModel:
+    ) -> tuple[AuthoringDraftModel, dict[str, Any]]:
         session = self.get_session(session_id)
         current_spec = base_spec or self.get_latest_draft(session_id).spec_json
         metadata = current_spec.get("metadata", {}) if isinstance(current_spec, dict) else {}
@@ -240,7 +240,7 @@ class AuthoringService:
                 error_message=None,
                 metadata_json=result.metadata,
             )
-            return draft
+            return draft, result.metadata
         except AuthoringAgentError as exc:
             self.repo.create_generation_log(
                 session_id,

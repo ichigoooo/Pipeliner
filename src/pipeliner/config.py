@@ -47,6 +47,16 @@ class Settings:
             "claude -p --permission-mode bypassPermissions",
         )
     )
+    claude_trace_enabled: bool = field(
+        default_factory=lambda: os.getenv("PIPELINER_CLAUDE_TRACE_ENABLED", "true").lower()
+        == "true"
+    )
+    claude_output_max_bytes: int = field(
+        default_factory=lambda: int(os.getenv("PIPELINER_CLAUDE_OUTPUT_MAX_BYTES", "2000000"))
+    )
+    claude_output_retention: str = field(
+        default_factory=lambda: os.getenv("PIPELINER_CLAUDE_OUTPUT_RETENTION", "7d")
+    )
     projects_root: Path = field(
         default_factory=lambda: Path(os.getenv("PIPELINER_PROJECTS_ROOT", "projects")).resolve()
     )

@@ -9,6 +9,7 @@ import { json } from '@codemirror/lang-json';
 import { api, AuthoringDraft, AuthoringSession } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
+import { ClaudeTerminalPanel } from '@/components/claude/ClaudeTerminalPanel';
 
 function parseSpec(value: string) {
   return JSON.parse(value) as Record<string, unknown>;
@@ -16,6 +17,7 @@ function parseSpec(value: string) {
 
 export function AuthoringStudio() {
   const t = useTranslations('authoring');
+  const tClaude = useTranslations('claudeTerminal');
   const searchParams = useSearchParams();
   const sessionFromQuery = searchParams.get('session');
   const queryClient = useQueryClient();
@@ -37,6 +39,7 @@ export function AuthoringStudio() {
   );
   const [rawSpec, setRawSpec] = useState('{}');
   const [error, setError] = useState<string | null>(null);
+  const [claudeCallId, setClaudeCallId] = useState<string | null>(null);
 
   useEffect(() => {
     if (sessionFromQuery && !queryApplied) {
@@ -82,6 +85,10 @@ export function AuthoringStudio() {
     setRawSpec(prettyJson(draftQuery.data.spec_json));
   }, [draftQuery.data?.revision]);
 
+  useEffect(() => {
+    setClaudeCallId(null);
+  }, [selectedSessionId]);
+
   const invalidateSession = async (sessionId: string) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['authoring-sessions'] }),
@@ -122,6 +129,7 @@ export function AuthoringStudio() {
     mutationFn: ({ sessionId, draft, note }: { sessionId: string; draft: Record<string, unknown>; note: string }) =>
       api.generateDraft(sessionId, { spec: draft, instruction: note }),
     onSuccess: async (payload) => {
+      setClaudeCallId(payload.claude_call_id ? payload.claude_call_id : null);
       setRawSpec(prettyJson(payload.spec_json));
       await invalidateSession(payload.session_id);
     },
@@ -162,6 +170,7 @@ export function AuthoringStudio() {
   const submitCreateSession = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    setClaudeCallId(null);
     try {
       await createSessionMutation.mutateAsync({ title, intent_brief: intentBrief });
     } catch (mutationError) {
@@ -176,6 +185,7 @@ export function AuthoringStudio() {
     }
 
     setError(null);
+    setClaudeCallId(null);
     try {
       const draft = parseSpec(rawSpec);
       if (mode === 'save') {
@@ -207,6 +217,7 @@ export function AuthoringStudio() {
     }
 
     setError(null);
+    setClaudeCallId(null);
     try {
       const draft = parseSpec(rawSpec);
       await generateMutation.mutateAsync({
@@ -377,6 +388,11 @@ export function AuthoringStudio() {
             </div>
             {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
           </div>
+
+          <ClaudeTerminalPanel
+            callId={claudeCallId}
+            title={tClaude('authoringTitle')}
+          />
 
           <div className="grid min-h-0 gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="flex min-h-0 flex-col rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">

@@ -245,6 +245,21 @@
       "logSubtitle": "运行日志预览"
     }
   },
+  "claudeTerminal": {
+    "title": "Claude 终端",
+    "authoringTitle": "Claude 生成终端",
+    "executorTitle": "Claude 执行器终端",
+    "validatorTitle": "Claude 验证器终端 · {id}",
+    "expand": "展开",
+    "collapse": "收起",
+    "ready": "已绑定调用",
+    "empty": "暂无可用调用",
+    "streaming": "实时输出中",
+    "noOutput": "暂无输出",
+    "redacted": "已脱敏，输出不可展示。",
+    "truncated": "输出已截断",
+    "loadFailed": "加载输出失败"
+  },
   "workflow": {
     "tabs": {
       "graph": "图形",
