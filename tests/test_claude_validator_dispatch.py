@@ -24,6 +24,7 @@ def _start_run(client, workflow_id: str, version: str) -> dict:
             "workflow_id": workflow_id,
             "version": version,
             "inputs": {"topic": "claude validator test"},
+            "auto_drive": False,
         },
     )
     assert response.status_code == 200

@@ -39,15 +39,15 @@ export default function RunsPage() {
                 <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{run.workflow_id}</p>
                 <h2 className="mt-2 text-xl font-semibold text-stone-900">{run.run_id}</h2>
                 <p className="mt-3 text-sm text-stone-600">
-                  {t('version')} {run.version} · {t('status')} {formatTimestamp(run.created_at)}
+                  {t('version')} {run.version} · {t('created')} {formatTimestamp(run.created_at)}
                 </p>
               </div>
               <StatusBadge value={run.status} />
             </div>
             <div className="mt-4 grid gap-2 text-sm text-stone-600 md:grid-cols-3">
-              <p>Stop reason: {run.stop_reason || '-'}</p>
-              <p>Attention nodes: {run.attention_node_count ?? 0}</p>
-              <p>Updated: {formatTimestamp(run.updated_at)}</p>
+              <p>{t('stopReason')}: {run.stop_reason || '-'}</p>
+              <p>{t('attentionNodes')}: {run.attention_node_count ?? 0}</p>
+              <p>{t('updated')}: {formatTimestamp(run.updated_at)}</p>
             </div>
           </Link>
         ))}

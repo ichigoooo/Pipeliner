@@ -40,6 +40,7 @@ from pipeliner.services.settings_service import SettingsService
 from pipeliner.services.preview_service import PreviewService
 from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.report_service import ReportService
+from pipeliner.services.run_drive_coordinator import RunDriveCoordinator
 from pipeliner.ui.views import render_index, render_run_view, render_workflow_view
 
 router = APIRouter()
@@ -53,6 +54,7 @@ class RunCreateRequest(BaseModel):
     workflow_id: str
     version: str
     inputs: dict[str, Any] = Field(default_factory=dict)
+    auto_drive: bool = True
 
 
 class StopRunRequest(BaseModel):
@@ -196,6 +198,10 @@ def _artifact_service(session: Session, request: Request) -> ArtifactService:
         RunRepository(session),
         request.app.state.settings,
     )
+
+
+def _run_drive_coordinator(request: Request) -> RunDriveCoordinator:
+    return request.app.state.run_drive_coordinator
 
 
 def _claude_call_store(request: Request) -> ClaudeCallStore:
@@ -791,10 +797,15 @@ def create_run(
         request_body.version,
         request_body.inputs,
     )
+    session.commit()
+    driver = None
+    if request_body.auto_drive:
+        driver = _run_drive_coordinator(request).start_auto_drive(run.id)
     return {
         "run_id": run.id,
         "status": run.status,
         "workspace_root": run.workspace_root,
+        "driver": driver,
     }
 
 
@@ -889,12 +900,13 @@ def drive_run(
     request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
-    driver = _run_driver(session, request)
+    session.commit()
+    driver = _run_drive_coordinator(request)
     result = driver.drive(
         run_id=run_id,
+        max_steps=request_body.max_steps,
         executor_command_template=request_body.executor_command_template,
         validator_command_template=request_body.validator_command_template,
-        max_steps=request_body.max_steps,
     )
     return result
 
@@ -906,7 +918,10 @@ def get_run_debug_overview(
     session: SessionDep,
 ) -> dict[str, Any]:
     service = _run_service(session, request)
-    overview = service.get_run_debug_overview(run_id)
+    overview = service.get_run_debug_overview(
+        run_id,
+        driver_state=_run_drive_coordinator(request).get_status(run_id),
+    )
     return overview
 
 

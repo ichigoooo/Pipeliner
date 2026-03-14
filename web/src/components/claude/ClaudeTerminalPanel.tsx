@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { formatStatusLabel } from '@/lib/status';
 
 type ClaudeTerminalPanelProps = {
   callId?: string | null;
@@ -146,7 +147,7 @@ export function ClaudeTerminalPanel({ callId, title, defaultOpen = false }: Clau
     outputRef.current.scrollTop = outputRef.current.scrollHeight;
   }, [content, open]);
 
-  const statusLabel = status ? tStatus(status as never) : tStatus('unknown' as never);
+  const statusLabel = formatStatusLabel(status, tStatus);
 
   return (
     <section className="rounded-[1.75rem] border border-stone-200 bg-white p-5 shadow-sm">

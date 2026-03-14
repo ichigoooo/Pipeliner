@@ -10,6 +10,7 @@ import { api, AuthoringDraft, AuthoringSession } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
 import { ClaudeTerminalPanel } from '@/components/claude/ClaudeTerminalPanel';
+import { WorkflowInputEditor } from '@/components/authoring/WorkflowInputEditor';
 
 function parseSpec(value: string) {
   return JSON.parse(value) as Record<string, unknown>;
@@ -412,6 +413,8 @@ export function AuthoringStudio() {
             callId={claudeCallId}
             title={tClaude('authoringTitle')}
           />
+
+          <WorkflowInputEditor rawSpec={rawSpec} onChange={setRawSpec} />
 
           <div className="grid min-h-0 gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="flex min-h-0 flex-col rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">

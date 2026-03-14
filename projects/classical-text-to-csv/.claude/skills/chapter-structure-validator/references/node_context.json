@@ -1,0 +1,82 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.2.0"
+  },
+  "skill": {
+    "name": "chapter-structure-validator",
+    "role": "validator",
+    "validator_id": "chapter-structure-check"
+  },
+  "node_id": "chapter_recognition",
+  "node_spec": {
+    "node_id": "chapter_recognition",
+    "title": "篇章结构识别",
+    "purpose": "自动识别整部著作的篇章结构，根据文本内容特征（如章节标题、分段标记、序号等）划分出各个篇章（Chapter），并为每个篇章提取标题和类型信息",
+    "archetype": "recognize-structure",
+    "depends_on": [
+      "text_preprocessing"
+    ],
+    "inputs": [
+      {
+        "name": "preprocessed_text",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_preprocessing",
+          "output": "preprocessed_text"
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "预处理后的文本"
+      },
+      {
+        "name": "structure_hint",
+        "from": {
+          "kind": "workflow_input",
+          "name": "structure_hint",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "篇章结构提示，帮助系统更准确识别篇章结构"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "chapters_structure",
+        "shape": "structured_data",
+        "summary": "识别出的篇章结构列表，每个篇章包含标题、类型、起始位置等信息"
+      }
+    ],
+    "executor": {
+      "skill": "chapter-recognition"
+    },
+    "validators": [
+      {
+        "validator_id": "chapter-structure-check",
+        "skill": "chapter-structure-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "已自动识别出著作的篇章结构，划分出各个章节",
+      "pass_condition": [
+        "篇章划分合理，符合文本结构特征",
+        "每个篇章都有明确的标题",
+        "篇章之间无重叠、无遗漏",
+        "原文所有内容都被分配到相应篇章"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "chapters_structure"
+      ]
+    }
+  },
+  "updated_at": "2026-03-13T02:10:44.027255+00:00"
+}

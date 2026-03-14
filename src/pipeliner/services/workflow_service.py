@@ -9,7 +9,7 @@ import yaml
 
 from pipeliner.persistence.models import WorkflowDefinitionModel, WorkflowVersionModel
 from pipeliner.persistence.repositories import WorkflowRepository
-from pipeliner.protocols.workflow import WorkflowSpec
+from pipeliner.protocols.workflow import WorkflowSpec, validate_workflow_input_value
 from pipeliner.services.errors import NotFoundError, ValidationError
 
 
@@ -75,6 +75,39 @@ class WorkflowService:
     def list_workflows(self) -> list[WorkflowDefinitionModel]:
         return self.repo.list_definitions()
 
+    def validate_run_inputs(self, spec: WorkflowSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+        normalized: dict[str, Any] = {}
+        missing: list[str] = []
+
+        for item in spec.inputs:
+            descriptor = item.normalized_descriptor()
+            value = inputs.get(item.name)
+            if value is None and descriptor.default is not None:
+                value = descriptor.default
+            if value is None:
+                if descriptor.required:
+                    missing.append(item.name)
+                continue
+            try:
+                validate_workflow_input_value(
+                    name=item.name,
+                    input_type=descriptor.input_type,
+                    value=value,
+                    options=descriptor.options,
+                    minimum=descriptor.minimum,
+                    maximum=descriptor.maximum,
+                    min_length=descriptor.min_length,
+                    max_length=descriptor.max_length,
+                    pattern=descriptor.pattern,
+                )
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
+            normalized[item.name] = value
+
+        if missing:
+            raise ValidationError(f"缺少必填 workflow inputs: {', '.join(missing)}")
+        return normalized
+
     def project_spec(self, raw_spec: dict[str, Any]) -> dict[str, Any]:
         lint_errors: list[str] = []
         warnings: list[str] = []
@@ -92,6 +125,11 @@ class WorkflowService:
         spec_data = canonical_spec if isinstance(canonical_spec, dict) else raw_spec
         metadata = spec_data.get("metadata", {})
         raw_nodes = spec_data.get("nodes", []) if isinstance(spec_data.get("nodes", []), list) else []
+        input_descriptors = (
+            [item.normalized_descriptor().model_dump(by_alias=True, mode="json") for item in validated_spec.inputs]
+            if validated_spec is not None
+            else []
+        )
 
         cards: list[dict[str, Any]] = []
         graph_nodes: list[dict[str, Any]] = []
@@ -162,6 +200,7 @@ class WorkflowService:
                     "tags": metadata.get("tags", []),
                 },
                 "inputs": spec_data.get("inputs", []),
+                "input_descriptors": input_descriptors,
                 "outputs": spec_data.get("outputs", []),
                 "cards": cards,
             },

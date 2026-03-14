@@ -76,7 +76,7 @@ def test_iteration_from_version_and_run(client: TestClient) -> None:
 
     run_response = client.post(
         "/api/runs",
-        json={"workflow_id": "iteration_flow", "version": "v1.0.0", "inputs": {}},
+        json={"workflow_id": "iteration_flow", "version": "v1.0.0", "inputs": {}, "auto_drive": False},
     )
     assert run_response.status_code == 200
     run_id = run_response.json()["run_id"]

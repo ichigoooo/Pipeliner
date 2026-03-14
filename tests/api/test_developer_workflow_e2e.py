@@ -114,6 +114,7 @@ def test_developer_workflow_end_to_end(client: TestClient, settings) -> None:
             "workflow_id": workflow_id,
             "version": version,
             "inputs": {"topic": "studio e2e"},
+            "auto_drive": False,
         },
     )
     assert run_response.status_code == 200

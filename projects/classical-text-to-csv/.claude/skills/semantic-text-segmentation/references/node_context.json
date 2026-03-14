@@ -2,7 +2,7 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "skill": {
     "name": "semantic-text-segmentation",
@@ -13,30 +13,30 @@
   "node_spec": {
     "node_id": "semantic_segmentation",
     "title": "语义分段",
-    "purpose": "根据语义块进行合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段，确保段落便于后续阅读时比对翻译",
+    "purpose": "根据语义块对每个篇章的内容进行合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段，确保段落便于后续阅读时比对翻译",
     "archetype": "segment-content",
     "depends_on": [
-      "text_preprocessing"
+      "chapter_recognition"
     ],
     "inputs": [
       {
-        "name": "preprocessed_text",
+        "name": "chapters_structure",
         "from": {
           "kind": "node_output",
           "name": null,
-          "node_id": "text_preprocessing",
-          "output": "preprocessed_text"
+          "node_id": "chapter_recognition",
+          "output": "chapters_structure"
         },
-        "shape": "file",
+        "shape": "structured_data",
         "required": true,
-        "summary": "预处理后的文本"
+        "summary": "识别出的篇章结构列表"
       }
     ],
     "outputs": [
       {
-        "name": "segmented_passages",
+        "name": "segmented_chapters",
         "shape": "structured_data",
-        "summary": "语义分段后的段落列表，每段包含序号和内容"
+        "summary": "语义分段后的篇章列表，每个篇章包含多个段落，每段有序号和内容"
       }
     ],
     "executor": {
@@ -53,12 +53,12 @@
       }
     ],
     "acceptance": {
-      "done_means": "文本已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
+      "done_means": "所有篇章的文本已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
       "pass_condition": [
         "分段基于语义而非原始换行符",
         "每段长度适中（3-5 句话或一个语义块）",
         "原文内容无遗漏、无错误修改",
-        "段落序号连续正确"
+        "各篇章内的段落序号连续正确"
       ]
     },
     "gate": {
@@ -66,9 +66,9 @@
     },
     "handoff": {
       "outputs": [
-        "segmented_passages"
+        "segmented_chapters"
       ]
     }
   },
-  "updated_at": "2026-03-12T07:54:04.151323+00:00"
+  "updated_at": "2026-03-13T02:10:44.027362+00:00"
 }

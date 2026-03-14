@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
+import { WorkflowRunStartPanel } from '@/components/workflow/WorkflowRunStartPanel';
 
 export function WorkflowVersionClient({
   workflowId,
@@ -18,7 +19,7 @@ export function WorkflowVersionClient({
   const t = useTranslations('workflows');
   const router = useRouter();
   const [showStart, setShowStart] = useState(false);
-  const [inputsJson, setInputsJson] = useState('{\n  \n}');
+  const [purposeExpanded, setPurposeExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [iterationError, setIterationError] = useState<string | null>(null);
   const workflowQuery = useQuery({
@@ -27,8 +28,16 @@ export function WorkflowVersionClient({
   });
 
   const workflow = workflowQuery.data;
+  const purpose = workflow?.workflow_view.metadata.purpose?.trim() || '';
+  const shouldCollapsePurpose = purpose.length > 220;
+
+  useEffect(() => {
+    setPurposeExpanded(false);
+  }, [workflowId, version]);
+
   const startRunMutation = useMutation({
-    mutationFn: (inputs: Record<string, unknown>) => api.startRun(workflowId, version, inputs),
+    mutationFn: (inputs: Record<string, unknown>) =>
+      api.startRun(workflowId, version, inputs, { auto_drive: true }),
     onSuccess: (payload) => {
       router.push(`/runs/${payload.run_id}`);
     },
@@ -74,9 +83,33 @@ export function WorkflowVersionClient({
             <h1 className="mt-2 text-3xl font-semibold text-stone-900">
               {workflow.workflow_view.metadata.title}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-stone-600">
-              {workflow.workflow_view.metadata.purpose}
-            </p>
+            {purpose ? (
+              <div className="mt-2 max-w-5xl">
+                <div className="relative">
+                  <p
+                    data-testid="workflow-purpose"
+                    className={`whitespace-pre-wrap text-sm leading-6 text-stone-600 ${
+                      shouldCollapsePurpose && !purposeExpanded ? 'max-h-24 overflow-hidden' : ''
+                    }`}
+                  >
+                    {purpose}
+                  </p>
+                  {shouldCollapsePurpose && !purposeExpanded ? (
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
+                  ) : null}
+                </div>
+                {shouldCollapsePurpose ? (
+                  <button
+                    type="button"
+                    aria-expanded={purposeExpanded}
+                    onClick={() => setPurposeExpanded((value) => !value)}
+                    className="mt-2 rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+                  >
+                    {purposeExpanded ? t('collapsePurpose') : t('expandPurpose')}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-full bg-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
@@ -101,48 +134,16 @@ export function WorkflowVersionClient({
         <p className="mt-3 text-xs text-stone-500">{t('iterateHint')}</p>
         {iterationError ? <p className="mt-2 text-xs text-rose-700">{iterationError}</p> : null}
         {showStart ? (
-          <div className="mt-4 rounded-[2rem] border border-stone-200 bg-white p-4 shadow-sm">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
-              {t('runInputs')}
-            </label>
-            <textarea
-              className="mt-3 min-h-32 w-full rounded-3xl border border-stone-200 bg-stone-50 px-4 py-3 font-mono text-xs text-stone-900 outline-none"
-              value={inputsJson}
-              onChange={(event) => setInputsJson(event.target.value)}
-            />
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  let payload: Record<string, unknown>;
-                  try {
-                    const parsed = JSON.parse(inputsJson || '{}') as Record<string, unknown>;
-                    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-                      throw new Error(t('jsonObjectRequired'));
-                    }
-                    payload = parsed;
-                  } catch (parseError) {
-                    setError(parseError instanceof Error ? parseError.message : t('parseFailed'));
-                    return;
-                  }
-                  startRunMutation.mutate(payload);
-                }}
-                disabled={startRunMutation.isPending}
-                className="rounded-full bg-stone-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
-              >
-                {t('launchRun')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowStart(false)}
-                className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
-              >
-                {t('cancel')}
-              </button>
-              {error ? <p className="text-xs text-rose-700">{error}</p> : null}
-            </div>
-          </div>
+          <WorkflowRunStartPanel
+            descriptors={workflow.workflow_view.input_descriptors}
+            error={error}
+            isSubmitting={startRunMutation.isPending}
+            onCancel={() => setShowStart(false)}
+            onSubmit={(payload) => {
+              setError(null);
+              startRunMutation.mutate(payload);
+            }}
+          />
         ) : null}
       </div>
 

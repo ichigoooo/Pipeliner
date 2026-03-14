@@ -2,7 +2,7 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "skill": {
     "name": "completeness-validator",
@@ -13,7 +13,7 @@
   "node_spec": {
     "node_id": "final_validation",
     "title": "最终质量验证",
-    "purpose": "对生成的 CSV 进行全面的质量检查，包括内容完整性验证、格式规范验证，并生成处理报告",
+    "purpose": "对生成的 CSV 进行全面的质量检查，包括内容完整性验证、格式规范验证、篇章结构验证，并生成处理报告",
     "archetype": "validate-output",
     "depends_on": [
       "csv_generation",
@@ -33,12 +33,12 @@
         "summary": "生成的 CSV 文件"
       },
       {
-        "name": "segmented_passages",
+        "name": "segmented_chapters",
         "from": {
           "kind": "node_output",
           "name": null,
           "node_id": "semantic_segmentation",
-          "output": "segmented_passages"
+          "output": "segmented_chapters"
         },
         "shape": "structured_data",
         "required": true,
@@ -54,7 +54,7 @@
       {
         "name": "report",
         "shape": "file",
-        "summary": "处理报告，包含分段统计和质量检查结果"
+        "summary": "处理报告，包含篇章识别结果、分段统计和质量检查结果"
       }
     ],
     "executor": {
@@ -77,7 +77,8 @@
         "无错误修改",
         "格式完全符合规范",
         "段落序号连续无重复",
-        "元数据完整准确"
+        "元数据完整准确",
+        "各篇章结构清晰完整"
       ]
     },
     "gate": {
@@ -90,5 +91,5 @@
       ]
     }
   },
-  "updated_at": "2026-03-12T07:54:04.153175+00:00"
+  "updated_at": "2026-03-13T02:10:44.029281+00:00"
 }

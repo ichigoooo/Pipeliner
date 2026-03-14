@@ -17,6 +17,7 @@ def _start_run(client) -> dict:
             "workflow_id": "mvp-review-loop",
             "version": "0.1.0",
             "inputs": {"topic": "AI"},
+            "auto_drive": False,
         },
     )
     assert response.status_code == 200

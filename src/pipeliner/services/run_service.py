@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
-from uuid import uuid4
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from pipeliner.config import Settings, get_settings
 from pipeliner.persistence.models import NodeRunModel, RunModel
-from pipeliner.persistence.repositories import ArtifactRepository, RunRepository, WorkflowRepository
+from pipeliner.persistence.repositories import (
+    ArtifactRepository,
+    CallbackRepository,
+    RunRepository,
+    WorkflowRepository,
+)
 from pipeliner.protocols.artifact import ArtifactManifest, ArtifactRef
 from pipeliner.protocols.workflow import WorkflowNodeSpec, WorkflowSpec
 from pipeliner.services.artifact_service import ArtifactService
+from pipeliner.services.claude_call import ClaudeCallStore
 from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
 from pipeliner.services.workflow_service import WorkflowService
 from pipeliner.storage.local_fs import RunWorkspace, WorkspaceManager
@@ -29,10 +37,11 @@ class RunService:
         self.settings = settings or get_settings()
         self.workspace = WorkspaceManager(self.settings)
         self.artifact_service = ArtifactService(artifact_repo, run_repo, self.settings)
+        self.callback_repo = CallbackRepository(run_repo.session)
 
     def start_run(self, workflow_id: str, version: str, inputs: dict) -> RunModel:
         spec = self.workflow_service.load_spec_model(workflow_id, version)
-        self._validate_required_inputs(spec, inputs)
+        inputs = self.workflow_service.validate_run_inputs(spec, inputs)
         run_id = self._generate_run_id()
         workspace = self.workspace.create_run_workspace(workflow_id, run_id)
         run = self.run_repo.create_run(
@@ -180,8 +189,15 @@ class RunService:
             )
         return items
 
-    def get_run_debug_overview(self, run_id: str) -> dict[str, Any]:
+    def get_run_debug_overview(
+        self,
+        run_id: str,
+        *,
+        driver_state: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         detail = self.get_run_detail(run_id)
+        run = detail["run"]
+        workspace = self.get_workspace(run)
         timeline = [
             {
                 "node_id": item.node_id,
@@ -196,10 +212,15 @@ class RunService:
             for item in detail["nodes"]
         ]
         latest = self.run_repo.list_latest_node_runs(run_id)
+        call_map = {
+            (item.node_id, item.round_no): self._read_round_claude_calls(workspace, item.node_id, item.round_no)
+            for item in detail["nodes"]
+        }
+        current_focus = self._select_current_focus(latest, call_map)
         return {
             "run_id": run_id,
-            "status": detail["run"].status,
-            "stop_reason": detail["run"].stop_reason,
+            "status": run.status,
+            "stop_reason": run.stop_reason,
             "workflow": detail["workflow"],
             "timeline": timeline,
             "latest_nodes": [
@@ -212,6 +233,20 @@ class RunService:
                 }
                 for item in latest.values()
             ],
+            "driver": driver_state
+            or {
+                "run_id": run_id,
+                "status": "idle",
+                "mode": None,
+                "max_steps": None,
+                "started_at": None,
+                "ended_at": None,
+                "last_error": None,
+                "stop_reason": None,
+                "result_status": None,
+            },
+            "current_focus": current_focus,
+            "activity": self._build_activity_stream(run, detail["nodes"], latest, call_map),
         }
 
     def retry_node(
@@ -366,11 +401,266 @@ class RunService:
         self.workspace.write_executor_context(workspace, node.node_id, round_no, context)
         return node_run
 
-    def _validate_required_inputs(self, spec: WorkflowSpec, inputs: dict) -> None:
-        missing = [item.name for item in spec.inputs if item.required and item.name not in inputs]
-        if missing:
-            raise ValidationError(f"缺少必填 workflow inputs: {', '.join(missing)}")
-
     def _generate_run_id(self) -> str:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"run_{timestamp}_{uuid4().hex[:8]}"
+
+    def _build_activity_stream(
+        self,
+        run: RunModel,
+        node_runs: list[NodeRunModel],
+        latest: dict[str, NodeRunModel],
+        call_map: dict[tuple[str, int], dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        if run.created_at:
+            events.append(
+                {
+                    "kind": "run_created",
+                    "node_id": None,
+                    "round_no": None,
+                    "actor_role": None,
+                    "validator_id": None,
+                    "status": run.status,
+                    "summary": "Run created",
+                    "happened_at": run.created_at.isoformat(),
+                    "call_id": None,
+                }
+            )
+
+        for node_run in node_runs:
+            key = (node_run.node_id, node_run.round_no)
+            calls = call_map.get(key, {"executor_call_id": None, "validator_calls": []})
+            created_at = node_run.created_at.isoformat() if node_run.created_at else None
+            if created_at:
+                events.append(
+                    {
+                        "kind": "node_round_created",
+                        "node_id": node_run.node_id,
+                        "round_no": node_run.round_no,
+                        "actor_role": "executor",
+                        "validator_id": None,
+                        "status": node_run.status,
+                        "summary": f"{node_run.node_id} round {node_run.round_no} queued",
+                        "happened_at": created_at,
+                        "call_id": None,
+                    }
+                )
+
+            executor_call_id = calls.get("executor_call_id")
+            if executor_call_id:
+                executor_meta = calls.get("executor_call")
+                events.append(
+                    {
+                        "kind": "executor_started",
+                        "node_id": node_run.node_id,
+                        "round_no": node_run.round_no,
+                        "actor_role": "executor",
+                        "validator_id": None,
+                        "status": (executor_meta or {}).get("status", node_run.status),
+                        "summary": f"Executor started for {node_run.node_id}",
+                        "happened_at": (executor_meta or {}).get("started_at") or created_at,
+                        "call_id": executor_call_id,
+                    }
+                )
+
+            for validator_call in calls.get("validator_calls", []):
+                validator_meta = validator_call.get("meta") or {}
+                events.append(
+                    {
+                        "kind": "validator_started",
+                        "node_id": node_run.node_id,
+                        "round_no": node_run.round_no,
+                        "actor_role": "validator",
+                        "validator_id": validator_call.get("validator_id"),
+                        "status": validator_meta.get("status", node_run.status),
+                        "summary": (
+                            f"Validator {validator_call.get('validator_id')} started for {node_run.node_id}"
+                        ),
+                        "happened_at": validator_meta.get("started_at") or created_at,
+                        "call_id": validator_call.get("call_id"),
+                    }
+                )
+
+            if node_run.status in {
+                NodeRunStatus.WAITING_EXECUTOR.value,
+                NodeRunStatus.WAITING_VALIDATOR.value,
+            }:
+                updated_at = node_run.updated_at.isoformat() if node_run.updated_at else created_at
+                events.append(
+                    {
+                        "kind": "node_waiting",
+                        "node_id": node_run.node_id,
+                        "round_no": node_run.round_no,
+                        "actor_role": node_run.waiting_for_role,
+                        "validator_id": None,
+                        "status": node_run.status,
+                        "summary": f"{node_run.node_id} is waiting for {node_run.waiting_for_role or 'work'}",
+                        "happened_at": updated_at,
+                        "call_id": None,
+                    }
+                )
+
+            if node_run.status not in {
+                NodeRunStatus.WAITING_EXECUTOR.value,
+                NodeRunStatus.WAITING_VALIDATOR.value,
+            }:
+                updated_at = node_run.updated_at.isoformat() if node_run.updated_at else created_at
+                events.append(
+                    {
+                        "kind": "node_status_changed",
+                        "node_id": node_run.node_id,
+                        "round_no": node_run.round_no,
+                        "actor_role": None,
+                        "validator_id": None,
+                        "status": node_run.status,
+                        "summary": f"{node_run.node_id} changed to {node_run.status}",
+                        "happened_at": updated_at,
+                        "call_id": None,
+                    }
+                )
+
+        for node_run in latest.values():
+            callbacks = self._list_node_round_events(run.id, node_run.node_id, node_run.round_no)
+            for callback in callbacks:
+                status = callback.verdict_status or callback.execution_status
+                events.append(
+                    {
+                        "kind": "callback_reported",
+                        "node_id": callback.node_id,
+                        "round_no": callback.round_no,
+                        "actor_role": callback.actor_role,
+                        "validator_id": callback.validator_id,
+                        "status": status,
+                        "summary": (
+                            f"{callback.actor_role} callback reported"
+                            + (f" ({callback.validator_id})" if callback.validator_id else "")
+                        ),
+                        "happened_at": callback.processed_at.isoformat() if callback.processed_at else None,
+                        "call_id": None,
+                    }
+                )
+
+        if run.updated_at and run.status in {
+            RunStatus.COMPLETED.value,
+            RunStatus.NEEDS_ATTENTION.value,
+            RunStatus.STOPPED.value,
+        }:
+            events.append(
+                {
+                    "kind": "run_terminal",
+                    "node_id": None,
+                    "round_no": None,
+                    "actor_role": None,
+                    "validator_id": None,
+                    "status": run.status,
+                    "summary": f"Run reached {run.status}",
+                    "happened_at": run.updated_at.isoformat(),
+                    "call_id": None,
+                }
+            )
+
+        events = [event for event in events if event["happened_at"]]
+        events.sort(key=lambda item: item["happened_at"], reverse=True)
+        return events
+
+    def _select_current_focus(
+        self,
+        latest: dict[str, NodeRunModel],
+        call_map: dict[tuple[str, int], dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        candidates = list(latest.values())
+        if not candidates:
+            return None
+
+        def sort_key(node_run: NodeRunModel) -> tuple[int, float]:
+            if node_run.status == NodeRunStatus.WAITING_EXECUTOR.value:
+                priority = 0
+            elif node_run.status == NodeRunStatus.WAITING_VALIDATOR.value:
+                priority = 1
+            elif node_run.status in {
+                NodeRunStatus.REVISE.value,
+                NodeRunStatus.BLOCKED.value,
+                NodeRunStatus.FAILED.value,
+                NodeRunStatus.TIMED_OUT.value,
+                NodeRunStatus.REWORK_LIMIT.value,
+            }:
+                priority = 2
+            else:
+                priority = 3
+            timestamp = node_run.updated_at or node_run.created_at or datetime.fromtimestamp(0, tz=timezone.utc)
+            return (priority, -timestamp.timestamp())
+
+        focus = sorted(candidates, key=sort_key)[0]
+        calls = call_map.get((focus.node_id, focus.round_no), {"executor_call_id": None, "validator_calls": []})
+        return {
+            "node_id": focus.node_id,
+            "round_no": focus.round_no,
+            "status": focus.status,
+            "waiting_for_role": focus.waiting_for_role,
+            "stop_reason": focus.stop_reason,
+            "executor_call_id": calls.get("executor_call_id"),
+            "validator_calls": [
+                {
+                    "validator_id": item.get("validator_id"),
+                    "call_id": item.get("call_id"),
+                }
+                for item in calls.get("validator_calls", [])
+            ],
+        }
+
+    def _read_round_claude_calls(
+        self,
+        workspace: RunWorkspace,
+        node_id: str,
+        round_no: int,
+    ) -> dict[str, Any]:
+        round_dir = workspace.nodes_dir / node_id / "rounds" / str(round_no)
+        if not round_dir.exists():
+            return {"executor_call_id": None, "validator_calls": []}
+
+        store = ClaudeCallStore(self.settings)
+        executor_payload = self._read_call_payload(round_dir / "executor" / "claude_call.json")
+        executor_call_id = executor_payload.get("call_id") if executor_payload else None
+        executor_meta = self._load_call_meta(store, executor_call_id)
+
+        validator_calls: list[dict[str, Any]] = []
+        validators_dir = round_dir / "validators"
+        if validators_dir.exists():
+            for file_path in sorted(validators_dir.glob("*.claude_call.json")):
+                payload = self._read_call_payload(file_path)
+                if not payload:
+                    continue
+                call_id = payload.get("call_id")
+                validator_calls.append(
+                    {
+                        "validator_id": payload.get("validator_id") or file_path.stem.split(".")[0],
+                        "call_id": call_id,
+                        "meta": self._load_call_meta(store, call_id),
+                    }
+                )
+
+        return {
+            "executor_call_id": executor_call_id,
+            "executor_call": executor_meta,
+            "validator_calls": validator_calls,
+        }
+
+    def _read_call_payload(self, path: Path) -> dict[str, Any] | None:
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+
+    def _load_call_meta(self, store: ClaudeCallStore, call_id: str | None) -> dict[str, Any] | None:
+        if not call_id:
+            return None
+        try:
+            return store.load_metadata(call_id)
+        except NotFoundError:
+            return None
+
+    def _list_node_round_events(self, run_id: str, node_id: str, round_no: int) -> list[Any]:
+        return self.callback_repo.list_node_round_events(run_id, node_id, round_no)

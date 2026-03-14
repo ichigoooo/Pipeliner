@@ -131,6 +131,28 @@
       "messages": "记录系统与创作会话的消息与发布事件。",
       "revisionHistory": "每次保存或继续都会生成一个版本，可回溯查看。"
     },
+    "inputs": {
+      "title": "工作流输入",
+      "description": "为运行前输入配置结构化 metadata，并与 canonical spec 保持同步。",
+      "add": "新增输入",
+      "remove": "移除",
+      "empty": "当前还没有 workflow input，可先添加一项定义运行输入合同。",
+      "untitled": "输入 {index}",
+      "invalidRawSpec": "只有当 raw spec 是合法 JSON 时，才能使用工作流输入编辑器。",
+      "fields": {
+        "name": "名称",
+        "type": "输入类型",
+        "summary": "说明",
+        "required": "必填",
+        "default": "默认值",
+        "options": "枚举选项",
+        "minimum": "最小值",
+        "maximum": "最大值",
+        "minLength": "最短长度",
+        "maxLength": "最长长度",
+        "pattern": "匹配模式"
+      }
+    },
     "summary": {
       "sessions": "会话数",
       "revisions": "版本数",
@@ -179,18 +201,33 @@
     "workspace": "工作流工作区",
     "loadingWorkspace": "加载工作流工作区...",
     "runInputs": "运行输入 (JSON)",
+    "runInputsForm": "运行输入（表单）",
+    "runInputsFormHint": "优先使用 workflow input metadata 自动生成的结构化表单。",
+    "runInputsRawHint": "需要绕过或覆盖结构化表单时，可切换为原始 JSON。",
+    "runInputsEmpty": "该 workflow 没有声明输入，也可以直接用空 payload 启动运行。",
     "launchRun": "启动运行",
     "cancel": "取消",
     "jsonObjectRequired": "输入必须是 JSON 对象",
     "parseFailed": "解析输入失败",
+    "switchToRaw": "切换到原始 JSON",
+    "switchToForm": "切换到表单",
+    "required": "必填",
+    "selectOption": "请选择一个选项",
+    "filePathPlaceholder": "请输入本地文件路径",
+    "filePathHint": "这里保留为手填本地路径字符串，方便后续复用到批量启动场景。",
     "iterate": "发起迭代",
-    "iterateHint": "从当前版本创建新的 authoring 会话继续迭代。"
+    "iterateHint": "从当前版本创建新的 authoring 会话继续迭代。",
+    "expandPurpose": "展开描述",
+    "collapsePurpose": "收起描述"
   },
   "runs": {
     "title": "运行",
     "list": "运行列表",
     "details": "运行详情",
+    "version": "版本",
     "status": "状态",
+    "created": "创建于",
+    "updated": "更新于",
     "timeline": "时间线",
     "callbacks": "回调",
     "artifacts": "产物",
@@ -203,7 +240,50 @@
     "stopRun": "停止运行",
     "retrySelectedNode": "重试选中节点",
     "runHealth": "运行健康度",
+    "summary": {
+      "title": "运行概览",
+      "runStatus": "当前状态",
+      "currentNode": "当前节点",
+      "driver": "自动驱动",
+      "viewCurrent": "查看当前节点",
+      "advanced": "高级操作"
+    },
+    "focus": {
+      "title": "当前焦点",
+      "live": "当前活跃节点",
+      "waiting": "正在等待 {role}",
+      "queued": "该轮次已进入队列，等待下一次派发启动。",
+      "inspect": "打开节点详情",
+      "empty": "当前没有可聚焦的活跃节点轮次。"
+    },
+    "driver": {
+      "title": "驱动状态",
+      "state": "驱动器：{status}",
+      "mode": "模式：{mode}",
+      "idle": "当前没有活动中的 driver"
+    },
+    "graph": {
+      "title": "运行流程图",
+      "description": "用流程图直接展示每个节点的实时运行状态。点击节点即可查看该节点最新轮次详情。",
+      "legend": {
+        "current": "当前活跃节点",
+        "running": "运行中",
+        "waiting": "等待执行",
+        "completed": "已完成",
+        "attention": "需处理"
+      }
+    },
+    "detail": {
+      "title": "节点详情",
+      "emptyTitle": "请选择一个节点",
+      "emptyDescription": "请在流程图中选择一个节点，查看它的运行详情。",
+      "roundSelector": "查看轮次",
+      "viewingHistorical": "当前查看的不是活跃节点",
+      "returnToCurrent": "回到当前运行节点",
+      "waitingValidator": "executor 已完成，正在等待 validator 启动。"
+    },
     "stopReason": "停止原因",
+    "attentionNodes": "关注节点数",
     "stopReasonLabel": "停止原因：{reason}",
     "nodesInLatestState": "最新状态节点数",
     "none": "无",
@@ -216,22 +296,25 @@
     "noLogsInRound": "本轮未记录日志。",
     "noArtifactsRegistered": "尚未注册产物。",
     "inspectorTitle": "运行检查器",
-    "tabs": {
-      "timeline": "时间线",
-      "nodeDetail": "节点详情",
+    "detailTabs": {
+      "terminal": "终端",
       "artifacts": "产物",
+      "callbacks": "回调",
       "raw": "原始数据"
     },
+    "callbacksEmpty": "本轮尚未记录回调。",
     "drive": {
       "title": "自动驱动",
       "description": "按顺序调度可执行节点，直到终态或达到步数上限。",
+      "runningDescription": "当前 run 已有自动驱动正在执行。",
       "maxSteps": "最大步数",
       "button": "自动驱动",
       "inspect": "查看详情",
       "result": "结果状态：{status}",
       "stopReason": "停止原因：{reason}",
       "steps": "执行步骤：{count}",
-      "invalidSteps": "最大步数必须为正整数"
+      "invalidSteps": "最大步数必须为正整数",
+      "disabledWhileRunning": "已有 driver 运行时，手动 Drive 会被禁用。"
     },
     "preview": {
       "title": "产物/日志预览",
@@ -288,6 +371,7 @@
   },
   "status": {
     "completed": "已完成",
+    "passed": "通过",
     "running": "运行中",
     "needs_attention": "需关注",
     "failed": "失败",

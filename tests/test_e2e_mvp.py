@@ -58,6 +58,7 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
             "workflow_id": "mvp-review-loop",
             "version": "0.1.0",
             "inputs": {"topic": "AI agents"},
+            "auto_drive": False,
         },
     )
     assert run_response.status_code == 200

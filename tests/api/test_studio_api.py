@@ -15,6 +15,7 @@ def _start_run(client: TestClient) -> dict:
             "workflow_id": "mvp-review-loop",
             "version": "0.1.0",
             "inputs": {"topic": "studio api test"},
+            "auto_drive": False,
         },
     )
     assert response.status_code == 200
@@ -37,6 +38,7 @@ def test_workflow_and_run_studio_endpoints(client: TestClient, workflow_fixture:
     assert workflow_response.status_code == 200
     assert workflow_response.json()["graph"]["nodes"]
     assert workflow_response.json()["workflow_view"]["cards"]
+    assert workflow_response.json()["workflow_view"]["input_descriptors"][0]["type"] == "string"
 
     runs_response = client.get("/api/runs")
     assert runs_response.status_code == 200
@@ -45,6 +47,9 @@ def test_workflow_and_run_studio_endpoints(client: TestClient, workflow_fixture:
     overview_response = client.get(f"/api/runs/{run['run_id']}/debug/overview")
     assert overview_response.status_code == 200
     assert overview_response.json()["timeline"][0]["node_id"] == "draft_article"
+    assert overview_response.json()["driver"]["status"] == "idle"
+    assert overview_response.json()["current_focus"]["node_id"] == "draft_article"
+    assert overview_response.json()["activity"]
 
     round_response = client.get(
         f"/api/runs/{run['run_id']}/debug/nodes/draft_article/rounds/1"
@@ -52,6 +57,60 @@ def test_workflow_and_run_studio_endpoints(client: TestClient, workflow_fixture:
     assert round_response.status_code == 200
     assert round_response.json()["context"]["node"]["node_id"] == "draft_article"
     assert round_response.json()["log_refs"]
+
+
+def test_run_creation_validates_typed_workflow_inputs(client: TestClient, workflow_fixture: dict) -> None:
+    workflow_fixture["inputs"][0]["form"] = {
+        "type": "enum",
+        "options": ["science", "history"],
+    }
+    _register_workflow(client, workflow_fixture)
+
+    response = client.post(
+        "/api/runs",
+        json={
+            "workflow_id": "mvp-review-loop",
+            "version": "0.1.0",
+            "inputs": {"topic": "finance"},
+            "auto_drive": False,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "必须是以下值之一" in response.json()["detail"]
+
+
+def test_run_creation_accepts_manual_file_path_inputs(client: TestClient, workflow_fixture: dict) -> None:
+    workflow_fixture["inputs"][0] = {
+        "name": "source_file",
+        "shape": "file",
+        "required": True,
+        "summary": "Source file path",
+        "form": {
+            "type": "file",
+            "min_length": 1,
+        },
+    }
+    workflow_fixture["nodes"][0]["inputs"][0] = {
+        "name": "source_file",
+        "from": {"kind": "workflow_input", "name": "source_file"},
+        "shape": "file",
+        "required": True,
+        "summary": "Source file path",
+    }
+    _register_workflow(client, workflow_fixture)
+
+    response = client.post(
+        "/api/runs",
+        json={
+            "workflow_id": "mvp-review-loop",
+            "version": "0.1.0",
+            "inputs": {"source_file": "/tmp/source.md"},
+            "auto_drive": False,
+        },
+    )
+
+    assert response.status_code == 200
 
 
 def test_attention_retry_and_settings_snapshot(

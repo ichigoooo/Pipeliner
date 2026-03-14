@@ -2,9 +2,11 @@
 
 import { useTranslations } from 'next-intl';
 import { classNames } from '@/lib/format';
+import { formatStatusLabel, normalizeStatusKey } from '@/lib/status';
 
 const STATUS_STYLES: Record<string, string> = {
   completed: 'bg-emerald-100 text-emerald-900',
+  passed: 'bg-emerald-100 text-emerald-900',
   running: 'bg-sky-100 text-sky-900',
   needs_attention: 'bg-amber-100 text-amber-900',
   failed: 'bg-rose-100 text-rose-900',
@@ -21,8 +23,8 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function StatusBadge({ value }: { value: string | null | undefined }) {
   const t = useTranslations('status');
-  const normalized = (value || 'unknown').toLowerCase();
-  const label = t(normalized as never) || value || 'Unknown';
+  const normalized = normalizeStatusKey(value);
+  const label = formatStatusLabel(value, t);
 
   return (
     <span

@@ -1,12 +1,76 @@
 from __future__ import annotations
 
 from collections import Counter
+import re
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pipeliner.protocols.guards import RuntimeGuards
 from pipeliner.skills.naming import validate_skill_name
 from pipeliner.types import GateMode
+
+SUPPORTED_WORKFLOW_INPUT_TYPES = {"string", "number", "boolean", "enum", "file", "json"}
+
+
+def derive_workflow_input_type(shape: str) -> str:
+    normalized = shape.strip().lower()
+    if normalized == "file":
+        return "file"
+    if normalized == "json":
+        return "json"
+    if normalized == "boolean":
+        return "boolean"
+    if normalized in {"number", "integer", "float"}:
+        return "number"
+    return "string"
+
+
+def validate_workflow_input_value(
+    *,
+    name: str,
+    input_type: str,
+    value: Any,
+    options: list[str] | None = None,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    min_length: int | None = None,
+    max_length: int | None = None,
+    pattern: str | None = None,
+) -> None:
+    if input_type in {"string", "file"}:
+        if not isinstance(value, str):
+            raise ValueError(f"workflow input {name} 必须是字符串")
+        if min_length is not None and len(value) < min_length:
+            raise ValueError(f"workflow input {name} 长度不能小于 {min_length}")
+        if max_length is not None and len(value) > max_length:
+            raise ValueError(f"workflow input {name} 长度不能大于 {max_length}")
+        if pattern and re.fullmatch(pattern, value) is None:
+            raise ValueError(f"workflow input {name} 不匹配要求的 pattern")
+        return
+    if input_type == "number":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"workflow input {name} 必须是数字")
+        numeric = float(value)
+        if minimum is not None and numeric < minimum:
+            raise ValueError(f"workflow input {name} 不能小于 {minimum}")
+        if maximum is not None and numeric > maximum:
+            raise ValueError(f"workflow input {name} 不能大于 {maximum}")
+        return
+    if input_type == "boolean":
+        if not isinstance(value, bool):
+            raise ValueError(f"workflow input {name} 必须是布尔值")
+        return
+    if input_type == "enum":
+        if not isinstance(value, str):
+            raise ValueError(f"workflow input {name} 必须是字符串枚举值")
+        allowed = options or []
+        if value not in allowed:
+            raise ValueError(f"workflow input {name} 必须是以下值之一: {', '.join(allowed)}")
+        return
+    if input_type == "json":
+        return
+    raise ValueError(f"workflow input {name} 使用了未知类型 {input_type}")
 
 
 class WorkflowMetadata(BaseModel):
@@ -22,6 +86,103 @@ class WorkflowInputSpec(BaseModel):
     shape: str
     required: bool
     summary: str
+    form: "WorkflowInputFormSpec | None" = None
+
+    def normalized_descriptor(self) -> "WorkflowInputDescriptor":
+        form = self.form or WorkflowInputFormSpec(type=derive_workflow_input_type(self.shape))
+        source = "explicit" if self.form is not None else "derived"
+        return WorkflowInputDescriptor(
+            name=self.name,
+            shape=self.shape,
+            required=self.required,
+            summary=self.summary,
+            type=form.input_type,
+            default=form.default,
+            options=list(form.options),
+            minimum=form.minimum,
+            maximum=form.maximum,
+            min_length=form.min_length,
+            max_length=form.max_length,
+            pattern=form.pattern,
+            source=source,
+        )
+
+
+class WorkflowInputFormSpec(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    input_type: str = Field(alias="type", serialization_alias="type")
+    default: Any | None = None
+    options: list[str] = Field(default_factory=list)
+    minimum: float | None = None
+    maximum: float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
+
+    @model_validator(mode="after")
+    def validate_form(self) -> "WorkflowInputFormSpec":
+        if self.input_type not in SUPPORTED_WORKFLOW_INPUT_TYPES:
+            raise ValueError(
+                f"workflow input type 仅支持: {', '.join(sorted(SUPPORTED_WORKFLOW_INPUT_TYPES))}"
+            )
+        if self.input_type == "enum":
+            if not self.options:
+                raise ValueError("enum workflow input 必须提供 options")
+            if len(set(self.options)) != len(self.options):
+                raise ValueError("enum workflow input 的 options 不能重复")
+        elif self.options:
+            raise ValueError("只有 enum workflow input 支持 options")
+
+        if self.minimum is not None or self.maximum is not None:
+            if self.input_type != "number":
+                raise ValueError("只有 number workflow input 支持 minimum / maximum")
+            if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+                raise ValueError("workflow input 的 minimum 不能大于 maximum")
+
+        if self.min_length is not None or self.max_length is not None or self.pattern is not None:
+            if self.input_type not in {"string", "file"}:
+                raise ValueError("只有 string / file workflow input 支持长度或 pattern 约束")
+            if (
+                self.min_length is not None
+                and self.max_length is not None
+                and self.min_length > self.max_length
+            ):
+                raise ValueError("workflow input 的 min_length 不能大于 max_length")
+            if self.pattern:
+                re.compile(self.pattern)
+
+        if self.default is not None:
+            validate_workflow_input_value(
+                name="default",
+                input_type=self.input_type,
+                value=self.default,
+                options=self.options,
+                minimum=self.minimum,
+                maximum=self.maximum,
+                min_length=self.min_length,
+                max_length=self.max_length,
+                pattern=self.pattern,
+            )
+        return self
+
+
+class WorkflowInputDescriptor(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    shape: str
+    required: bool
+    summary: str
+    input_type: str = Field(alias="type", serialization_alias="type")
+    default: Any | None = None
+    options: list[str] = Field(default_factory=list)
+    minimum: float | None = None
+    maximum: float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
+    source: str
 
 
 class WorkflowOutputRef(BaseModel):

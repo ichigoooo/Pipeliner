@@ -185,3 +185,89 @@ def test_derive_graph_projection_returns_full_package(client: TestClient) -> Non
     assert payload["graph"]["nodes"][0]["id"] == "draft_article"
     assert payload["workflow_view"]["metadata"]["workflow_id"] == "test_wf"
     assert payload["lint_report"]["blocking"] is False
+
+
+def test_authoring_typed_inputs_can_publish_and_start_run(client: TestClient) -> None:
+    response = client.post(
+        "/api/authoring/sessions",
+        json={"title": "Typed Inputs", "intent_brief": "Verify typed inputs"},
+    )
+    session_id = response.json()["session_id"]
+
+    typed_spec = _valid_authoring_spec()
+    typed_spec["inputs"] = [
+        {
+            "name": "topic",
+            "shape": "string",
+            "required": True,
+            "summary": "Topic to write about",
+            "form": {
+                "type": "enum",
+                "options": ["science", "history"],
+            },
+        },
+        {
+            "name": "retry_count",
+            "shape": "number",
+            "required": False,
+            "summary": "Retry count",
+            "form": {
+                "type": "number",
+                "default": 2,
+                "minimum": 1,
+                "maximum": 5,
+            },
+        },
+    ]
+    typed_spec["nodes"][0]["inputs"].append(
+        {
+            "name": "retry_count",
+            "from": {"kind": "workflow_input", "name": "retry_count"},
+            "shape": "number",
+            "required": False,
+            "summary": "Retry count",
+        }
+    )
+
+    save_response = client.post(
+        f"/api/authoring/sessions/{session_id}/drafts",
+        json={"spec": typed_spec},
+    )
+    assert save_response.status_code == 200
+    assert save_response.json()["workflow_view"]["input_descriptors"][0]["type"] == "enum"
+
+    publish_response = client.post(f"/api/authoring/sessions/{session_id}/publish")
+    assert publish_response.status_code == 200
+
+    run_response = client.post(
+        "/api/runs",
+        json={
+            "workflow_id": "test_wf",
+            "version": "v1.0.0",
+            "inputs": {"topic": "science"},
+            "auto_drive": False,
+        },
+    )
+    assert run_response.status_code == 200
+
+
+def test_authoring_invalid_input_metadata_surfaces_blocking_feedback(client: TestClient) -> None:
+    response = client.post(
+        "/api/authoring/sessions",
+        json={"title": "Invalid Typed Input", "intent_brief": "Trigger input validation"},
+    )
+    session_id = response.json()["session_id"]
+
+    invalid_spec = _valid_authoring_spec()
+    invalid_spec["inputs"][0]["form"] = {
+        "type": "enum",
+        "options": [],
+    }
+
+    save_response = client.post(
+        f"/api/authoring/sessions/{session_id}/drafts",
+        json={"spec": invalid_spec},
+    )
+    assert save_response.status_code == 200
+    assert save_response.json()["lint_report"]["blocking"] is True
+    assert "enum workflow input" in save_response.json()["lint_report"]["errors"][0]

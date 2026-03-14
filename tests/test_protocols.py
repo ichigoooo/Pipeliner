@@ -79,3 +79,72 @@ def test_reject_duplicate_skill_names(client, workflow_fixture) -> None:
         workflow_fixture["nodes"][1]["validators"][0]["skill"] = duplicate
         with pytest.raises(ValueError):
             service.validate_spec(workflow_fixture)
+
+
+def test_workflow_input_form_metadata_supports_defaults_and_validation(client, workflow_fixture) -> None:
+    with client.app.state.db.session() as session:
+        service = WorkflowService(WorkflowRepository(session))
+        workflow_fixture["inputs"] = [
+            {
+                "name": "topic",
+                "shape": "string",
+                "required": True,
+                "summary": "Requested topic",
+                "form": {
+                    "type": "enum",
+                    "options": ["science", "history"],
+                    "default": "science",
+                },
+            },
+            {
+                "name": "retry_count",
+                "shape": "number",
+                "required": False,
+                "summary": "Optional retry count",
+                "form": {
+                    "type": "number",
+                    "default": 2,
+                    "minimum": 1,
+                    "maximum": 5,
+                },
+            },
+        ]
+        workflow_fixture["nodes"][0]["inputs"].append(
+            {
+                "name": "retry_count",
+                "from": {"kind": "workflow_input", "name": "retry_count"},
+                "shape": "number",
+                "required": False,
+                "summary": "Retry count",
+            }
+        )
+
+        spec, _warnings = service.validate_spec(workflow_fixture)
+        normalized = service.validate_run_inputs(spec, {"topic": "history"})
+
+        assert normalized == {"topic": "history", "retry_count": 2}
+        descriptor = spec.inputs[0].normalized_descriptor()
+        assert descriptor.input_type == "enum"
+        assert descriptor.source == "explicit"
+
+
+def test_workflow_input_form_metadata_rejects_invalid_enum_and_default(client, workflow_fixture) -> None:
+    with client.app.state.db.session() as session:
+        service = WorkflowService(WorkflowRepository(session))
+        workflow_fixture["inputs"][0]["form"] = {
+            "type": "enum",
+            "options": ["science"],
+            "default": "history",
+        }
+        with pytest.raises(ValueError):
+            service.validate_spec(workflow_fixture)
+
+
+def test_workflow_input_descriptor_derives_from_legacy_shape(client, workflow_fixture) -> None:
+    with client.app.state.db.session() as session:
+        service = WorkflowService(WorkflowRepository(session))
+        spec, _warnings = service.validate_spec(workflow_fixture)
+        descriptor = spec.inputs[0].normalized_descriptor()
+
+        assert descriptor.input_type == "string"
+        assert descriptor.source == "derived"

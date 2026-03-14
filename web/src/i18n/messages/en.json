@@ -131,6 +131,28 @@
       "messages": "System messages and publish events for this session.",
       "revisionHistory": "Each save/continue creates a new revision you can revisit."
     },
+    "inputs": {
+      "title": "Workflow inputs",
+      "description": "Configure structured input metadata and keep it synchronized with the canonical spec.",
+      "add": "Add input",
+      "remove": "Remove",
+      "empty": "No workflow inputs yet. Add one to define the run-start contract.",
+      "untitled": "Input {index}",
+      "invalidRawSpec": "Workflow input controls are unavailable until the raw spec becomes valid JSON.",
+      "fields": {
+        "name": "Name",
+        "type": "Input type",
+        "summary": "Summary",
+        "required": "Required",
+        "default": "Default value",
+        "options": "Enum options",
+        "minimum": "Minimum",
+        "maximum": "Maximum",
+        "minLength": "Min length",
+        "maxLength": "Max length",
+        "pattern": "Pattern"
+      }
+    },
     "summary": {
       "sessions": "Sessions",
       "revisions": "Revisions",
@@ -179,18 +201,33 @@
     "workspace": "Workflow workspace",
     "loadingWorkspace": "Loading workflow workspace...",
     "runInputs": "Run inputs (JSON)",
+    "runInputsForm": "Run inputs (form)",
+    "runInputsFormHint": "Use the structured form generated from workflow input metadata.",
+    "runInputsRawHint": "Use raw JSON when you need to bypass or override the structured form.",
+    "runInputsEmpty": "This workflow does not declare any inputs. You can still launch the run with an empty payload.",
     "launchRun": "Launch Run",
     "cancel": "Cancel",
     "jsonObjectRequired": "Input must be a JSON object",
     "parseFailed": "Failed to parse input",
+    "switchToRaw": "Use Raw JSON",
+    "switchToForm": "Use Form",
+    "required": "Required",
+    "selectOption": "Select an option",
+    "filePathPlaceholder": "Enter a local file path",
+    "filePathHint": "Manual local path entry is kept plain so the same value can be reused for batch launches.",
     "iterate": "Iterate",
-    "iterateHint": "Create a new authoring session from this published version."
+    "iterateHint": "Create a new authoring session from this published version.",
+    "expandPurpose": "Expand description",
+    "collapsePurpose": "Collapse description"
   },
   "runs": {
     "title": "Runs",
     "list": "Run List",
     "details": "Run Details",
+    "version": "Version",
     "status": "Status",
+    "created": "Created",
+    "updated": "Updated",
     "timeline": "Timeline",
     "callbacks": "Callbacks",
     "artifacts": "Artifacts",
@@ -203,7 +240,50 @@
     "stopRun": "Stop Run",
     "retrySelectedNode": "Retry Selected Node",
     "runHealth": "Run health",
+    "summary": {
+      "title": "Run overview",
+      "runStatus": "Current status",
+      "currentNode": "Current node",
+      "driver": "Auto drive",
+      "viewCurrent": "View current node",
+      "advanced": "Advanced controls"
+    },
+    "focus": {
+      "title": "Current Focus",
+      "live": "Currently active node",
+      "waiting": "Waiting for {role}",
+      "queued": "This round is queued and waiting for the next dispatch to start.",
+      "inspect": "Open Node Detail",
+      "empty": "No active node round is available right now."
+    },
+    "driver": {
+      "title": "Driver state",
+      "state": "Driver: {status}",
+      "mode": "Mode: {mode}",
+      "idle": "No active driver"
+    },
+    "graph": {
+      "title": "Run Graph",
+      "description": "Use the workflow graph as the single source of truth for live node status. Click a node to inspect its latest round.",
+      "legend": {
+        "current": "Current focus",
+        "running": "Running",
+        "waiting": "Waiting",
+        "completed": "Completed",
+        "attention": "Needs attention"
+      }
+    },
+    "detail": {
+      "title": "Node Detail",
+      "emptyTitle": "Select a node",
+      "emptyDescription": "Select a node in the graph to inspect its run details.",
+      "roundSelector": "Round",
+      "viewingHistorical": "You are viewing a non-current node",
+      "returnToCurrent": "Return to current node",
+      "waitingValidator": "Executor finished. Waiting for the validator to start."
+    },
     "stopReason": "Stop reason",
+    "attentionNodes": "Attention nodes",
     "stopReasonLabel": "Stop reason: {reason}",
     "nodesInLatestState": "Nodes in latest state",
     "none": "None",
@@ -216,22 +296,25 @@
     "noLogsInRound": "No logs recorded for this round.",
     "noArtifactsRegistered": "No artifacts registered yet.",
     "inspectorTitle": "Run Inspector",
-    "tabs": {
-      "timeline": "Timeline",
-      "nodeDetail": "Node Detail",
+    "detailTabs": {
+      "terminal": "Terminal",
       "artifacts": "Artifacts",
+      "callbacks": "Callbacks",
       "raw": "Raw"
     },
+    "callbacksEmpty": "No callbacks recorded for this round.",
     "drive": {
       "title": "Auto drive",
       "description": "Dispatch nodes in order until terminal state or max steps.",
+      "runningDescription": "Auto-drive is already running for this run.",
       "maxSteps": "Max steps",
       "button": "Drive",
       "inspect": "Inspect",
       "result": "Result status: {status}",
       "stopReason": "Stop reason: {reason}",
       "steps": "Steps executed: {count}",
-      "invalidSteps": "Max steps must be a positive integer"
+      "invalidSteps": "Max steps must be a positive integer",
+      "disabledWhileRunning": "Manual drive is disabled while another driver is running."
     },
     "preview": {
       "title": "Artifact / Log Preview",
@@ -288,6 +371,7 @@
   },
   "status": {
     "completed": "Completed",
+    "passed": "Passed",
     "running": "Running",
     "needs_attention": "Needs Attention",
     "failed": "Failed",

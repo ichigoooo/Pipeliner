@@ -28,6 +28,22 @@ export interface WorkflowCard {
   raw: Record<string, unknown>;
 }
 
+export interface WorkflowInputDescriptor {
+  name: string;
+  shape: string;
+  required: boolean;
+  summary: string;
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'file' | 'json';
+  default?: unknown;
+  options: string[];
+  minimum?: number;
+  maximum?: number;
+  min_length?: number;
+  max_length?: number;
+  pattern?: string;
+  source: 'explicit' | 'derived';
+}
+
 export interface WorkflowProjection {
   metadata: {
     workflow_id: string;
@@ -37,6 +53,7 @@ export interface WorkflowProjection {
     tags: string[];
   };
   inputs: unknown[];
+  input_descriptors: WorkflowInputDescriptor[];
   outputs: unknown[];
   cards: WorkflowCard[];
 }
@@ -196,6 +213,40 @@ export interface RunOverview {
     status: string;
     waiting_for_role: string | null;
     stop_reason: string | null;
+  }>;
+  driver: {
+    run_id: string;
+    status: string;
+    mode: string | null;
+    max_steps: number | null;
+    started_at: string | null;
+    ended_at: string | null;
+    last_error: string | null;
+    stop_reason: string | null;
+    result_status: string | null;
+  };
+  current_focus: {
+    node_id: string;
+    round_no: number;
+    status: string;
+    waiting_for_role: string | null;
+    stop_reason: string | null;
+    executor_call_id: string | null;
+    validator_calls: Array<{
+      validator_id: string;
+      call_id: string;
+    }>;
+  } | null;
+  activity: Array<{
+    kind: string;
+    node_id: string | null;
+    round_no: number | null;
+    actor_role: string | null;
+    validator_id: string | null;
+    status: string;
+    summary: string;
+    happened_at: string;
+    call_id: string | null;
   }>;
 }
 
@@ -377,13 +428,19 @@ export const api = {
       }
     ),
   listRuns: async () => request<{ runs: RunSummary[] }>('runs'),
-  startRun: async (workflowId: string, version: string, inputs: Record<string, unknown>) =>
+  startRun: async (
+    workflowId: string,
+    version: string,
+    inputs: Record<string, unknown>,
+    options?: { auto_drive?: boolean }
+  ) =>
     request<{ run_id: string; status: string; workspace_root: string }>('runs', {
       method: 'POST',
       body: JSON.stringify({
         workflow_id: workflowId,
         version,
         inputs,
+        auto_drive: options?.auto_drive ?? true,
       }),
     }),
   listAttentionRuns: async () => request<{ runs: AttentionRun[] }>('runs/attention'),
