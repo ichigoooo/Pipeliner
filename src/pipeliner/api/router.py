@@ -1088,6 +1088,18 @@ def preview_run_artifact(
     return service.preview_artifact(run_id, artifact_id, version)
 
 
+@router.post("/api/runs/{run_id}/artifacts/{artifact_id}/versions/{version}/open-folder")
+def open_run_artifact_folder(
+    run_id: str,
+    artifact_id: str,
+    version: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _preview_service(session, request)
+    return service.open_artifact_folder(run_id, artifact_id, version)
+
+
 @router.get("/api/runs/{run_id}/logs/preview")
 def preview_run_log(
     run_id: str,

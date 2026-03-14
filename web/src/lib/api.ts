@@ -188,6 +188,13 @@ export interface RunDetail {
   }>;
 }
 
+export interface RunArtifactFolderOpenResult {
+  artifact_id: string;
+  version: string;
+  target_path: string;
+  opened_path: string;
+}
+
 export interface RunOverview {
   run_id: string;
   status: string;
@@ -479,6 +486,10 @@ export const api = {
     ),
   previewRunArtifact: async (runId: string, artifactId: string, version: string) =>
     request<any>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/preview`),
+  openRunArtifactFolder: async (runId: string, artifactId: string, version: string) =>
+    request<RunArtifactFolderOpenResult>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/open-folder`, {
+      method: 'POST',
+    }),
   previewRunLog: async (runId: string, path: string) =>
     request<any>(`runs/${runId}/logs/preview?path=${encodeURIComponent(path)}`),
   getSettings: async () => request<{ settings: SettingsSnapshot }>('settings'),

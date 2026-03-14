@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+
 from fastapi.testclient import TestClient
 
 
@@ -22,7 +24,7 @@ def _start_run(client: TestClient, workflow_id: str, version: str) -> dict:
     return response.json()
 
 
-def test_artifact_and_log_preview(client: TestClient, workflow_fixture, settings, workspace_manager) -> None:
+def test_artifact_and_log_preview(client: TestClient, workflow_fixture, settings, workspace_manager, monkeypatch) -> None:
     _register_workflow(client, workflow_fixture)
     run_info = _start_run(client, "mvp-review-loop", "0.1.0")
 
@@ -59,6 +61,26 @@ def test_artifact_and_log_preview(client: TestClient, workflow_fixture, settings
     preview_payload = preview_response.json()
     assert preview_payload["preview"]["kind"] == "text"
     assert "preview content" in preview_payload["preview"]["content"]
+
+    opened_commands: list[list[str]] = []
+
+    def _mock_run(command: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
+        opened_commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("pipeliner.services.preview_service.subprocess.run", _mock_run)
+
+    open_response = client.post(
+        f"/api/runs/{run_info['run_id']}/artifacts/article_draft/versions/v1/open-folder"
+    )
+    assert open_response.status_code == 200
+    open_payload = open_response.json()
+    assert open_payload["artifact_id"] == "article_draft"
+    assert open_payload["version"] == "v1"
+    assert open_payload["target_path"].endswith("/article.md")
+    assert open_payload["opened_path"].endswith("/artifacts/article_draft@v1/payload")
+    assert opened_commands
+    assert opened_commands[0][-1].endswith("/artifacts/article_draft@v1/payload")
 
     log_rel = "nodes/draft_article/rounds/1/executor/executor_stdout.log"
     log_path = settings.data_dir / run_info["workspace_root"] / log_rel

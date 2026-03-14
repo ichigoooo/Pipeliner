@@ -295,6 +295,11 @@
     "noArtifactsInRound": "本轮未发布产物。",
     "noLogsInRound": "本轮未记录日志。",
     "noArtifactsRegistered": "尚未注册产物。",
+    "artifactActions": {
+      "openFolder": "打开文件夹",
+      "preview": "预览",
+      "opened": "已打开目录：{path}"
+    },
     "inspectorTitle": "运行检查器",
     "detailTabs": {
       "terminal": "终端",

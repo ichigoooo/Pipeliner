@@ -25,6 +25,7 @@ vi.mock('@/lib/api', () => ({
     retryNode: vi.fn(),
     driveRun: vi.fn(),
     previewRunArtifact: vi.fn(),
+    openRunArtifactFolder: vi.fn(),
     previewRunLog: vi.fn(),
   },
 }));
@@ -229,6 +230,12 @@ describe('RunDetailPage', () => {
         path: '/tmp/artifact.json',
       },
     });
+    mockedApi.openRunArtifactFolder.mockResolvedValue({
+      artifact_id: 'artifact_1',
+      version: 'v1',
+      target_path: '/tmp/run/artifacts/artifact_1@v1/payload/article.md',
+      opened_path: '/tmp/run/artifacts/artifact_1@v1/payload',
+    });
     mockedApi.previewRunLog.mockResolvedValue({
       path: 'nodes/draft_article/rounds/1/executor.log',
       preview: {
@@ -276,6 +283,9 @@ describe('RunDetailPage', () => {
 
     fireEvent.click(screen.getByText('Artifacts'));
     fireEvent.click(screen.getByText('artifact_1@v1'));
+    expect(mockedApi.openRunArtifactFolder).toHaveBeenCalledWith('run_1', 'artifact_1', 'v1');
+    expect(await screen.findByText('Opened folder: /tmp/run/artifacts/artifact_1@v1/payload')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(await screen.findByTestId('run-detail-preview')).toBeInTheDocument();
     expect(await screen.findByText('Artifact / Log Preview')).toBeInTheDocument();
     expect(screen.getByText(/ok/)).toBeInTheDocument();
@@ -410,6 +420,12 @@ describe('RunDetailPage', () => {
       status: 'completed',
       stop_reason: 'terminal_state',
       steps: [],
+    });
+    mockedApi.openRunArtifactFolder.mockResolvedValue({
+      artifact_id: 'artifact_1',
+      version: 'v1',
+      target_path: '/tmp/run_live/artifacts/artifact_1@v1/payload/article.md',
+      opened_path: '/tmp/run_live/artifacts/artifact_1@v1/payload',
     });
     mockedApi.previewRunArtifact.mockResolvedValue(null as never);
     mockedApi.previewRunLog.mockResolvedValue(null as never);

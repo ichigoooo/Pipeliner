@@ -51,6 +51,8 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const [previewState, setPreviewState] = useState<PreviewPanelState | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [artifactActionMessage, setArtifactActionMessage] = useState<string | null>(null);
+  const [artifactActionError, setArtifactActionError] = useState<string | null>(null);
 
   const runQuery = useQuery({
     queryKey: ['run', runId],
@@ -125,6 +127,8 @@ export function RunDetailClient({ runId }: { runId: string }) {
   });
 
   const loadArtifactPreview = async (artifactId: string, version: string) => {
+    setArtifactActionMessage(null);
+    setArtifactActionError(null);
     setPreviewLoading(true);
     setPreviewError(null);
     try {
@@ -138,6 +142,8 @@ export function RunDetailClient({ runId }: { runId: string }) {
   };
 
   const loadLogPreview = async (path: string) => {
+    setArtifactActionMessage(null);
+    setArtifactActionError(null);
     setPreviewLoading(true);
     setPreviewError(null);
     try {
@@ -147,6 +153,17 @@ export function RunDetailClient({ runId }: { runId: string }) {
       setPreviewError((mutationError as Error).message);
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  const openArtifactFolder = async (artifactId: string, version: string) => {
+    setArtifactActionMessage(null);
+    setArtifactActionError(null);
+    try {
+      const payload = await api.openRunArtifactFolder(runId, artifactId, version);
+      setArtifactActionMessage(t('artifactActions.opened', { path: payload.opened_path }));
+    } catch (mutationError) {
+      setArtifactActionError((mutationError as Error).message);
     }
   };
 
@@ -682,17 +699,34 @@ export function RunDetailClient({ runId }: { runId: string }) {
 
               {nodeRound && detailTabIndex === 1 && (
                 <div className="space-y-3">
+                  {artifactActionMessage ? (
+                    <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                      {artifactActionMessage}
+                    </div>
+                  ) : null}
+                  {artifactActionError ? (
+                    <div className="rounded-[1.5rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                      {artifactActionError}
+                    </div>
+                  ) : null}
                   {nodeRound.artifacts.length === 0 ? (
                     <p className="text-sm text-stone-500">{t('noArtifactsInRound')}</p>
                   ) : (
                     nodeRound.artifacts.map((artifact) => (
-                      <button
+                      <div
                         key={`${artifact.artifact_id}-${artifact.version}`}
-                        type="button"
-                        onClick={() => loadArtifactPreview(artifact.artifact_id, artifact.version)}
-                        className="w-full rounded-[1.75rem] border border-stone-200 px-5 py-4 text-left transition hover:border-amber-500"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openArtifactFolder(artifact.artifact_id, artifact.version)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            void openArtifactFolder(artifact.artifact_id, artifact.version);
+                          }
+                        }}
+                        className="w-full cursor-pointer rounded-[1.75rem] border border-stone-200 px-5 py-4 text-left transition hover:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
                       >
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-medium text-stone-900">
                               {artifact.artifact_id}@{artifact.version}
@@ -700,10 +734,25 @@ export function RunDetailClient({ runId }: { runId: string }) {
                             <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
                               {artifact.kind}
                             </p>
+                            <p className="mt-3 text-xs font-medium text-amber-700">
+                              {t('artifactActions.openFolder')}
+                            </p>
                           </div>
-                          <span className="text-xs text-stone-500">{artifact.storage_uri}</span>
+                          <div className="flex flex-col items-end gap-3">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void loadArtifactPreview(artifact.artifact_id, artifact.version);
+                              }}
+                              className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+                            >
+                              {t('artifactActions.preview')}
+                            </button>
+                            <span className="text-right text-xs text-stone-500">{artifact.storage_uri}</span>
+                          </div>
                         </div>
-                      </button>
+                      </div>
                     ))
                   )}
                 </div>

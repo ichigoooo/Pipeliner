@@ -295,6 +295,11 @@
     "noArtifactsInRound": "No artifacts published in this round.",
     "noLogsInRound": "No logs recorded for this round.",
     "noArtifactsRegistered": "No artifacts registered yet.",
+    "artifactActions": {
+      "openFolder": "Open folder",
+      "preview": "Preview",
+      "opened": "Opened folder: {path}"
+    },
     "inspectorTitle": "Run Inspector",
     "detailTabs": {
       "terminal": "Terminal",
