@@ -80,6 +80,14 @@ describe('SettingsPage', () => {
             default: '.pipeliner/pipeliner.db',
           },
         },
+        observability: {
+          claude_trace_enabled: {
+            value: false,
+            source: 'default',
+            env_key: 'PIPELINER_CLAUDE_TRACE_ENABLED',
+            default: false,
+          },
+        },
         runtime_guards: {
           default_timeout: {
             value: '30m',

@@ -54,7 +54,8 @@
       "runtimeGuards": "运行时保护",
       "providerBindings": "Provider 绑定",
       "observedSkills": "已观察的 Skills",
-      "rawSnapshot": "原始快照"
+      "rawSnapshot": "原始快照",
+      "observability": "可观测性"
     },
     "labels": {
       "executor": "执行器",
@@ -67,7 +68,9 @@
       "defaultTimeout": "默认超时",
       "maxReworkRounds": "最大重做次数",
       "blockedRequiresManual": "阻塞需手动处理",
-      "failureRequiresManual": "失败需手动处理"
+      "failureRequiresManual": "失败需手动处理",
+      "claudeTrace": "Claude Trace",
+      "claudeTraceHint": "控制是否保留并展示 Claude 输出日志。"
     },
     "language": {
       "title": "语言",
@@ -96,7 +99,9 @@
     "edit": "编辑",
     "delete": "删除",
     "create": "创建",
-    "refresh": "刷新"
+    "refresh": "刷新",
+    "expand": "展开",
+    "collapse": "收起"
   },
   "authoring": {
     "title": "创作",
@@ -188,6 +193,8 @@
     "version": "版本",
     "versions": "工作流版本",
     "startRun": "开始运行",
+    "downloadTemplate": "下载模板",
+    "batchStart": "批量启动",
     "noWorkflows": "未找到工作流",
     "backToWorkflows": "返回工作流列表",
     "backToVersions": "返回版本列表",
@@ -206,6 +213,9 @@
     "runInputsRawHint": "需要绕过或覆盖结构化表单时，可切换为原始 JSON。",
     "runInputsEmpty": "该 workflow 没有声明输入，也可以直接用空 payload 启动运行。",
     "launchRun": "启动运行",
+    "uploadCsv": "上传 CSV",
+    "uploadCsvHint": "每一行对应一个运行，批次内顺序执行。",
+    "startBatch": "开始批量启动",
     "cancel": "取消",
     "jsonObjectRequired": "输入必须是 JSON 对象",
     "parseFailed": "解析输入失败",
@@ -246,7 +256,10 @@
       "currentNode": "当前节点",
       "driver": "自动驱动",
       "viewCurrent": "查看当前节点",
-      "advanced": "高级操作"
+      "advanced": "高级操作",
+      "nextActions": "下一步行动",
+      "dispatchableCount": "可执行动作：{count}",
+      "dispatchNow": "立即派发"
     },
     "focus": {
       "title": "当前焦点",
@@ -280,10 +293,12 @@
       "roundSelector": "查看轮次",
       "viewingHistorical": "当前查看的不是活跃节点",
       "returnToCurrent": "回到当前运行节点",
-      "waitingValidator": "executor 已完成，正在等待 validator 启动。"
+      "waitingValidator": "executor 已完成，正在等待 validator 启动。",
+      "roundSummary": "轮次概览",
+      "contextSummary": "上下文摘要"
     },
     "stopReason": "停止原因",
-    "attentionNodes": "关注节点数",
+    "attentionNodes": "关注节点",
     "stopReasonLabel": "停止原因：{reason}",
     "nodesInLatestState": "最新状态节点数",
     "none": "无",
@@ -298,7 +313,9 @@
     "artifactActions": {
       "openFolder": "打开文件夹",
       "preview": "预览",
-      "opened": "已打开目录：{path}"
+      "opened": "已打开目录：{path}",
+      "copyUri": "复制 URI",
+      "copied": "已复制：{value}"
     },
     "inspectorTitle": "运行检查器",
     "detailTabs": {
@@ -330,8 +347,41 @@
       "binary": "二进制文件无法预览。",
       "manifest": "Artifact Manifest",
       "path": "Workspace 路径",
-      "logSubtitle": "运行日志预览"
-    }
+      "logSubtitle": "运行日志预览",
+      "openFolder": "打开目录"
+    },
+    "statusCounts": "节点状态统计",
+    "viewNode": "查看节点",
+    "noAttentionNodes": "当前没有需要关注的节点。",
+    "noDispatchable": "当前没有可执行动作。",
+    "logMeta": "大小 {size} · 更新 {time}",
+    "logMetaMissing": "文件信息不可用"
+  },
+  "batchRuns": {
+    "title": "批量运行",
+    "details": "批次详情",
+    "summary": "汇总",
+    "total": "总计",
+    "success": "成功",
+    "failed": "失败",
+    "status": "状态",
+    "created": "创建于",
+    "updated": "更新于",
+    "started": "开始于",
+    "ended": "结束于",
+    "version": "版本",
+    "row": "行号",
+    "inputs": "输入",
+    "runId": "运行 ID",
+    "viewRun": "查看运行",
+    "noRun": "尚未创建运行",
+    "error": "错误",
+    "loading": "加载批次详情中...",
+    "empty": "该批次暂无行记录。",
+    "autoRefresh": "批次仍在执行时会自动刷新。",
+    "openFolder": "打开结果目录",
+    "openFolderSuccess": "已打开目录：{path}",
+    "openFolderFailed": "打开目录失败"
   },
   "claudeTerminal": {
     "title": "Claude 终端",
@@ -346,12 +396,14 @@
     "noOutput": "暂无输出",
     "redacted": "已脱敏，输出不可展示。",
     "truncated": "输出已截断",
-    "loadFailed": "加载输出失败"
+    "loadFailed": "加载输出失败",
+    "redactedHint": "当前已关闭 Claude Trace（PIPELINER_CLAUDE_TRACE_ENABLED=false）。"
   },
   "workflow": {
     "tabs": {
       "graph": "图形",
       "cards": "卡片",
+      "inputs": "输入",
       "spec": "规范",
       "lint": "检查"
     },
@@ -378,6 +430,7 @@
     "completed": "已完成",
     "passed": "通过",
     "running": "运行中",
+    "pending": "等待中",
     "needs_attention": "需关注",
     "failed": "失败",
     "blocked": "阻塞",

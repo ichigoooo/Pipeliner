@@ -54,7 +54,8 @@
       "runtimeGuards": "Runtime guards",
       "providerBindings": "Provider bindings",
       "observedSkills": "Observed skills",
-      "rawSnapshot": "Raw snapshot"
+      "rawSnapshot": "Raw snapshot",
+      "observability": "Observability"
     },
     "labels": {
       "executor": "Executor",
@@ -67,7 +68,9 @@
       "defaultTimeout": "Default timeout",
       "maxReworkRounds": "Max rework rounds",
       "blockedRequiresManual": "Blocked requires manual",
-      "failureRequiresManual": "Failure requires manual"
+      "failureRequiresManual": "Failure requires manual",
+      "claudeTrace": "Claude Trace",
+      "claudeTraceHint": "Controls whether Claude output logs are retained and displayed."
     },
     "language": {
       "title": "Language",
@@ -96,7 +99,9 @@
     "edit": "Edit",
     "delete": "Delete",
     "create": "Create",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "authoring": {
     "title": "Authoring",
@@ -188,6 +193,8 @@
     "version": "Version",
     "versions": "Workflow versions",
     "startRun": "Start Run",
+    "downloadTemplate": "Download Template",
+    "batchStart": "Batch Launch",
     "noWorkflows": "No workflows found",
     "backToWorkflows": "Back to workflows",
     "backToVersions": "Back to versions",
@@ -206,6 +213,9 @@
     "runInputsRawHint": "Use raw JSON when you need to bypass or override the structured form.",
     "runInputsEmpty": "This workflow does not declare any inputs. You can still launch the run with an empty payload.",
     "launchRun": "Launch Run",
+    "uploadCsv": "Upload CSV",
+    "uploadCsvHint": "Each row becomes one run. Runs execute sequentially.",
+    "startBatch": "Start batch",
     "cancel": "Cancel",
     "jsonObjectRequired": "Input must be a JSON object",
     "parseFailed": "Failed to parse input",
@@ -246,7 +256,10 @@
       "currentNode": "Current node",
       "driver": "Auto drive",
       "viewCurrent": "View current node",
-      "advanced": "Advanced controls"
+      "advanced": "Advanced controls",
+      "nextActions": "Next actions",
+      "dispatchableCount": "Dispatchable: {count}",
+      "dispatchNow": "Dispatch now"
     },
     "focus": {
       "title": "Current Focus",
@@ -280,7 +293,9 @@
       "roundSelector": "Round",
       "viewingHistorical": "You are viewing a non-current node",
       "returnToCurrent": "Return to current node",
-      "waitingValidator": "Executor finished. Waiting for the validator to start."
+      "waitingValidator": "Executor finished. Waiting for the validator to start.",
+      "roundSummary": "Round summary",
+      "contextSummary": "Context summary"
     },
     "stopReason": "Stop reason",
     "attentionNodes": "Attention nodes",
@@ -298,7 +313,9 @@
     "artifactActions": {
       "openFolder": "Open folder",
       "preview": "Preview",
-      "opened": "Opened folder: {path}"
+      "opened": "Opened folder: {path}",
+      "copyUri": "Copy URI",
+      "copied": "Copied: {value}"
     },
     "inspectorTitle": "Run Inspector",
     "detailTabs": {
@@ -330,8 +347,41 @@
       "binary": "Binary file cannot be previewed.",
       "manifest": "Artifact manifest",
       "path": "Workspace path",
-      "logSubtitle": "Run log preview"
-    }
+      "logSubtitle": "Run log preview",
+      "openFolder": "Open folder"
+    },
+    "statusCounts": "Node status counts",
+    "viewNode": "View node",
+    "noAttentionNodes": "No attention nodes at the moment.",
+    "noDispatchable": "No dispatchable actions right now.",
+    "logMeta": "Size {size} · Updated {time}",
+    "logMetaMissing": "File metadata unavailable"
+  },
+  "batchRuns": {
+    "title": "Batch Runs",
+    "details": "Batch Details",
+    "summary": "Summary",
+    "total": "Total",
+    "success": "Success",
+    "failed": "Failed",
+    "status": "Status",
+    "created": "Created",
+    "updated": "Updated",
+    "started": "Started",
+    "ended": "Ended",
+    "version": "Version",
+    "row": "Row",
+    "inputs": "Inputs",
+    "runId": "Run ID",
+    "viewRun": "View run",
+    "noRun": "Not started yet",
+    "error": "Error",
+    "loading": "Loading batch details...",
+    "empty": "No rows found in this batch.",
+    "autoRefresh": "Auto-refreshing while this batch is still active.",
+    "openFolder": "Open Folder",
+    "openFolderSuccess": "Opened folder: {path}",
+    "openFolderFailed": "Failed to open folder"
   },
   "claudeTerminal": {
     "title": "Claude Terminal",
@@ -346,12 +396,14 @@
     "noOutput": "No output yet",
     "redacted": "Output redacted.",
     "truncated": "Output truncated",
-    "loadFailed": "Failed to load output"
+    "loadFailed": "Failed to load output",
+    "redactedHint": "Claude Trace is disabled (PIPELINER_CLAUDE_TRACE_ENABLED=false)."
   },
   "workflow": {
     "tabs": {
       "graph": "Graph",
       "cards": "Cards",
+      "inputs": "Inputs",
       "spec": "Spec",
       "lint": "Lint"
     },
@@ -378,6 +430,7 @@
     "completed": "Completed",
     "passed": "Passed",
     "running": "Running",
+    "pending": "Pending",
     "needs_attention": "Needs Attention",
     "failed": "Failed",
     "blocked": "Blocked",

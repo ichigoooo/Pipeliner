@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useState, useEffect } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
+import { defaultTimeZone } from '@/i18n/config';
 import { I18nProvider } from '@/i18n/provider';
 import { getMessages } from '@/i18n/messages';
 import { Locale, defaultLocale, detectBrowserLocale, isValidLocale } from '@/i18n/config';
@@ -29,14 +30,14 @@ function I18nWrapper({ children }: { children: ReactNode }) {
   // Prevent hydration mismatch by not rendering until mounted
   if (!mounted) {
     return (
-      <NextIntlClientProvider locale={defaultLocale} messages={getMessages(defaultLocale)}>
+      <NextIntlClientProvider locale={defaultLocale} messages={getMessages(defaultLocale)} timeZone={defaultTimeZone}>
         {children}
       </NextIntlClientProvider>
     );
   }
 
   return (
-    <NextIntlClientProvider locale={currentLocale} messages={messages}>
+    <NextIntlClientProvider locale={currentLocale} messages={messages} timeZone={defaultTimeZone}>
       {children}
     </NextIntlClientProvider>
   );

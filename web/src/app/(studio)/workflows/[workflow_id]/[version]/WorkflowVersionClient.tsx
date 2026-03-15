@@ -6,8 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
+import { WorkflowBatchStartPanel } from '@/components/workflow/WorkflowBatchStartPanel';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
 import { WorkflowRunStartPanel } from '@/components/workflow/WorkflowRunStartPanel';
+
+type ActivePanel = 'run' | 'batch' | null;
 
 export function WorkflowVersionClient({
   workflowId,
@@ -18,9 +21,10 @@ export function WorkflowVersionClient({
 }) {
   const t = useTranslations('workflows');
   const router = useRouter();
-  const [showStart, setShowStart] = useState(false);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [purposeExpanded, setPurposeExpanded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [batchError, setBatchError] = useState<string | null>(null);
   const [iterationError, setIterationError] = useState<string | null>(null);
   const workflowQuery = useQuery({
     queryKey: ['workflow', workflowId, version],
@@ -33,6 +37,7 @@ export function WorkflowVersionClient({
 
   useEffect(() => {
     setPurposeExpanded(false);
+    setActivePanel(null);
   }, [workflowId, version]);
 
   const startRunMutation = useMutation({
@@ -42,7 +47,34 @@ export function WorkflowVersionClient({
       router.push(`/runs/${payload.run_id}`);
     },
     onError: (mutationError) => {
-      setError((mutationError as Error).message);
+      setRunError((mutationError as Error).message);
+    },
+  });
+
+  const downloadTemplateMutation = useMutation({
+    mutationFn: () => api.downloadWorkflowInputTemplate(workflowId, version),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${workflowId}@${version}-inputs.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    },
+    onError: (mutationError) => {
+      setBatchError((mutationError as Error).message);
+    },
+  });
+
+  const startBatchMutation = useMutation({
+    mutationFn: (file: File) => api.startBatchRun(workflowId, version, file),
+    onSuccess: (payload) => {
+      router.push(`/runs/batches/${payload.batch_id}`);
+    },
+    onError: (mutationError) => {
+      setBatchError((mutationError as Error).message);
     },
   });
 
@@ -59,6 +91,12 @@ export function WorkflowVersionClient({
       setIterationError((mutationError as Error).message);
     },
   });
+
+  const togglePanel = (panel: Exclude<ActivePanel, null>) => {
+    setRunError(null);
+    setBatchError(null);
+    setActivePanel((current) => (current === panel ? null : panel));
+  };
 
   if (!workflow) {
     return (
@@ -124,7 +162,22 @@ export function WorkflowVersionClient({
             </button>
             <button
               type="button"
-              onClick={() => setShowStart((value) => !value)}
+              onClick={() => downloadTemplateMutation.mutate()}
+              disabled={downloadTemplateMutation.isPending}
+              className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+            >
+              {t('downloadTemplate')}
+            </button>
+            <button
+              type="button"
+              onClick={() => togglePanel('batch')}
+              className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+            >
+              {t('batchStart')}
+            </button>
+            <button
+              type="button"
+              onClick={() => togglePanel('run')}
               className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
             >
               {t('startRun')}
@@ -133,15 +186,26 @@ export function WorkflowVersionClient({
         </div>
         <p className="mt-3 text-xs text-stone-500">{t('iterateHint')}</p>
         {iterationError ? <p className="mt-2 text-xs text-rose-700">{iterationError}</p> : null}
-        {showStart ? (
+        {activePanel === 'run' ? (
           <WorkflowRunStartPanel
             descriptors={workflow.workflow_view.input_descriptors}
-            error={error}
+            error={runError}
             isSubmitting={startRunMutation.isPending}
-            onCancel={() => setShowStart(false)}
+            onCancel={() => setActivePanel(null)}
             onSubmit={(payload) => {
-              setError(null);
+              setRunError(null);
               startRunMutation.mutate(payload);
+            }}
+          />
+        ) : null}
+        {activePanel === 'batch' ? (
+          <WorkflowBatchStartPanel
+            error={batchError}
+            isSubmitting={startBatchMutation.isPending}
+            onCancel={() => setActivePanel(null)}
+            onSubmit={(file) => {
+              setBatchError(null);
+              startBatchMutation.mutate(file);
             }}
           />
         ) : null}

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, File, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -18,11 +21,13 @@ from pipeliner.persistence.repositories import (
     RunRepository,
     WorkflowRepository,
     AuthoringRepository,
+    BatchRunRepository,
 )
 from pipeliner.protocols.artifact import ArtifactManifest
 from pipeliner.protocols.callback import NodeCallbackPayload
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.artifact_service import ArtifactService
+from pipeliner.services.batch_run_service import BatchRunService
 from pipeliner.services.errors import (
     ConflictError,
     InvalidStateError,
@@ -41,6 +46,7 @@ from pipeliner.services.preview_service import PreviewService
 from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.report_service import ReportService
 from pipeliner.services.run_drive_coordinator import RunDriveCoordinator
+from pipeliner.services.batch_run_coordinator import BatchRunCoordinator
 from pipeliner.ui.views import render_index, render_run_view, render_workflow_view
 
 router = APIRouter()
@@ -156,6 +162,10 @@ def _run_driver(session: Session, request: Request) -> RunDriver:
         ArtifactRepository(session),
         request.app.state.settings,
     )
+
+
+def _batch_run_coordinator(request: Request) -> BatchRunCoordinator:
+    return request.app.state.batch_run_coordinator
 
 
 def _preview_service(session: Session, request: Request) -> PreviewService:
@@ -785,6 +795,75 @@ def workflow_view(
     return render_workflow_view(payload)
 
 
+@router.get("/api/workflows/{workflow_id}/versions/{version}/inputs/template.csv")
+def download_workflow_input_template(
+    workflow_id: str,
+    version: str,
+    request: Request,
+    session: SessionDep,
+) -> StreamingResponse:
+    service = BatchRunService(
+        BatchRunRepository(session),
+        RunRepository(session),
+        WorkflowRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+    csv_text = service.build_template_csv(workflow_id, version)
+    filename = f"{workflow_id}@{version}-inputs.csv"
+    return StreamingResponse(
+        io.StringIO(csv_text),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/api/workflows/{workflow_id}/versions/{version}/batch-runs")
+def create_batch_run(
+    workflow_id: str,
+    version: str,
+    request: Request,
+    session: SessionDep,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    raw = file.file.read()
+    try:
+        content = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValidationError("CSV 必须为 UTF-8 编码") from exc
+
+    service = BatchRunService(
+        BatchRunRepository(session),
+        RunRepository(session),
+        WorkflowRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+    rows = service.parse_csv_inputs(workflow_id, version, content)
+    batch = service.create_batch(workflow_id, version, rows)
+    session.commit()
+
+    batch_record = _batch_run_coordinator(request).start_batch(
+        batch.id,
+        _run_drive_coordinator(request),
+    )
+    return {
+        "batch_id": batch.id,
+        "workflow_id": batch.workflow_id,
+        "version": batch.workflow_version,
+        "status": batch.status,
+        "total_count": batch.total_count,
+        "success_count": batch.success_count,
+        "failed_count": batch.failed_count,
+        "error_message": batch.error_message,
+        "created_at": batch.created_at.isoformat() if batch.created_at else None,
+        "updated_at": batch.updated_at.isoformat() if batch.updated_at else None,
+        "started_at": batch.started_at.isoformat() if batch.started_at else None,
+        "ended_at": batch.ended_at.isoformat() if batch.ended_at else None,
+        "driver": batch_record,
+    }
+
+
 @router.post("/api/runs")
 def create_run(
     request_body: RunCreateRequest,
@@ -851,6 +930,54 @@ def list_runs(
 ) -> dict[str, Any]:
     service = _run_service(session, request)
     return {"runs": service.list_run_summaries(workflow_id=workflow_id)}
+
+
+@router.get("/api/batch-runs/{batch_id}")
+def get_batch_run(
+    batch_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = BatchRunService(
+        BatchRunRepository(session),
+        RunRepository(session),
+        WorkflowRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+    batch = service.get_batch_or_404(batch_id)
+    items = service.list_batch_items(batch_id)
+    return {
+        "batch": {
+            "batch_id": batch.id,
+            "workflow_id": batch.workflow_id,
+            "version": batch.workflow_version,
+            "status": batch.status,
+            "total_count": batch.total_count,
+            "success_count": batch.success_count,
+            "failed_count": batch.failed_count,
+            "error_message": batch.error_message,
+            "created_at": batch.created_at.isoformat() if batch.created_at else None,
+            "updated_at": batch.updated_at.isoformat() if batch.updated_at else None,
+            "started_at": batch.started_at.isoformat() if batch.started_at else None,
+            "ended_at": batch.ended_at.isoformat() if batch.ended_at else None,
+        },
+        "items": [
+            {
+                "item_id": item.id,
+                "row_index": item.row_index,
+                "inputs": item.inputs_json,
+                "run_id": item.run_id,
+                "status": item.status,
+                "error_message": item.error_message,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+                "started_at": item.started_at.isoformat() if item.started_at else None,
+                "ended_at": item.ended_at.isoformat() if item.ended_at else None,
+            }
+            for item in items
+        ],
+    }
 
 
 @router.get("/api/runs/{run_id}")
@@ -960,10 +1087,13 @@ def get_run_node_debug_details(
     if round_dir.exists():
         for file_path in sorted(round_dir.rglob("*")):
             if file_path.is_file():
+                stat = file_path.stat()
                 log_refs.append(
                     {
                         "path": str(file_path.relative_to(workspace.root)),
                         "kind": "file",
+                        "size_bytes": stat.st_size,
+                        "updated_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
                     }
                 )
 
@@ -1022,6 +1152,8 @@ def get_run_node_debug_details(
                 "kind": item.kind,
                 "storage_uri": item.storage_uri,
                 "digest": item.digest,
+                "node_id": item.node_id,
+                "round_no": item.round_no,
             }
             for item in artifacts
         ],
@@ -1074,6 +1206,16 @@ def get_run_artifacts(
             for item in service.list_run_artifacts(run_id)
         ]
     }
+
+
+@router.post("/api/runs/{run_id}/open-folder")
+def open_run_workspace(
+    run_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _preview_service(session, request)
+    return service.open_run_workspace(run_id)
 
 
 @router.get("/api/runs/{run_id}/artifacts/{artifact_id}/versions/{version}/preview")
@@ -1277,6 +1419,7 @@ def stream_claude_call(
 
     def event_stream():
         current_offset = offset
+        last_heartbeat = time.monotonic()
         if not settings.claude_trace_enabled:
             payload = {
                 "call_id": call_id,
@@ -1298,6 +1441,7 @@ def stream_claude_call(
                 chunk = handle.read(4096)
                 if chunk:
                     current_offset += len(chunk)
+                    last_heartbeat = time.monotonic()
                     payload = {
                         "call_id": call_id,
                         "offset": current_offset,
@@ -1323,9 +1467,21 @@ def stream_claude_call(
                     }
                     yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                     break
+                now = time.monotonic()
+                if now - last_heartbeat >= 1.0:
+                    yield ": keepalive\n\n"
+                    last_heartbeat = now
                 time.sleep(0.5)
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def install_exception_handlers(app: FastAPI) -> None:

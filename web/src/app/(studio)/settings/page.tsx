@@ -66,6 +66,11 @@ export default function SettingsPage() {
             <SettingRow label={t('labels.databasePath')} setting={settings.database.path} />
           </SettingsSection>
 
+          <SettingsSection title={t('sections.observability')}>
+            <SettingRow label={t('labels.claudeTrace')} setting={settings.observability.claude_trace_enabled} />
+            <p className="text-xs text-stone-500">{t('labels.claudeTraceHint')}</p>
+          </SettingsSection>
+
           <SettingsSection title={t('sections.runtimeGuards')}>
             <SettingRow label={t('labels.defaultTimeout')} setting={settings.runtime_guards.default_timeout} />
             <SettingRow

@@ -44,7 +44,7 @@ export default function AttentionQueuePage() {
         {runs.map((run) => (
           <Link
             key={run.run_id}
-            href={`/runs/${run.run_id}`}
+            href={`/runs/${run.run_id}?focus=attention`}
             className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm transition hover:border-amber-500 hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-4">

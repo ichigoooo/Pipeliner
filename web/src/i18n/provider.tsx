@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
+import { defaultTimeZone } from '@/i18n/config';
 
 interface I18nProviderProps {
   children: ReactNode;
@@ -11,7 +12,7 @@ interface I18nProviderProps {
 
 export function I18nProvider({ children, locale, messages }: I18nProviderProps) {
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone={defaultTimeZone}>
       {children}
     </NextIntlClientProvider>
   );

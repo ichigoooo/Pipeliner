@@ -3,8 +3,39 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
+import { useState } from 'react';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
+
+const MAX_PREVIEW_LENGTH = 120;
+
+function ExpandablePurpose({ purpose, t }: { purpose: string; t: (key: string) => string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!purpose) {
+    return <span className="text-stone-400">-</span>;
+  }
+
+  const needsExpansion = purpose.length > MAX_PREVIEW_LENGTH;
+  const displayText = expanded || !needsExpansion
+    ? purpose
+    : purpose.slice(0, MAX_PREVIEW_LENGTH) + '...';
+
+  return (
+    <div>
+      <p className="text-sm leading-6 text-stone-600 whitespace-pre-wrap">{displayText}</p>
+      {needsExpansion && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-xs font-medium text-amber-700 hover:text-amber-800 transition"
+        >
+          {expanded ? t('collapse') : t('expand')}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function WorkflowsPage() {
   const t = useTranslations('workflows');
@@ -58,7 +89,9 @@ export default function WorkflowsPage() {
                     {workflow.workflow_id}
                   </p>
                 </td>
-                <td className="px-6 py-5 text-sm leading-6 text-stone-600">{workflow.purpose}</td>
+                <td className="px-6 py-5">
+                  <ExpandablePurpose purpose={workflow.purpose ?? ''} t={tc} />
+                </td>
                 <td className="px-6 py-5 text-sm text-stone-700">{workflow.version_count}</td>
                 <td className="px-6 py-5 text-sm text-stone-700">
                   <div>{workflow.latest_version || '-'}</div>

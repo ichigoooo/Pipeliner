@@ -414,9 +414,7 @@ export function AuthoringStudio() {
             title={tClaude('authoringTitle')}
           />
 
-          <WorkflowInputEditor rawSpec={rawSpec} onChange={setRawSpec} />
-
-          <div className="grid min-h-0 gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="grid min-h-0 gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_280px]">  
           <div className="flex min-h-0 flex-col rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
@@ -498,14 +496,15 @@ export function AuthoringStudio() {
 
       <section className="min-h-0 rounded-[2rem] border border-stone-200 bg-white shadow-sm">
         {activeDraft ? (
-          <WorkflowWorkspace
-            spec={activeDraft.spec_json}
-            cards={activeDraft.workflow_view.cards}
-            nodes={activeDraft.graph.nodes as never[]}
-            edges={activeDraft.graph.edges as never[]}
-            lintWarnings={activeDraft.lint_report.warnings}
-            lintErrors={activeDraft.lint_report.errors}
-          />
+          <WorkflowWorkspace  
+            spec={activeDraft.spec_json}  
+            cards={activeDraft.workflow_view.cards}  
+            nodes={activeDraft.graph.nodes as never[]}  
+            edges={activeDraft.graph.edges as never[]}  
+            lintWarnings={activeDraft.lint_report.warnings}  
+            lintErrors={activeDraft.lint_report.errors}  
+            inputEditor={<WorkflowInputEditor rawSpec={rawSpec} onChange={setRawSpec} compact />}  
+          />  
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-stone-500">
             {t('empty.workspaceHint')}

@@ -21,19 +21,72 @@ def _parse_json_from_text(text: str) -> dict[str, Any]:
     try:
         return json.loads(content)
     except json.JSONDecodeError:
+        sanitized = _sanitize_json_text(content)
+        if sanitized != content:
+            try:
+                return json.loads(sanitized)
+            except json.JSONDecodeError:
+                pass
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end == -1 or end <= start:
             raise ValueError("authoring output is not valid JSON")
-        return json.loads(content[start : end + 1])
+        snippet = content[start : end + 1]
+        try:
+            return json.loads(snippet)
+        except json.JSONDecodeError:
+            return json.loads(_sanitize_json_text(snippet))
 
 
 def _load_result_payload(result_path: Path, stdout: str) -> dict[str, Any]:
     if result_path.exists():
         content = result_path.read_text(encoding="utf-8").strip()
         if content:
-            return json.loads(content)
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                return json.loads(_sanitize_json_text(content))
     return _parse_json_from_text(stdout)
+
+
+def _sanitize_json_text(text: str) -> str:
+    result: list[str] = []
+    in_string = False
+    escaped = False
+    length = len(text)
+    index = 0
+    while index < length:
+        char = text[index]
+        if not in_string:
+            if char == '"':
+                in_string = True
+            result.append(char)
+            index += 1
+            continue
+        if escaped:
+            result.append(char)
+            escaped = False
+            index += 1
+            continue
+        if char == "\\":
+            result.append(char)
+            escaped = True
+            index += 1
+            continue
+        if char == '"':
+            lookahead = index + 1
+            while lookahead < length and text[lookahead] in " \t\r\n":
+                lookahead += 1
+            if lookahead < length and text[lookahead] not in ",:]}":
+                result.append('\\"')
+            else:
+                in_string = False
+                result.append(char)
+            index += 1
+            continue
+        result.append(char)
+        index += 1
+    return "".join(result)
 
 
 def _truthy_env(name: str, default: bool) -> bool:

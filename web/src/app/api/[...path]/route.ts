@@ -5,30 +5,61 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_PIPELINER_API_BASE_URL ||
   'http://127.0.0.1:8000';
 
+async function readRequestBody(request: NextRequest): Promise<BodyInit | undefined> {
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    return undefined;
+  }
+
+  const contentType = request.headers.get('content-type') || '';
+  if (contentType.includes('multipart/form-data')) {
+    return request.formData();
+  }
+  if (contentType.includes('application/octet-stream')) {
+    return request.arrayBuffer();
+  }
+  return request.text();
+}
+
 async function forward(request: NextRequest, params: { path?: string[] }) {
-  const path = params.path?.join('/') ?? '';
+  const path = params.path?.join('/') || '';
   const search = request.nextUrl.search || '';
   const targetUrl = `${API_BASE_URL}/api/${path}${search}`;
-  const body =
-    request.method === 'GET' || request.method === 'HEAD'
-      ? undefined
-      : await request.text();
+  const contentType = request.headers.get('content-type');
+  const accept = request.headers.get('accept');
+  const headers = new Headers();
+  const body = await readRequestBody(request);
+
+  if (contentType && !contentType.includes('multipart/form-data')) {
+    headers.set('content-type', contentType);
+  }
+  if (accept) {
+    headers.set('accept', accept);
+  }
 
   const response = await fetch(targetUrl, {
     method: request.method,
-    headers: {
-      'content-type': request.headers.get('content-type') || 'application/json',
-    },
+    headers,
     body,
     cache: 'no-store',
   });
 
-  const text = await response.text();
-  return new NextResponse(text, {
+  const responseHeaders = new Headers(response.headers);
+  if (!responseHeaders.get('content-type')) {
+    responseHeaders.set('content-type', 'application/json');
+  }
+  if (!responseHeaders.get('cache-control')) {
+    responseHeaders.set('cache-control', 'no-store');
+  }
+  if (!response.body) {
+    const text = await response.text();
+    return new NextResponse(text, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  }
+  return new NextResponse(response.body, {
     status: response.status,
-    headers: {
-      'content-type': response.headers.get('content-type') || 'application/json',
-    },
+    headers: responseHeaders,
   });
 }
 
@@ -45,5 +76,5 @@ export async function POST(
 ) {
   return forward(request, await context.params);
 }
-export const maxDuration = 900;  
-  
+
+export const maxDuration = 900;

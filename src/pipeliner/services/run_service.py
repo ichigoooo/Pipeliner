@@ -217,6 +217,8 @@ class RunService:
             for item in detail["nodes"]
         }
         current_focus = self._select_current_focus(latest, call_map)
+        dispatchable = self._list_dispatchable_actions(run, latest)
+        summary = self._build_overview_summary(latest)
         return {
             "run_id": run_id,
             "status": run.status,
@@ -246,7 +248,78 @@ class RunService:
                 "result_status": None,
             },
             "current_focus": current_focus,
+            "summary": summary,
+            "dispatchable": dispatchable,
             "activity": self._build_activity_stream(run, detail["nodes"], latest, call_map),
+        }
+
+    def _list_dispatchable_actions(
+        self,
+        run: RunModel,
+        latest: dict[str, NodeRunModel],
+    ) -> list[dict[str, Any]]:
+        spec = self.get_run_spec(run)
+        actions: list[dict[str, Any]] = []
+        for node in spec.nodes:
+            node_run = latest.get(node.node_id)
+            if node_run is None:
+                continue
+            if node_run.status == NodeRunStatus.WAITING_EXECUTOR.value:
+                actions.append(
+                    {
+                        "kind": "executor",
+                        "node_id": node.node_id,
+                        "round_no": node_run.round_no,
+                    }
+                )
+                continue
+            if node_run.status == NodeRunStatus.WAITING_VALIDATOR.value:
+                for validator in node.validators:
+                    existing = self.callback_repo.get_validator_round_event(
+                        run.id,
+                        node.node_id,
+                        node_run.round_no,
+                        validator.validator_id,
+                    )
+                    if existing is None:
+                        actions.append(
+                            {
+                                "kind": "validator",
+                                "node_id": node.node_id,
+                                "round_no": node_run.round_no,
+                                "validator_id": validator.validator_id,
+                            }
+                        )
+        return actions
+
+    def _build_overview_summary(
+        self,
+        latest: dict[str, NodeRunModel],
+    ) -> dict[str, Any]:
+        node_counts: dict[str, int] = {}
+        attention_statuses = {
+            NodeRunStatus.BLOCKED.value,
+            NodeRunStatus.FAILED.value,
+            NodeRunStatus.TIMED_OUT.value,
+            NodeRunStatus.REWORK_LIMIT.value,
+            NodeRunStatus.STOPPED.value,
+        }
+        attention_nodes: list[dict[str, Any]] = []
+        for node_run in latest.values():
+            node_counts[node_run.status] = node_counts.get(node_run.status, 0) + 1
+            if node_run.status in attention_statuses:
+                attention_nodes.append(
+                    {
+                        "node_id": node_run.node_id,
+                        "round_no": node_run.round_no,
+                        "status": node_run.status,
+                        "waiting_for_role": node_run.waiting_for_role,
+                        "stop_reason": node_run.stop_reason,
+                    }
+                )
+        return {
+            "node_counts": node_counts,
+            "attention_nodes": attention_nodes,
         }
 
     def retry_node(

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
+import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -16,6 +17,32 @@ export default function RunsPage() {
   });
 
   const runs = runsQuery.data?.runs ?? [];
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [workflowFilter, setWorkflowFilter] = useState('');
+  const [onlyAttention, setOnlyAttention] = useState(false);
+
+  const statusOptions = useMemo(() => {
+    const values = Array.from(new Set(runs.map((item) => item.status)));
+    return ['all', ...values];
+  }, [runs]);
+
+  const filteredRuns = useMemo(() => {
+    return runs.filter((run) => {
+      if (statusFilter !== 'all' && run.status !== statusFilter) {
+        return false;
+      }
+      if (onlyAttention && (run.attention_node_count ?? 0) <= 0) {
+        return false;
+      }
+      if (workflowFilter.trim()) {
+        const target = workflowFilter.trim().toLowerCase();
+        if (!run.workflow_id.toLowerCase().includes(target)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [onlyAttention, runs, statusFilter, workflowFilter]);
 
   return (
     <div className="p-6 lg:p-8">
@@ -27,8 +54,42 @@ export default function RunsPage() {
         </p>
       </div>
 
+      <div className="mb-6 grid gap-3 rounded-[2rem] border border-stone-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_200px_180px]">
+        <label className="block text-xs uppercase tracking-[0.2em] text-stone-500">
+          {t('status')}
+          <select
+            className="mt-2 h-11 w-full rounded-2xl border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            {statusOptions.map((value) => (
+              <option key={value} value={value}>
+                {value === 'all' ? t('status') : value}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs uppercase tracking-[0.2em] text-stone-500">
+          Workflow
+          <input
+            className="mt-2 h-11 w-full rounded-2xl border border-stone-200 bg-stone-50 px-3 text-sm text-stone-900"
+            placeholder="workflow_id"
+            value={workflowFilter}
+            onChange={(event) => setWorkflowFilter(event.target.value)}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-stone-500">
+          <input
+            type="checkbox"
+            checked={onlyAttention}
+            onChange={(event) => setOnlyAttention(event.target.checked)}
+          />
+          {t('attentionNodes')}
+        </label>
+      </div>
+
       <div className="grid gap-4">
-        {runs.map((run) => (
+        {filteredRuns.map((run) => (
           <Link
             key={run.run_id}
             href={`/runs/${run.run_id}`}
@@ -51,6 +112,11 @@ export default function RunsPage() {
             </div>
           </Link>
         ))}
+        {filteredRuns.length === 0 ? (
+          <div className="rounded-[2rem] border border-dashed border-stone-300 bg-white p-12 text-center text-sm text-stone-500">
+            {t('noRuns')}
+          </div>
+        ) : null}
       </div>
     </div>
   );

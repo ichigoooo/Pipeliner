@@ -26,7 +26,9 @@ vi.mock('@/lib/api', () => ({
     driveRun: vi.fn(),
     previewRunArtifact: vi.fn(),
     openRunArtifactFolder: vi.fn(),
-    previewRunLog: vi.fn(),
+    previewRunLog: vi.fn(),  
+    dispatchExecutor: vi.fn(),  
+    dispatchValidator: vi.fn(),  
   },
 }));
 
@@ -94,6 +96,21 @@ describe('RunDetailPage', () => {
       status: 'needs_attention',
       stop_reason: 'blocked',
       workflow: { workflow_id: 'wf_test', version: 'v1', title: 'Workflow Test' },
+      summary: {
+        node_counts: { blocked: 1, completed: 1 },
+        attention_nodes: [
+          {
+            node_id: 'draft_article',
+            round_no: 2,
+            status: 'blocked',
+            waiting_for_role: 'executor',
+            stop_reason: 'blocked',
+          },
+        ],
+      },
+      dispatchable: [
+        { kind: 'executor', node_id: 'draft_article', round_no: 2 },
+      ],
       timeline: [
         {
           node_id: 'draft_article',
@@ -189,6 +206,8 @@ describe('RunDetailPage', () => {
                 kind: 'json',
                 storage_uri: 'runs/run_1/artifacts/artifact_1@v1',
                 digest: 'abc',
+                node_id: 'draft_article',
+                round_no: roundNo,
               },
             ]
           : [],
@@ -198,6 +217,8 @@ describe('RunDetailPage', () => {
               {
                 path: 'nodes/draft_article/rounds/2/executor.log',
                 kind: 'executor',
+                size_bytes: 2048,
+                updated_at: '2026-03-13T00:00:02Z',
               },
             ]
           : [],
@@ -282,7 +303,7 @@ describe('RunDetailPage', () => {
     expect(await screen.findByText('cb_1')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Artifacts'));
-    fireEvent.click(screen.getByText('artifact_1@v1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open folder' }));  
     expect(mockedApi.openRunArtifactFolder).toHaveBeenCalledWith('run_1', 'artifact_1', 'v1');
     expect(await screen.findByText('Opened folder: /tmp/run/artifacts/artifact_1@v1/payload')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
@@ -337,6 +358,11 @@ describe('RunDetailPage', () => {
       status: 'running',
       stop_reason: null,
       workflow: { workflow_id: 'wf_live', version: 'v2', title: 'Workflow Live' },
+      summary: {
+        node_counts: { waiting_executor: 1 },
+        attention_nodes: [],
+      },
+      dispatchable: [],
       timeline: [
         {
           node_id: 'draft_article',

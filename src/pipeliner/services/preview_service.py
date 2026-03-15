@@ -54,6 +54,20 @@ class PreviewService:
             "opened_path": str(target_path),
         }
 
+    def open_run_workspace(self, run_id: str) -> dict[str, Any]:
+        run = self.run_repo.get_run(run_id)
+        if run is None:
+            raise NotFoundError(f"未找到 run: {run_id}")
+        workspace = self.workspace.get_workspace(run.workflow_id, run.id)
+        target_path = workspace.root
+        if not target_path.exists():
+            raise NotFoundError(f"run workspace 不存在: {target_path}")
+        self._open_path(target_path)
+        return {
+            "run_id": run.id,
+            "opened_path": str(target_path),
+        }
+
     def preview_log(self, run_id: str, relative_path: str) -> dict[str, Any]:
         run = self.run_repo.get_run(run_id)
         if run is None:

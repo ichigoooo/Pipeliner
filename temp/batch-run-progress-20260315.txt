@@ -1,0 +1,161 @@
+批量启动工作流功能当前进展记录
+日期: 2026-03-15
+
+一、目标
+实现以下能力:
+1. 在工作流版本页下载 CSV 模板，表头为全部 workflow inputs。
+2. 用户填写 CSV 后上传，用于批量启动 run。
+3. 批次内串行执行，一次只跑一条输入。
+4. 在结果页聚合展示该批次每条输入对应 run 的状态，并支持一键打开结果目录。
+
+二、已完成进展
+1. 后端数据模型已补齐
+   - 已新增 batch_runs / batch_run_items 两张表。
+   - 文件:
+     - src/pipeliner/persistence/models.py
+     - alembic/versions/0b2e7d5a8c21_add_batch_runs.py
+
+2. 后端仓储与服务已初步完成
+   - 已新增 BatchRunRepository。
+   - 已新增 BatchRunService，包含:
+     - CSV 模板生成
+     - CSV 解析
+     - 按 input 类型自动转型
+     - 行级校验失败时标记失败并继续
+     - 批次创建 / item 状态更新
+   - 文件:
+     - src/pipeliner/persistence/repositories.py
+     - src/pipeliner/services/batch_run_service.py
+
+3. 批次串行调度器已初步完成
+   - 已新增 BatchRunCoordinator。
+   - 调度逻辑:
+     - 逐条取 pending item
+     - 创建 run
+     - 调用现有 RunDriveCoordinator 自动驱动
+     - 轮询 run 直到终态
+     - 再推进下一条
+   - 文件:
+     - src/pipeliner/services/batch_run_coordinator.py
+     - src/pipeliner/app.py
+
+4. 后端 API 已初步接入
+   - 已新增或接入:
+     - GET /api/workflows/{workflow_id}/versions/{version}/inputs/template.csv
+     - POST /api/workflows/{workflow_id}/versions/{version}/batch-runs
+     - GET /api/batch-runs/{batch_id}
+     - POST /api/runs/{run_id}/open-folder
+   - 文件:
+     - src/pipeliner/api/router.py
+
+5. run workspace 打开能力已补齐
+   - PreviewService 新增 open_run_workspace(run_id)。
+   - 文件:
+     - src/pipeliner/services/preview_service.py
+
+6. 前端文案已部分补充
+   - 已新增部分 workflows / batchRuns / status.pending 文案。
+   - 文件:
+     - web/src/i18n/messages/en.json
+     - web/src/i18n/messages/zh.json
+     - web/src/components/ui/StatusBadge.tsx
+
+7. 前端批量上传面板文件已创建
+   - 文件:
+     - web/src/components/workflow/WorkflowBatchStartPanel.tsx
+
+三、当前问题 / 未完成项
+1. 前端主接线尚未完成
+   - WorkflowVersionClient 还没有真正接入:
+     - 下载模板按钮
+     - 批量启动按钮
+     - 批量上传面板
+     - 创建 batch 后跳转结果页
+
+2. 批次结果页还没实现
+   - 尚未创建 /runs/batches/[batch_id] 页面。
+   - 尚未实现批次聚合展示、逐行状态展示、打开目录按钮。
+
+3. web/src/lib/api.ts 需要清理
+   - 已插入 BatchRun 相关接口和方法，但当前格式较乱。
+   - 当前不是最终可交付状态，继续开发前应先清理。
+   - 重点关注:
+     - BatchRunSummary / BatchRunItem / BatchRunDetail / RunWorkspaceOpenResult
+     - requestForm / requestBlob
+     - downloadWorkflowInputTemplate / startBatchRun / getBatchRun / openRunWorkspace
+
+4. WorkflowBatchStartPanel.tsx 仍需修正
+   - 当前 file input 的 onChange 写法有问题。
+   - 现状:
+     - setFile(event.target.files?.[0] ? null)
+   - 应改为:
+     - setFile(event.target.files?.[0] ?? null)
+
+5. 测试未补齐，未运行
+   - 尚未补 API 测试。
+   - 尚未补前端测试。
+   - 尚未执行 pytest / vitest / 构建验证。
+
+四、建议的下一步实施顺序
+1. 先清理 web/src/lib/api.ts
+   - 把新增类型和辅助请求函数整理为正常 TS 结构。
+   - 确保 startBatchRun 使用 FormData 上传。
+
+2. 修复 WorkflowBatchStartPanel.tsx
+   - 修正 onChange。
+   - 确认错误提示逻辑和按钮状态。
+
+3. 接入 WorkflowVersionClient
+   - 增加“下载模板”按钮。
+   - 增加“批量启动”按钮。
+   - 挂接 WorkflowBatchStartPanel。
+   - startBatchRun 成功后跳转到 /runs/batches/[batch_id]。
+
+4. 新增批次结果页
+   - 建议路径:
+     - web/src/app/(studio)/runs/batches/[batch_id]/page.tsx
+     - web/src/app/(studio)/runs/batches/[batch_id]/BatchRunDetailClient.tsx
+   - 页面需要:
+     - 批次摘要
+     - 行级列表
+     - run 详情链接
+     - 打开结果目录按钮
+     - 自动轮询刷新
+
+5. 接入 openRunWorkspace
+   - 页面按钮调用 POST /api/runs/{run_id}/open-folder。
+   - 对成功/失败给出提示。
+
+6. 补测试
+   - 后端:
+     - CSV 解析
+     - 非法行继续
+     - batch 创建与详情接口
+   - 前端:
+     - WorkflowVersionClient 的批量入口
+     - BatchRunDetailClient 的渲染与按钮行为
+
+7. 最后执行验证
+   - alembic upgrade
+   - 后端测试
+   - 前端测试 / 类型检查
+
+五、当前已新增或重点修改的文件
+- alembic/versions/0b2e7d5a8c21_add_batch_runs.py
+- src/pipeliner/services/batch_run_service.py
+- src/pipeliner/services/batch_run_coordinator.py
+- src/pipeliner/persistence/models.py
+- src/pipeliner/persistence/repositories.py
+- src/pipeliner/api/router.py
+- src/pipeliner/app.py
+- src/pipeliner/services/preview_service.py
+- web/src/components/workflow/WorkflowBatchStartPanel.tsx
+- web/src/lib/api.ts
+- web/src/i18n/messages/en.json
+- web/src/i18n/messages/zh.json
+- web/src/components/ui/StatusBadge.tsx
+
+六、额外说明
+1. 工作区当前本身还有不少用户已有改动，不全是本功能造成的。
+2. 本功能当前以后端主干已落地为主，前端尚未闭环。
+3. 继续开发时，应优先修正前端文件状态，再补页面与测试。

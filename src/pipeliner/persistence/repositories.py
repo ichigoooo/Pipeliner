@@ -9,6 +9,8 @@ from pipeliner.persistence.models import (
     AuthoringGenerationLogModel,
     AuthoringMessageModel,
     CallbackEventModel,
+    BatchRunItemModel,
+    BatchRunModel,
     NodeRunModel,
     RunModel,
     WorkflowDefinitionModel,
@@ -170,6 +172,44 @@ class RunRepository:
         for node_run in node_runs:
             latest[node_run.node_id] = node_run
         return latest
+
+
+class BatchRunRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create_batch(self, batch: BatchRunModel) -> BatchRunModel:
+        self.session.add(batch)
+        self.session.flush()
+        return batch
+
+    def create_items(self, items: list[BatchRunItemModel]) -> list[BatchRunItemModel]:
+        self.session.add_all(items)
+        self.session.flush()
+        return items
+
+    def get_batch(self, batch_id: str) -> BatchRunModel | None:
+        return self.session.get(BatchRunModel, batch_id)
+
+    def get_item(self, item_id: int) -> BatchRunItemModel | None:
+        return self.session.get(BatchRunItemModel, item_id)
+
+    def list_items(self, batch_id: str) -> list[BatchRunItemModel]:
+        stmt = (
+            select(BatchRunItemModel)
+            .where(BatchRunItemModel.batch_id == batch_id)
+            .order_by(BatchRunItemModel.row_index.asc())
+        )
+        return list(self.session.scalars(stmt))
+
+    def get_next_pending_item(self, batch_id: str) -> BatchRunItemModel | None:
+        stmt = (
+            select(BatchRunItemModel)
+            .where(BatchRunItemModel.batch_id == batch_id)
+            .where(BatchRunItemModel.status == "pending")
+            .order_by(BatchRunItemModel.row_index.asc())
+        )
+        return self.session.scalars(stmt).first()
 
 
 class CallbackRepository:

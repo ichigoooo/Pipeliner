@@ -13,7 +13,9 @@ import {
 interface WorkflowInputEditorProps {
   rawSpec: string;
   onChange: (nextRawSpec: string) => void;
+  compact?: boolean;
 }
+
 
 function parseSpec(rawSpec: string): Record<string, unknown> | null {
   try {
@@ -87,10 +89,16 @@ function emptyInput(): WorkflowInputDescriptor {
   };
 }
 
-export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorProps) {
+export function WorkflowInputEditor({ rawSpec, onChange, compact = false }: WorkflowInputEditorProps) {
   const t = useTranslations('authoring');
   const parsedSpec = parseSpec(rawSpec);
   const inputs = normalizeWorkflowInputSpecs(parsedSpec?.inputs);
+  const containerPadding = compact ? 'p-4' : 'p-5';
+  const sectionSpacing = compact ? 'mt-3 space-y-3' : 'mt-4 space-y-4';
+  const gridGap = compact ? 'gap-3' : 'gap-4';
+  const inputHeight = compact ? 'h-10' : 'h-11';
+  const headerSpacing = compact ? 'mt-1.5' : 'mt-2';
+  const buttonPadding = compact ? 'px-3 py-1.5' : 'px-4 py-2';
 
   const commitInputs = (nextInputs: WorkflowInputDescriptor[]) => {
     if (!parsedSpec) {
@@ -120,24 +128,24 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
   }
 
   return (
-    <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+    <div className={`rounded-[2rem] border border-stone-200 bg-white ${containerPadding} shadow-sm`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
             {t('inputs.title')}
           </p>
-          <p className="mt-2 text-xs text-stone-500">{t('inputs.description')}</p>
+          <p className={`${headerSpacing} text-xs text-stone-500`}>{t('inputs.description')}</p>
         </div>
         <button
           type="button"
           onClick={() => commitInputs([...inputs, emptyInput()])}
-          className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+          className={`rounded-full border border-stone-300 ${buttonPadding} text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900`}
         >
           {t('inputs.add')}
         </button>
       </div>
 
-      <div className="mt-4 space-y-4">
+      <div className={sectionSpacing}>
         {inputs.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 px-4 py-5 text-sm text-stone-500">
             {t('inputs.empty')}
@@ -161,13 +169,13 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className={`mt-4 grid ${gridGap} md:grid-cols-2`}>
                 <label className="space-y-2 text-sm text-stone-700">
                   <span className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
                     {t('inputs.fields.name')}
                   </span>
                   <input
-                    className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                    className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                     value={input.name}
                     onChange={(event) =>
                       updateInput(index, (current) => ({ ...current, name: event.target.value }))
@@ -180,7 +188,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                     {t('inputs.fields.type')}
                   </span>
                   <select
-                    className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                    className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                     value={input.type}
                     onChange={(event) => {
                       const nextType = event.target.value as WorkflowInputType;
@@ -222,7 +230,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                     {t('inputs.fields.summary')}
                   </span>
                   <input
-                    className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                    className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                     value={input.summary}
                     onChange={(event) =>
                       updateInput(index, (current) => ({ ...current, summary: event.target.value }))
@@ -278,7 +286,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                       />
                     ) : (
                       <input
-                        className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                        className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                         type={input.type === 'number' ? 'number' : 'text'}
                         value={String(input.default ?? '')}
                         onChange={(event) =>
@@ -302,7 +310,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                       {t('inputs.fields.options')}
                     </span>
                     <input
-                      className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                      className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                       value={input.options.join(', ')}
                       onChange={(event) =>
                         updateInput(index, (current) => ({
@@ -325,7 +333,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                         {t('inputs.fields.minimum')}
                       </span>
                       <input
-                        className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                        className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                         type="number"
                         value={input.minimum ?? ''}
                         onChange={(event) =>
@@ -342,7 +350,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                         {t('inputs.fields.maximum')}
                       </span>
                       <input
-                        className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                        className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                         type="number"
                         value={input.maximum ?? ''}
                         onChange={(event) =>
@@ -364,7 +372,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                         {t('inputs.fields.minLength')}
                       </span>
                       <input
-                        className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                        className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                         type="number"
                         value={input.min_length ?? ''}
                         onChange={(event) =>
@@ -381,7 +389,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                         {t('inputs.fields.maxLength')}
                       </span>
                       <input
-                        className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                        className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                         type="number"
                         value={input.max_length ?? ''}
                         onChange={(event) =>
@@ -398,7 +406,7 @@ export function WorkflowInputEditor({ rawSpec, onChange }: WorkflowInputEditorPr
                         {t('inputs.fields.pattern')}
                       </span>
                       <input
-                        className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none"
+                        className={`${inputHeight} w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm text-stone-900 outline-none`}
                         value={input.pattern ?? ''}
                         onChange={(event) =>
                           updateInput(index, (current) => ({

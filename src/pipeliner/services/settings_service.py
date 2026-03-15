@@ -85,6 +85,13 @@ class SettingsService:
                     "source": "derived_from_data_dir",
                 },
             },
+            "observability": {
+                "claude_trace_enabled": self._env_value(
+                    "PIPELINER_CLAUDE_TRACE_ENABLED",
+                    self.settings.claude_trace_enabled,
+                    True,
+                ),
+            },
             "runtime_guards": {
                 "default_timeout": self._env_value(
                     "PIPELINER_DEFAULT_TIMEOUT",

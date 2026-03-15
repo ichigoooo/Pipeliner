@@ -180,7 +180,10 @@ export function ClaudeTerminalPanel({ callId, title, defaultOpen = false }: Clau
             className="max-h-[260px] overflow-auto rounded-[1.5rem] border border-stone-200 bg-stone-950 p-4 text-xs text-stone-100"
           >
             {redacted ? (
-              <p className="text-amber-200">{t('redacted')}</p>
+              <>
+                <p className="text-amber-200">{t('redacted')}</p>
+                <p className="mt-2 text-xs text-amber-200">{t('redactedHint')}</p>
+              </>
             ) : content ? (
               <pre className="whitespace-pre-wrap break-all">{content}</pre>
             ) : (

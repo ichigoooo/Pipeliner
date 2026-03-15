@@ -191,6 +191,60 @@ class RunModel(Base):
     )
 
 
+class BatchRunModel(Base):
+    __tablename__ = "batch_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(String(255), index=True)
+    workflow_version: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(64), index=True)
+    total_count: Mapped[int] = mapped_column(Integer, default=0)
+    success_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, default=None)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    items: Mapped[list["BatchRunItemModel"]] = relationship(
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        order_by="BatchRunItemModel.row_index",
+    )
+
+
+class BatchRunItemModel(Base):
+    __tablename__ = "batch_run_items"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "row_index", name="uq_batch_row"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_id: Mapped[str] = mapped_column(ForeignKey("batch_runs.id", ondelete="CASCADE"), index=True)
+    row_index: Mapped[int] = mapped_column(Integer)
+    inputs_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    run_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(64), index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, default=None)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    batch: Mapped[BatchRunModel] = relationship(back_populates="items")
+
+
 class NodeRunModel(Base):
     __tablename__ = "node_runs"
     __table_args__ = (

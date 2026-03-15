@@ -159,6 +159,43 @@ export interface RunSummary {
   attention_node_count?: number;
 }
 
+export interface BatchRunSummary {
+  batch_id: string;
+  workflow_id: string;
+  version: string;
+  status: string;
+  total_count: number;
+  success_count: number;
+  failed_count: number;
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface BatchRunItem {
+  item_id: number;
+  row_index: number;
+  inputs: Record<string, unknown>;
+  run_id: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface BatchRunDetail {
+  batch: BatchRunSummary;
+  items: BatchRunItem[];
+}
+
+export interface BatchRunStartResponse extends BatchRunSummary {
+  driver: Record<string, unknown>;
+}
+
 export interface RunDetail {
   run: {
     id: string;
@@ -195,6 +232,11 @@ export interface RunArtifactFolderOpenResult {
   opened_path: string;
 }
 
+export interface RunWorkspaceOpenResult {
+  run_id: string;
+  opened_path: string;
+}
+
 export interface RunOverview {
   run_id: string;
   status: string;
@@ -204,6 +246,22 @@ export interface RunOverview {
     version: string;
     title: string;
   };
+  summary: {
+    node_counts: Record<string, number>;
+    attention_nodes: Array<{
+      node_id: string;
+      round_no: number;
+      status: string;
+      waiting_for_role: string | null;
+      stop_reason: string | null;
+    }>;
+  };
+  dispatchable: Array<{
+    kind: 'executor' | 'validator';
+    node_id: string;
+    round_no: number;
+    validator_id?: string;
+  }>;
   timeline: Array<{
     node_id: string;
     round_no: number;
@@ -279,10 +337,14 @@ export interface NodeRoundDetail {
     kind: string;
     storage_uri: string;
     digest: string;
+    node_id: string;
+    round_no: number;
   }>;
   log_refs: Array<{
     path: string;
     kind: string;
+    size_bytes: number | null;
+    updated_at: string | null;
   }>;
   claude_calls?: {
     executor_call_id: string | null;
@@ -316,6 +378,9 @@ export interface SettingsSnapshot {
     url: SettingValue<string>;
     path: SettingValue<string>;
   };
+  observability: {
+    claude_trace_enabled: SettingValue<boolean>;
+  };
   runtime_guards: {
     default_timeout: SettingValue<string>;
     default_max_rework_rounds: SettingValue<number>;
@@ -340,6 +405,11 @@ export interface SettingValue<T> {
   default: T;
 }
 
+async function readErrorMessage(response: Response): Promise<string> {
+  const payload = await response.json().catch(() => ({ detail: '请求失败' }));
+  return payload.detail || '请求失败';
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/${path}`, {
     ...init,
@@ -351,11 +421,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ detail: '请求失败' }));
-    throw new Error(payload.detail || '请求失败');
+    throw new Error(await readErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
+}
+
+async function requestForm<T>(path: string, form: FormData): Promise<T> {
+  const response = await fetch(`/api/${path}`, {
+    method: 'POST',
+    body: form,
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+  return response.json() as Promise<T>;
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(`/api/${path}`, {
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+  return response.blob();
 }
 
 export const api = {
@@ -435,6 +526,17 @@ export const api = {
       }
     ),
   listRuns: async () => request<{ runs: RunSummary[] }>('runs'),
+  downloadWorkflowInputTemplate: async (workflowId: string, version: string) =>
+    requestBlob(`workflows/${workflowId}/versions/${version}/inputs/template.csv`),
+  startBatchRun: async (workflowId: string, version: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return requestForm<BatchRunStartResponse>(
+      `workflows/${workflowId}/versions/${version}/batch-runs`,
+      form
+    );
+  },
+  getBatchRun: async (batchId: string) => request<BatchRunDetail>(`batch-runs/${batchId}`),
   startRun: async (
     workflowId: string,
     version: string,
@@ -484,10 +586,36 @@ export const api = {
         body: JSON.stringify(payload),
       }
     ),
+  dispatchExecutor: async (
+    runId: string,
+    nodeId: string,
+    payload: { round_no?: number; command_template?: string }
+  ) =>
+    request<Record<string, unknown>>(`runs/${runId}/nodes/${nodeId}/executor/dispatch`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  dispatchValidator: async (
+    runId: string,
+    nodeId: string,
+    validatorId: string,
+    payload: { round_no?: number; command_template?: string }
+  ) =>
+    request<Record<string, unknown>>(
+      `runs/${runId}/nodes/${nodeId}/validators/${validatorId}/dispatch`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
   previewRunArtifact: async (runId: string, artifactId: string, version: string) =>
     request<any>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/preview`),
   openRunArtifactFolder: async (runId: string, artifactId: string, version: string) =>
     request<RunArtifactFolderOpenResult>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/open-folder`, {
+      method: 'POST',
+    }),
+  openRunWorkspace: async (runId: string) =>
+    request<RunWorkspaceOpenResult>(`runs/${runId}/open-folder`, {
       method: 'POST',
     }),
   previewRunLog: async (runId: string, path: string) =>

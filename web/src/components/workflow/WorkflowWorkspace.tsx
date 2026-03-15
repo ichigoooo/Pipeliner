@@ -16,6 +16,7 @@ interface WorkflowWorkspaceProps {
   edges: Edge[];
   lintWarnings: string[];
   lintErrors?: string[];
+  inputEditor?: React.ReactNode;
 }
 
 export function WorkflowWorkspace({
@@ -25,12 +26,20 @@ export function WorkflowWorkspace({
   edges,
   lintWarnings,
   lintErrors = [],
+  inputEditor,
 }: WorkflowWorkspaceProps) {
   const t = useTranslations('workflow');
   const lintTab = t('lintTab', { count: lintWarnings.length + lintErrors.length });
   const [activeTab, setActiveTab] = useState(t('tabs.graph'));
   const [selectedNodeData, setSelectedNodeData] = useState<unknown>(null);
-  const tabs = [t('tabs.graph'), t('tabs.cards'), t('tabs.spec'), lintTab];
+  const inputTab = inputEditor ? t('tabs.inputs') : null;
+  const tabs = [
+    t('tabs.graph'),
+    t('tabs.cards'),
+    ...(inputTab ? [inputTab] : []),
+    t('tabs.spec'),
+    lintTab,
+  ];
 
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
     setSelectedNodeData(node.data?.spec || node.data || null);
@@ -97,6 +106,12 @@ export function WorkflowWorkspace({
                 </dl>
               </button>
             ))}
+          </div>
+        )}
+
+        {inputEditor && inputTab && activeTab === inputTab && (
+          <div className="h-full overflow-auto p-4">
+            {inputEditor}
           </div>
         )}
 

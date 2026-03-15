@@ -1,13 +1,13 @@
 'use client';
-
 import type { Node } from '@xyflow/react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import type { RunOverview } from '@/lib/api';
-import { prettyJson } from '@/lib/format';
+import { formatTimestamp, prettyJson } from '@/lib/format';
 import { formatStatusLabel as formatStatusText } from '@/lib/status';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { TabList } from '@/components/ui/TabList';
@@ -42,6 +42,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const tClaude = useTranslations('claudeTerminal');
   const tStatus = useTranslations('status');
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const focusParam = searchParams.get('focus');
+  const [focusApplied, setFocusApplied] = useState(false);
   const [detailTabIndex, setDetailTabIndex] = useState(0);
   const [selectedNode, setSelectedNode] = useState<NodeSelection | null>(null);
   const [inspectorData, setInspectorData] = useState<unknown>(null);
@@ -53,6 +56,8 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [artifactActionMessage, setArtifactActionMessage] = useState<string | null>(null);
   const [artifactActionError, setArtifactActionError] = useState<string | null>(null);
+  const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
 
   const runQuery = useQuery({
     queryKey: ['run', runId],
@@ -167,6 +172,37 @@ export function RunDetailClient({ runId }: { runId: string }) {
     }
   };
 
+  const copyArtifactUri = async (value: string) => {
+    setArtifactActionMessage(null);
+    setArtifactActionError(null);
+    try {
+      await navigator.clipboard.writeText(value);
+      setArtifactActionMessage(t('artifactActions.copied', { value }));
+    } catch (mutationError) {
+      setArtifactActionError((mutationError as Error).message);
+    }
+  };
+
+  const dispatchAction = async (action: RunOverview['dispatchable'][number]) => {
+    const key = `${action.kind}:${action.node_id}:${action.round_no}:${action.validator_id || ''}`;
+    setDispatchError(null);
+    setDispatchingKey(key);
+    try {
+      if (action.kind === 'executor') {
+        await api.dispatchExecutor(runId, action.node_id, { round_no: action.round_no });
+      } else if (action.validator_id) {
+        await api.dispatchValidator(runId, action.node_id, action.validator_id, { round_no: action.round_no });
+      } else {
+        throw new Error('validator_id missing');
+      }
+      await refresh();
+    } catch (mutationError) {
+      setDispatchError((mutationError as Error).message);
+    } finally {
+      setDispatchingKey(null);
+    }
+  };
+
   const run = runQuery.data;
   const overview = overviewQuery.data;
   const workflowDetail = workflowQuery.data;
@@ -233,6 +269,18 @@ export function RunDetailClient({ runId }: { runId: string }) {
     }
   }, [overview, selectedNode]);
 
+  const selectNodeRound = (selection: NodeSelection, resetTab = true) => {
+    setSelectedNode((current) =>
+      current?.node_id === selection.node_id && current.round_no === selection.round_no ? current : selection
+    );    if (resetTab) {
+      setDetailTabIndex(0);    }
+  }; 
+  useEffect(() => {
+    if (!overview || focusApplied || focusParam !== 'attention') {
+      return;    }
+    const attention = overview.summary?.attention_nodes || [];    if (attention.length > 0) {
+      selectNodeRound({ node_id: attention[0].node_id, round_no: attention[0].round_no });      setFocusApplied(true);    }
+  }, [focusApplied, focusParam, overview]); 
   if (!run || !overview || !workflowDetail) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-stone-500">
@@ -240,6 +288,11 @@ export function RunDetailClient({ runId }: { runId: string }) {
       </div>
     );
   }
+
+  const dispatchable = overview.dispatchable || [];  
+  const summary = overview.summary || { node_counts: {}, attention_nodes: [] };  
+  const attentionNodes = summary.attention_nodes;  
+  const nodeCounts = summary.node_counts;  
 
   const latestByNodeId = new Map(overview.latest_nodes.map((item) => [item.node_id, item]));
   const selectedLatest = selectedNode ? latestByNodeId.get(selectedNode.node_id) : null;
@@ -270,6 +323,33 @@ export function RunDetailClient({ runId }: { runId: string }) {
     return formatStatusText(status, tStatus);
   };
 
+  const formatBytes = (value: number | null | undefined) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (value < 1024) {
+      return `${value} B`;
+    }
+    if (value < 1024 * 1024) {
+      return `${(value / 1024).toFixed(1)} KB`;
+    }
+    if (value < 1024 * 1024 * 1024) {
+      return `${(value / 1024 / 1024).toFixed(1)} MB`;
+    }
+    return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  };
+
+  const buildLogMeta = (ref: { size_bytes?: number | null; updated_at?: string | null }) => {
+    const sizeLabel = formatBytes(ref.size_bytes);
+    if (sizeLabel && ref.updated_at) {
+      return t('logMeta', { size: sizeLabel, time: formatTimestamp(ref.updated_at) });
+    }
+    if (sizeLabel) {
+      return t('logMeta', { size: sizeLabel, time: '-' });
+    }
+    return t('logMetaMissing');
+  };
+
   const describeNodeState = ({
     waiting_for_role,
     stop_reason,
@@ -288,6 +368,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
     return formatStatusLabel(status);
   };
 
+  /*
   const selectNodeRound = (selection: NodeSelection, resetTab = true) => {
     setSelectedNode((current) =>
       current?.node_id === selection.node_id && current.round_no === selection.round_no ? current : selection
@@ -297,6 +378,19 @@ export function RunDetailClient({ runId }: { runId: string }) {
     }
   };
 
+  useEffect(() => {
+    if (!overview || focusApplied || focusParam !== 'attention') {
+      return;
+    }
+    const attention = overview.summary?.attention_nodes || [];  
+    if (attention.length > 0) {
+      selectNodeRound({ node_id: attention[0].node_id, round_no: attention[0].round_no });
+      setFocusApplied(true);
+    }
+  }, [focusApplied, focusParam, overview]);
+
+
+  */
   const graphNodes = (workflowDetail.graph.nodes as Node[]).map((node) => {
     const nodeId =
       typeof node.data === 'object' && node.data && 'node_id' in node.data
@@ -417,7 +511,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="grid min-h-0 gap-4">
+        <aside className="grid min-h-0 gap-4 overflow-y-auto">
           <section className="rounded-[2rem] border border-stone-200 bg-stone-950 p-5 text-white shadow-sm">
             <p className="text-xs uppercase tracking-[0.24em] text-stone-400">{t('summary.title')}</p>
             <div className="mt-4 grid gap-3">
@@ -443,6 +537,86 @@ export function RunDetailClient({ runId }: { runId: string }) {
                 <p className="mt-1 text-xs text-stone-300">
                   {overview.driver.mode ? t('driver.mode', { mode: overview.driver.mode }) : t('driver.idle')}
                 </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('statusCounts')}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-stone-200">
+                  {Object.entries(nodeCounts).length === 0 ? (
+                    <span className="text-xs text-stone-300">{t('none')}</span>
+                  ) : (
+                    Object.entries(nodeCounts).map(([status, count]) => (
+                      <span
+                        key={status}
+                        className="rounded-full bg-white/10 px-3 py-1 text-xs text-stone-100"
+                      >
+                        {status} · {count}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('attentionNodes')}</p>
+                {attentionNodes.length === 0 ? (
+                  <p className="mt-2 text-xs text-stone-300">{t('noAttentionNodes')}</p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {attentionNodes.map((node) => (
+                      <button
+                        key={`${node.node_id}-${node.round_no}`}
+                        type="button"
+                        onClick={() => selectNodeRound({ node_id: node.node_id, round_no: node.round_no })}
+                        className="w-full rounded-2xl border border-white/10 px-3 py-2 text-left transition hover:border-white/40"
+                      >
+                        <p className="text-sm text-white">{node.node_id}</p>
+                        <p className="mt-1 text-xs text-stone-300">
+                          {t('round', { round: node.round_no })} · {formatStatusLabel(node.status)}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('summary.nextActions')}</p>
+                <p className="mt-2 text-xs text-stone-300">{t('summary.dispatchableCount', { count: dispatchable.length })}</p>
+                {dispatchable.length === 0 ? (
+                  <p className="mt-2 text-xs text-stone-300">{t('noDispatchable')}</p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {dispatchable.map((action) => {
+                      const key = `${action.kind}:${action.node_id}:${action.round_no}:${action.validator_id || ''}`;
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 px-3 py-2"
+                        >
+                          <div>
+                            <p className="text-sm text-white">{action.kind}</p>
+                            <p className="mt-1 text-xs text-stone-300">
+                              {action.node_id} · {t('round', { round: action.round_no })}
+                              {action.validator_id ? ` · ${action.validator_id}` : ''}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => dispatchAction(action)}
+                            disabled={driverRunning || dispatchingKey === key}
+                            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-stone-400"
+                          >
+                            {t('summary.dispatchNow')}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {dispatchError ? <p className="mt-2 text-xs text-rose-300">{dispatchError}</p> : null}
               </div>
             </div>
 
@@ -689,6 +863,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
                           >
                             <p className="text-sm font-medium text-stone-900">{ref.kind}</p>
                             <p className="mt-1 text-xs text-stone-500">{ref.path}</p>
+                            <p className="mt-1 text-[11px] text-stone-400">{buildLogMeta(ref)}</p>
                           </button>
                         ))
                       )}
@@ -715,16 +890,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
                     nodeRound.artifacts.map((artifact) => (
                       <div
                         key={`${artifact.artifact_id}-${artifact.version}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => openArtifactFolder(artifact.artifact_id, artifact.version)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            void openArtifactFolder(artifact.artifact_id, artifact.version);
-                          }
-                        }}
-                        className="w-full cursor-pointer rounded-[1.75rem] border border-stone-200 px-5 py-4 text-left transition hover:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                        className="w-full rounded-[1.75rem] border border-stone-200 px-5 py-4 text-left"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -734,22 +900,30 @@ export function RunDetailClient({ runId }: { runId: string }) {
                             <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
                               {artifact.kind}
                             </p>
-                            <p className="mt-3 text-xs font-medium text-amber-700">
-                              {t('artifactActions.openFolder')}
-                            </p>
+                            <p className="mt-2 text-xs text-stone-500">{artifact.storage_uri}</p>
                           </div>
-                          <div className="flex flex-col items-end gap-3">
+                          <div className="flex flex-col items-end gap-2">
                             <button
                               type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void loadArtifactPreview(artifact.artifact_id, artifact.version);
-                              }}
+                              onClick={() => void openArtifactFolder(artifact.artifact_id, artifact.version)}
+                              className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
+                            >
+                              {t('preview.openFolder')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void copyArtifactUri(artifact.storage_uri)}
+                              className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+                            >
+                              {t('artifactActions.copyUri')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void loadArtifactPreview(artifact.artifact_id, artifact.version)}
                               className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
                             >
                               {t('artifactActions.preview')}
                             </button>
-                            <span className="text-right text-xs text-stone-500">{artifact.storage_uri}</span>
                           </div>
                         </div>
                       </div>
