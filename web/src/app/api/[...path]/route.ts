@@ -4,6 +4,28 @@ const API_BASE_URL =
   process.env.PIPELINER_API_BASE_URL ||
   process.env.NEXT_PUBLIC_PIPELINER_API_BASE_URL ||
   'http://127.0.0.1:8000';
+const DEFAULT_HEADERS_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_BODY_TIMEOUT_MS = 30 * 60 * 1000;
+
+const parseTimeoutMs = (value: string | undefined, fallback: number) => {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const headersTimeoutMs = parseTimeoutMs(
+  process.env.PIPELINER_API_HEADERS_TIMEOUT_MS,
+  DEFAULT_HEADERS_TIMEOUT_MS
+);
+const bodyTimeoutMs = parseTimeoutMs(
+  process.env.PIPELINER_API_BODY_TIMEOUT_MS,
+  DEFAULT_BODY_TIMEOUT_MS
+);
 
 async function readRequestBody(request: NextRequest): Promise<BodyInit | undefined> {
   if (request.method === 'GET' || request.method === 'HEAD') {
@@ -41,6 +63,7 @@ async function forward(request: NextRequest, params: { path?: string[] }) {
     headers,
     body,
     cache: 'no-store',
+    signal: AbortSignal.timeout(Math.max(headersTimeoutMs, bodyTimeoutMs)),
   });
 
   const responseHeaders = new Headers(response.headers);
@@ -77,4 +100,4 @@ export async function POST(
   return forward(request, await context.params);
 }
 
-export const maxDuration = 900;
+export const maxDuration = 1800;

@@ -43,6 +43,7 @@ from pipeliner.services.authoring_service import AuthoringService
 from pipeliner.services.claude_call import ClaudeCallStore
 from pipeliner.services.settings_service import SettingsService
 from pipeliner.services.preview_service import PreviewService
+from pipeliner.services.project_service import ProjectService
 from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.report_service import ReportService
 from pipeliner.services.run_drive_coordinator import RunDriveCoordinator
@@ -216,6 +217,10 @@ def _run_drive_coordinator(request: Request) -> RunDriveCoordinator:
 
 def _claude_call_store(request: Request) -> ClaudeCallStore:
     return ClaudeCallStore(request.app.state.settings)
+
+
+def _project_service(request: Request) -> ProjectService:
+    return ProjectService(request.app.state.settings)
 
 
 def _executor_dispatcher(
@@ -519,6 +524,17 @@ def get_authoring_session(
             else None
         ),
     }
+
+
+@router.post("/api/authoring/sessions/{session_id}/open-project")
+def open_authoring_project(
+    session_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _authoring_service(session, request)
+    workflow_id = service.resolve_session_workflow_id(session_id)
+    return _project_service(request).open_project_root(workflow_id)
 
 
 @router.post("/api/authoring/sessions/{session_id}/drafts")

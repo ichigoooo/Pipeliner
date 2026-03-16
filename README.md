@@ -13,6 +13,7 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - 真实 `Claude` executor / validator 接入
 - `run drive` 自动顺序驱动 run 到终态
 - 基于 CSV 的 batch run 模板下载、批量启动、串行调度与批次详情页
+- Authoring 一键打开 workflow 项目目录，直观查看 skills 与脚本
 
 ## 当前进展
 
@@ -32,6 +33,7 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - settings 溯源面板（生效值 + 来源）
 - batch run 数据模型、CSV 模板生成、逐行校验与串行调度
 - Workflow Studio 批量启动入口、批次详情页与一键打开 run workspace
+- Authoring 操作区一键打开 workflow 项目目录
 
 已验证：
 - 后端自动化测试通过：`23 passed`
@@ -54,6 +56,7 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - 预览 artifact payload 与 run log 片段
 - 使用 Workflow Studio 完成 authoring、workflow 浏览、run 调试与 settings 溯源
 - 通过 CSV 模板批量启动多条 run，并在批次详情页追踪每一行状态
+- 在 Authoring 中一键打开 workflow 项目目录并检查 skills / scripts
 
 ## 技术栈
 
@@ -140,13 +143,14 @@ npm run start
 1. 打开 `http://localhost:3000`
 2. 进入 `/authoring` 创建 authoring session（或从版本/attention 发起迭代）
 3. 在右侧编辑 canonical spec，保存、继续或使用 Claude 生成新草案
-4. lint 通过后发布为 workflow version
-5. 在 `/workflows` 选择版本并点击 `Start Run`
-6. 在 `/runs` 或 `/runs/{run_id}` 查看 timeline、callbacks、artifacts、context 与 log refs
-7. 在 run 详情中执行自动驱动，查看 stop reason 与步骤摘要
-8. 点击 artifact / log 预览内容（超限会提示路径）
-9. 在 `/attention` 处理中断状态并执行 retry/stop/迭代
-10. 在 `/settings` 查看运行时配置与来源
+4. 在 Authoring 操作区点击 `Open Project Folder` 打开 `projects/<workflow_id>/` 查看 metadata、skills 与脚本
+5. lint 通过后发布为 workflow version
+6. 在 `/workflows` 选择版本并点击 `Start Run`
+7. 在 `/runs` 或 `/runs/{run_id}` 查看 timeline、callbacks、artifacts、context 与 log refs
+8. 在 run 详情中执行自动驱动，查看 stop reason 与步骤摘要
+9. 点击 artifact / log 预览内容（超限会提示路径）
+10. 在 `/attention` 处理中断状态并执行 retry/stop/迭代
+11. 在 `/settings` 查看运行时配置与来源
 
 每个 workflow 会在 `projects/<workflow_id>/` 下生成工程目录，并自动创建 `.claude/skills/`。Authoring 生成时会优先使用这些 skills（workflow-authoring / workflow-iteration / workflow-review）。
 
@@ -284,6 +288,8 @@ export PIPELINER_CLAUDE_VALIDATOR_CMD="claude -p --permission-mode bypassPermiss
 
 ```bash
 export PIPELINER_API_BASE_URL="http://127.0.0.1:8000"
+export PIPELINER_API_HEADERS_TIMEOUT_MS=1800000
+export PIPELINER_API_BODY_TIMEOUT_MS=1800000
 ```
 
 建议直接复制模板后按需修改：

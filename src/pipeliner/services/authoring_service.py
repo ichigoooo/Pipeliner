@@ -157,6 +157,17 @@ class AuthoringService:
         self.get_session(session_id)
         return self.repo.list_drafts(session_id)
 
+    def resolve_session_workflow_id(self, session_id: str) -> str:
+        session = self.get_session(session_id)
+        draft = self.repo.get_latest_draft(session_id)
+        if draft and isinstance(draft.spec_json, dict):
+            metadata = draft.spec_json.get("metadata", {})
+            if isinstance(metadata, dict):
+                workflow_id = metadata.get("workflow_id")
+                if workflow_id:
+                    return workflow_id
+        return session.published_workflow_id or session_id
+
     def publish(self, session_id: str, revision: int) -> dict[str, Any]:
         session = self.get_session(session_id)
         draft = self.get_draft(session_id, revision)
