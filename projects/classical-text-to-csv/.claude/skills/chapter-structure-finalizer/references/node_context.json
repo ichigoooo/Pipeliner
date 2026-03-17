@@ -1,0 +1,127 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.5.0"
+  },
+  "skill": {
+    "name": "chapter-structure-finalizer",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "chapter_structure_finalize",
+  "node_spec": {
+    "node_id": "chapter_structure_finalize",
+    "title": "篇章结构定稿与文档拆分",
+    "purpose": "基于切块清单、候选章节线索和预处理全文，生成最终的结构化章节列表，并将原始文本按照篇章划分为单独的文档文件（一篇章一个文档），供后续批量处理",
+    "archetype": "recognize-structure",
+    "depends_on": [
+      "text_preprocessing",
+      "text_chunking",
+      "chapter_outline_scan"
+    ],
+    "inputs": [
+      {
+        "name": "preprocessed_text",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_preprocessing",
+          "output": "preprocessed_text"
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "预处理后的全文"
+      },
+      {
+        "name": "text_chunks_dir",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_chunking",
+          "output": "text_chunks_dir"
+        },
+        "shape": "directory",
+        "required": true,
+        "summary": "全文切块目录，供核对局部线索与原文上下文"
+      },
+      {
+        "name": "chunk_manifest",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_chunking",
+          "output": "chunk_manifest"
+        },
+        "shape": "structured_data",
+        "required": true,
+        "summary": "切块清单，帮助将候选边界回写为全书连续范围"
+      },
+      {
+        "name": "chapter_outline_candidates",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "chapter_outline_scan",
+          "output": "chapter_outline_candidates"
+        },
+        "shape": "structured_data",
+        "required": true,
+        "summary": "候选章节边界和标题线索"
+      },
+      {
+        "name": "structure_hint",
+        "from": {
+          "kind": "workflow_input",
+          "name": "structure_hint",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "篇章结构提示，帮助最终定稿"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "chapters_structure",
+        "shape": "structured_data",
+        "summary": "最终识别出的篇章结构列表，每个篇章包含标题、类型和内容范围"
+      },
+      {
+        "name": "chapter_files_dir",
+        "shape": "directory",
+        "summary": "篇章文档目录，每个篇章保存为单独的文本文件"
+      }
+    ],
+    "executor": {
+      "skill": "chapter-structure-finalizer"
+    },
+    "validators": [
+      {
+        "validator_id": "chapter-structure-check",
+        "skill": "chapter-structure-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "已生成最终章节结构并将每篇章保存为单独文档文件",
+      "pass_condition": [
+        "篇章划分合理，符合文本结构特征",
+        "每个篇章都有明确标题",
+        "篇章之间无重叠、无遗漏",
+        "原文所有内容都被分配到相应篇章",
+        "每篇章已保存为单独的文档文件"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "chapters_structure",
+        "chapter_files_dir"
+      ]
+    }
+  },
+  "updated_at": "2026-03-17T07:49:48.808284+00:00"
+}

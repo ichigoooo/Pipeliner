@@ -86,6 +86,42 @@ def test_dispatch_validator_pass_activates_downstream(client, workflow_fixture, 
     assert final_review["status"] == "waiting_executor"
 
 
+def test_dispatch_validator_pass_with_versioned_target_artifact(client, workflow_fixture, settings) -> None:
+    _register_workflow(client, workflow_fixture)
+    run = _start_run(client, "mvp-review-loop", "0.1.0")
+    _dispatch_executor(client, settings, run["run_id"])
+
+    script = Path("tests/fixtures/mock_claude_validator.py").resolve()
+    command = f"{sys.executable} {script} pass_versioned"
+    with client.app.state.db.session() as session:
+        dispatcher = ClaudeValidatorDispatcher(
+            RunRepository(session),
+            WorkflowRepository(session),
+            CallbackRepository(session),
+            ArtifactRepository(session),
+            settings,
+        )
+        result = dispatcher.dispatch(
+            run_id=run["run_id"],
+            node_id="draft_article",
+            validator_id="content-review",
+            command_template=command,
+        )
+        assert result["status"] == "pass"
+        assert result["runtime"]["duplicate"] is False
+
+    detail = client.get(f"/api/runs/{run['run_id']}")
+    assert detail.status_code == 200
+    draft_rounds = [
+        item for item in detail.json()["nodes"] if item["node_id"] == "draft_article"
+    ]
+    assert draft_rounds[-1]["status"] == "passed"
+    final_review = next(
+        item for item in detail.json()["nodes"] if item["node_id"] == "final_review"
+    )
+    assert final_review["status"] == "waiting_executor"
+
+
 def test_dispatch_validator_revise_creates_next_round(client, workflow_fixture, settings) -> None:
     _register_workflow(client, workflow_fixture)
     run = _start_run(client, "mvp-review-loop", "0.1.0")

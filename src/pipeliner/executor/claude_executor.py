@@ -25,11 +25,13 @@ from pipeliner.protocols.callback import (
 )
 from pipeliner.protocols.workflow import WorkflowNodeSpec
 from pipeliner.runtime import RuntimeCoordinator
+from pipeliner.runtime.guards import parse_duration
 from pipeliner.services.artifact_service import ArtifactService
 from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
 from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.run_service import RunService
 from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
+from pipeliner.services.execution_trace import ExecutionTraceRecorder
 from pipeliner.types import (
     ActorRole,
     ArtifactKind,
@@ -99,10 +101,38 @@ class ClaudeExecutorDispatcher:
             node_run.round_no,
         )
         executor_dir = dirs["executor_dir"]
+        self.project_initializer.ensure_node_skills(
+            run.workflow_id,
+            spec.model_dump(by_alias=True, mode="json"),
+        )
         project_root = self.project_initializer.ensure_project_root(run.workflow_id)
+        mirror_dir = (
+            project_root
+            / ".pipeliner"
+            / "logs"
+            / "runs"
+            / run.id
+            / node.node_id
+            / "rounds"
+            / str(node_run.round_no)
+            / "executor"
+        )
+        trace_recorder = ExecutionTraceRecorder(
+            executor_dir / "execution_events.jsonl",
+            mirror_dir / "execution_events.jsonl",
+        )
         context_path = executor_dir / "context.json"
         if not context_path.exists():
             raise NotFoundError(f"executor context 文件不存在: {context_path}")
+
+        skill_name = node.executor.skill if node.executor else None
+        skill_root = (
+            project_root / ".claude" / "skills" / skill_name
+            if isinstance(skill_name, str) and skill_name
+            else None
+        )
+        skill_file = skill_root / "SKILL.md" if skill_root is not None else None
+        skill_reference = skill_root / "references" / "node_context.json" if skill_root is not None else None
 
         targets = self._build_targets(run, node)
         for target in targets:
@@ -116,6 +146,9 @@ class ClaudeExecutorDispatcher:
             "node_id": node.node_id,
             "round_no": node_run.round_no,
             "context_file": str(context_path),
+            "executor_skill": skill_name,
+            "executor_skill_file": str(skill_file) if skill_file is not None else None,
+            "executor_skill_reference": str(skill_reference) if skill_reference is not None else None,
             "targets": [
                 {
                     "artifact_id": target.artifact_id,
@@ -128,6 +161,16 @@ class ClaudeExecutorDispatcher:
                 for target in targets
             ],
         }
+        trace_recorder.log(
+            "dispatch_prepared",
+            run_id=run.id,
+            node_id=node.node_id,
+            round_no=node_run.round_no,
+            executor_skill=skill_name,
+            context_file=str(context_path),
+            executor_dir=str(executor_dir),
+            targets=[target["absolute_path"] for target in task_payload["targets"]],
+        )
         task_path = executor_dir / "executor_task.json"
         task_path.write_text(
             json.dumps(task_payload, ensure_ascii=False, indent=2),
@@ -149,6 +192,12 @@ class ClaudeExecutorDispatcher:
                 "round_no": node_run.round_no,
             },
             command=command,
+            mirror_dir=mirror_dir,
+        )
+        trace_recorder.log(
+            "claude_call_registered",
+            call_id=call_session.call_id,
+            command=" ".join(command),
         )
         self.run_service.workspace.write_json(
             executor_dir / "claude_call.json",
@@ -163,10 +212,16 @@ class ClaudeExecutorDispatcher:
             output_session=call_session,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
+            mirror_stdout_path=mirror_dir / "stdout.log",
+            mirror_stderr_path=mirror_dir / "stderr.log",
+            trace_recorder=trace_recorder,
+            first_byte_timeout=self._first_byte_timeout_seconds(spec),
         )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         error_message = None
-        if result.timed_out:
+        if result.first_byte_timed_out:
+            error_message = "executor first byte timeout"
+        elif result.timed_out:
             error_message = "executor command timeout"
         elif result.returncode != 0:
             error_message = f"executor command failed(exit={result.returncode})"
@@ -176,13 +231,26 @@ class ClaudeExecutorDispatcher:
             error_message=error_message,
             duration_ms=duration_ms,
         )
+        trace_recorder.log(
+            "claude_call_completed",
+            call_id=call_session.call_id,
+            status="completed" if result.returncode == 0 else "failed",
+            exit_code=result.returncode,
+            error_message=error_message,
+            duration_ms=duration_ms,
+        )
 
         if result.returncode != 0:
+            trace_recorder.log(
+                "executor_failed",
+                reason=error_message or f"executor command failed(exit={result.returncode})",
+            )
+            failure_message = error_message or f"executor command failed(exit={result.returncode})"
             payload = self._build_failure_callback(
                 run_id=run.id,
                 node_id=node.node_id,
                 round_no=node_run.round_no,
-                message=f"executor command failed(exit={result.returncode})",
+                message=failure_message,
             )
             result = self.runtime.submit_callback(payload)
             response = self._failure_result(run, node, node_run, payload.event_id, result)
@@ -190,8 +258,14 @@ class ClaudeExecutorDispatcher:
             return response
 
         try:
+            trace_recorder.log("artifact_publish_started")
             manifests = self._publish_manifests(run, node, node_run.round_no, targets)
+            trace_recorder.log(
+                "artifact_publish_succeeded",
+                artifacts=[f"{manifest.artifact_id}@{manifest.version}" for manifest in manifests],
+            )
         except ValidationError as exc:
+            trace_recorder.log("artifact_publish_failed", error=str(exc))
             payload = self._build_failure_callback(
                 run_id=run.id,
                 node_id=node.node_id,
@@ -208,7 +282,13 @@ class ClaudeExecutorDispatcher:
             node_run.round_no,
             manifests,
         )
+        trace_recorder.log("callback_submit_started", event_id=callback_payload.event_id)
         result = self.runtime.submit_callback(callback_payload)
+        trace_recorder.log(
+            "callback_submit_succeeded",
+            event_id=callback_payload.event_id,
+            run_status=result.get("run_status"),
+        )
         return {
             "run_id": run.id,
             "node_id": node.node_id,
@@ -402,6 +482,16 @@ class ClaudeExecutorDispatcher:
             )
             for item in task_payload["targets"]
         )
+        skill_lines = ""
+        if task_payload.get("executor_skill"):
+            skill_lines = (
+                f"- executor_skill: `{task_payload['executor_skill']}`\n"
+                f"- skill_file: `{task_payload.get('executor_skill_file')}`\n"
+                f"- skill_reference: `{task_payload.get('executor_skill_reference')}`\n\n"
+                "执行要求：\n"
+                "1. 先阅读 skill_file 和 skill_reference，再决定如何执行该节点。\n"
+                "2. 产出逻辑应优先遵循 executor_skill 对应的工作方式，而不是泛化地自由发挥。\n\n"
+            )
         return (
             "# Pipeliner Claude Executor Task\n\n"
             "你是节点 executor。请读取上下文并产出交付物。\n\n"
@@ -409,6 +499,7 @@ class ClaudeExecutorDispatcher:
             f"- node_id: `{task_payload['node_id']}`\n"
             f"- round_no: `{task_payload['round_no']}`\n"
             f"- context_file: `{task_payload['context_file']}`\n\n"
+            f"{skill_lines}"
             "必须写入以下目标路径：\n"
             f"{targets}\n\n"
             "约束：\n"
@@ -425,6 +516,12 @@ class ClaudeExecutorDispatcher:
         if not numeric.isdigit():
             return "v1"
         return f"v{int(numeric) + 1}"
+
+    def _first_byte_timeout_seconds(self, spec) -> float | None:
+        try:
+            return parse_duration(spec.runtime_guards_or_default().first_byte_timeout).total_seconds()
+        except Exception:
+            return None
 
     def _shape_to_kind(self, shape: str) -> ArtifactKind:
         normalized = shape.lower()

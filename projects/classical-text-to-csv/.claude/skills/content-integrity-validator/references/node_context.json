@@ -2,50 +2,67 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.2.0"
+    "version": "0.5.0"
   },
   "skill": {
     "name": "content-integrity-validator",
     "role": "validator",
     "validator_id": "content-integrity-check"
   },
-  "node_id": "semantic_segmentation",
+  "node_id": "chapter_batch_segmentation",
   "node_spec": {
-    "node_id": "semantic_segmentation",
-    "title": "语义分段",
-    "purpose": "根据语义块对每个篇章的内容进行合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段，确保段落便于后续阅读时比对翻译",
+    "node_id": "chapter_batch_segmentation",
+    "title": "批量语义分段",
+    "purpose": "对每个篇章文档进行批量语义分段处理，根据语义块将每个篇章内容合理分段，每段包含 3-5 句话或一个完整的语义块，不基于原始换行符机械分段",
     "archetype": "segment-content",
     "depends_on": [
-      "chapter_recognition"
+      "chapter_structure_finalize"
     ],
     "inputs": [
+      {
+        "name": "chapter_files_dir",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "chapter_structure_finalize",
+          "output": "chapter_files_dir"
+        },
+        "shape": "directory",
+        "required": true,
+        "summary": "篇章文档目录，包含每个篇章的单独文本文件"
+      },
       {
         "name": "chapters_structure",
         "from": {
           "kind": "node_output",
           "name": null,
-          "node_id": "chapter_recognition",
+          "node_id": "chapter_structure_finalize",
           "output": "chapters_structure"
         },
         "shape": "structured_data",
         "required": true,
-        "summary": "识别出的篇章结构列表"
+        "summary": "篇章结构信息，用于指导分段处理"
       }
     ],
     "outputs": [
       {
-        "name": "segmented_chapters",
+        "name": "segmented_chapters_dir",
+        "shape": "directory",
+        "summary": "语义分段后的篇章文档目录，每篇章包含多个段落及其序号"
+      },
+      {
+        "name": "segmentation_manifest",
         "shape": "structured_data",
-        "summary": "语义分段后的篇章列表，每个篇章包含多个段落，每段有序号和内容"
+        "summary": "分段处理清单，记录每个篇章的分段统计信息"
       }
     ],
     "executor": {
-      "skill": "semantic-text-segmentation"
+      "skill": "chapter-batch-segmentation"
     },
     "validators": [
       {
-        "validator_id": "segmentation-quality-check",
-        "skill": "segmentation-quality-validator"
+        "validator_id": "batch-segmentation-check",
+        "skill": "batch-segmentation-validator"
       },
       {
         "validator_id": "content-integrity-check",
@@ -53,12 +70,13 @@
       }
     ],
     "acceptance": {
-      "done_means": "所有篇章的文本已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
+      "done_means": "所有篇章文档已按语义块合理分段，每段 3-5 句话或一个完整语义单元",
       "pass_condition": [
         "分段基于语义而非原始换行符",
         "每段长度适中（3-5 句话或一个语义块）",
         "原文内容无遗漏、无错误修改",
-        "各篇章内的段落序号连续正确"
+        "各篇章内的段落序号连续正确",
+        "所有篇章文档都已处理完成"
       ]
     },
     "gate": {
@@ -66,9 +84,10 @@
     },
     "handoff": {
       "outputs": [
-        "segmented_chapters"
+        "segmented_chapters_dir",
+        "segmentation_manifest"
       ]
     }
   },
-  "updated_at": "2026-03-13T02:10:44.027586+00:00"
+  "updated_at": "2026-03-17T07:49:48.809062+00:00"
 }

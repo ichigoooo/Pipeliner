@@ -10,7 +10,7 @@ import yaml
 from pipeliner.persistence.models import WorkflowDefinitionModel, WorkflowVersionModel
 from pipeliner.persistence.repositories import WorkflowRepository
 from pipeliner.protocols.workflow import WorkflowSpec, validate_workflow_input_value
-from pipeliner.services.errors import NotFoundError, ValidationError
+from pipeliner.services.errors import ConflictError, NotFoundError, ValidationError
 
 
 @dataclass(slots=True)
@@ -49,6 +49,14 @@ class WorkflowService:
 
     def register_spec(self, raw_spec: dict) -> WorkflowVersionModel:
         spec, warnings = self.validate_spec(raw_spec)
+        existing = self.repo.get_version(spec.metadata.workflow_id, spec.metadata.version)
+        if existing is not None:
+            canonical_spec = spec.model_dump(by_alias=True, mode="json")
+            if existing.spec_json == canonical_spec:
+                return existing
+            raise ConflictError(
+                f"workflow {spec.metadata.workflow_id}@{spec.metadata.version} 已存在，请更新 spec.metadata.version 后再发布"
+            )
         definition = self.repo.create_or_update_definition(
             workflow_id=spec.metadata.workflow_id,
             title=spec.metadata.title,

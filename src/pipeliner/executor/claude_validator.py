@@ -28,10 +28,12 @@ from pipeliner.protocols.callback import (
 )
 from pipeliner.protocols.workflow import NodeValidatorSpec, WorkflowNodeSpec
 from pipeliner.runtime import RuntimeCoordinator
+from pipeliner.runtime.guards import parse_duration
 from pipeliner.services.errors import ConflictError, InvalidStateError, NotFoundError
 from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.run_service import RunService
 from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
+from pipeliner.services.execution_trace import ExecutionTraceRecorder
 from pipeliner.types import ExecutionStatus, NodeRunStatus, VerdictStatus
 
 
@@ -111,6 +113,22 @@ class ClaudeValidatorDispatcher:
             node_run.round_no,
         )
         project_root = self.project_initializer.ensure_project_root(run.workflow_id)
+        mirror_dir = (
+            project_root
+            / ".pipeliner"
+            / "logs"
+            / "runs"
+            / run.id
+            / node.node_id
+            / "rounds"
+            / str(node_run.round_no)
+            / "validators"
+            / validator.validator_id
+        )
+        trace_recorder = ExecutionTraceRecorder(
+            dirs["validators_dir"] / f"{validator_id}.events.jsonl",
+            mirror_dir / "execution_events.jsonl",
+        )
         context_path = dirs["validators_dir"] / f"{validator_id}.json"
         if not context_path.exists():
             raise NotFoundError(f"validator context 文件不存在: {context_path}")
@@ -124,6 +142,16 @@ class ClaudeValidatorDispatcher:
             "context_file": str(context_path),
             "result_file": str(result_path),
         }
+        trace_recorder.log(
+            "dispatch_prepared",
+            run_id=run.id,
+            node_id=node.node_id,
+            round_no=node_run.round_no,
+            validator_id=validator.validator_id,
+            validator_skill=validator.skill,
+            context_file=str(context_path),
+            result_file=str(result_path),
+        )
         task_path = dirs["validators_dir"] / f"{validator_id}.task.json"
         task_path.write_text(
             json.dumps(task_payload, ensure_ascii=False, indent=2),
@@ -152,6 +180,12 @@ class ClaudeValidatorDispatcher:
                 "validator_id": validator.validator_id,
             },
             command=command,
+            mirror_dir=mirror_dir,
+        )
+        trace_recorder.log(
+            "claude_call_registered",
+            call_id=call_session.call_id,
+            command=" ".join(command),
         )
         self.run_service.workspace.write_json(
             dirs["validators_dir"] / f"{validator_id}.claude_call.json",
@@ -166,10 +200,16 @@ class ClaudeValidatorDispatcher:
             output_session=call_session,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
+            mirror_stdout_path=mirror_dir / "stdout.log",
+            mirror_stderr_path=mirror_dir / "stderr.log",
+            trace_recorder=trace_recorder,
+            first_byte_timeout=self._first_byte_timeout_seconds(spec),
         )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         error_message = None
-        if result.timed_out:
+        if result.first_byte_timed_out:
+            error_message = "validator first byte timeout"
+        elif result.timed_out:
             error_message = "validator command timeout"
         elif result.returncode != 0:
             error_message = f"validator command failed(exit={result.returncode})"
@@ -179,14 +219,27 @@ class ClaudeValidatorDispatcher:
             error_message=error_message,
             duration_ms=duration_ms,
         )
+        trace_recorder.log(
+            "claude_call_completed",
+            call_id=call_session.call_id,
+            status="completed" if result.returncode == 0 else "failed",
+            exit_code=result.returncode,
+            error_message=error_message,
+            duration_ms=duration_ms,
+        )
 
         if result.returncode != 0:
+            trace_recorder.log(
+                "validator_failed",
+                reason=f"validator command failed(exit={result.returncode})",
+            )
+            failure_message = error_message or f"validator command failed(exit={result.returncode})"
             payload = self._build_failure_callback(
                 run_id=run.id,
                 node_id=node.node_id,
                 round_no=node_run.round_no,
                 validator_id=validator.validator_id,
-                message=f"validator command failed(exit={result.returncode})",
+                message=failure_message,
             )
             result = self.runtime.submit_callback(payload)
             response = self._failure_result(run, node, node_run, payload.event_id, result)
@@ -207,6 +260,7 @@ class ClaudeValidatorDispatcher:
             return response
 
         try:
+            trace_recorder.log("validator_result_loading_started")
             result_payload = self._load_result_payload(result_path, context_path)
             callback_payload = self._build_result_callback(
                 run_id=run.id,
@@ -215,7 +269,12 @@ class ClaudeValidatorDispatcher:
                 validator_id=validator.validator_id,
                 result_payload=result_payload,
             )
+            trace_recorder.log(
+                "validator_result_loaded",
+                verdict_status=callback_payload.verdict.status.value if callback_payload.verdict else None,
+            )
         except (PydanticValidationError, ValueError) as exc:
+            trace_recorder.log("validator_result_invalid", error=str(exc))
             payload = self._build_failure_callback(
                 run_id=run.id,
                 node_id=node.node_id,
@@ -228,7 +287,13 @@ class ClaudeValidatorDispatcher:
             response["claude_call_id"] = call_session.call_id
             return response
 
+        trace_recorder.log("callback_submit_started", event_id=callback_payload.event_id)
         result = self.runtime.submit_callback(callback_payload)
+        trace_recorder.log(
+            "callback_submit_succeeded",
+            event_id=callback_payload.event_id,
+            run_status=result.get("run_status"),
+        )
         return {
             "run_id": run.id,
             "node_id": node.node_id,
@@ -243,6 +308,12 @@ class ClaudeValidatorDispatcher:
             "claude_call_id": call_session.call_id,
             "runtime": result,
         }
+
+    def _first_byte_timeout_seconds(self, spec) -> float | None:
+        try:
+            return parse_duration(spec.runtime_guards_or_default().first_byte_timeout).total_seconds()
+        except Exception:
+            return None
 
     def _build_result_callback(
         self,
@@ -390,18 +461,20 @@ class ClaudeValidatorDispatcher:
             return payload
 
         context = json.loads(context_path.read_text(encoding="utf-8"))
-        artifact_lookup = {
-            artifact["artifact_id"]: {
+        artifact_lookup: dict[str, dict[str, str]] = {}
+        for artifact in context.get("artifacts", []):
+            if (
+                not isinstance(artifact, dict)
+                or not artifact.get("artifact_id")
+                or not artifact.get("version")
+            ):
+                continue
+            normalized_ref = {
                 "artifact_id": artifact["artifact_id"],
                 "version": artifact["version"],
             }
-            for artifact in context.get("artifacts", [])
-            if (
-                isinstance(artifact, dict)
-                and artifact.get("artifact_id")
-                and artifact.get("version")
-            )
-        }
+            artifact_lookup[artifact["artifact_id"]] = normalized_ref
+            artifact_lookup[f"{artifact['artifact_id']}@{artifact['version']}"] = normalized_ref
 
         normalized_targets: list[dict] = []
         for item in target_artifacts:

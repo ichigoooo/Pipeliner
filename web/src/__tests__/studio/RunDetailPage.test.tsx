@@ -7,6 +7,9 @@ import { RunDetailClient } from '@/app/(studio)/runs/[run_id]/RunDetailClient';
 import { api } from '@/lib/api';
 import enMessages from '@/i18n/messages/en.json';
 
+const pushMock = vi.fn();
+const confirmMock = vi.fn();
+
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
@@ -15,13 +18,20 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: pushMock }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock('@/lib/api', () => ({
   api: {
     getRun: vi.fn(),
     getRunOverview: vi.fn(),
     getWorkflow: vi.fn(),
     getNodeRound: vi.fn(),
+    getClaudeCall: vi.fn(),
     stopRun: vi.fn(),
+    deleteRun: vi.fn(),
     retryNode: vi.fn(),
     driveRun: vi.fn(),
     previewRunArtifact: vi.fn(),
@@ -50,6 +60,14 @@ const renderWithClient = (ui: React.ReactElement) => {
 };
 
 describe('RunDetailPage', () => {
+  beforeEach(() => {
+    pushMock.mockReset();
+    confirmMock.mockReset();
+    confirmMock.mockReturnValue(true);
+    vi.stubGlobal('confirm', confirmMock);
+    mockedApi.deleteRun.mockReset();
+  });
+
   it('renders run inspection flow and raw context', async () => {
     mockedApi.getWorkflow.mockResolvedValue({
       workflow_id: 'wf_test',
@@ -224,6 +242,28 @@ describe('RunDetailPage', () => {
           : [],
     }));
     mockedApi.stopRun.mockResolvedValue({ run_id: 'run_1', status: 'stopped', stop_reason: 'manual_stop' });
+    mockedApi.deleteRun.mockResolvedValue({
+      run_id: 'run_1',
+      workflow_id: 'wf_test',
+      batch_id: null,
+      workspace_root: '/tmp/run',
+      deleted: true,
+    });
+    mockedApi.getClaudeCall.mockResolvedValue({
+      call_id: 'call_1',
+      role: 'executor',
+      status: 'failed',
+      started_at: '2026-03-13T00:00:00Z',
+      ended_at: '2026-03-13T00:00:10Z',
+      exit_code: 1,
+      error_message: 'failed',
+      bytes_written: 0,
+      truncated: false,
+      limit_bytes: 2000000,
+      output_path: 'claude_calls/call_1.log',
+      command: 'claude -p',
+      context: {},
+    });
     mockedApi.retryNode.mockResolvedValue({
       run_id: 'run_1',
       node_id: 'draft_article',
@@ -273,34 +313,33 @@ describe('RunDetailPage', () => {
 
     expect(await screen.findByText('Run workspace')).toBeInTheDocument();
     expect(await screen.findByText('Run overview')).toBeInTheDocument();
+    expect(await screen.findByText('Recommended action')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Retry and run' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Run' })).toBeInTheDocument();
+    expect(await screen.findByText('Node Detail')).toBeInTheDocument();
     expect(await screen.findByText('Run Graph')).toBeInTheDocument();
     expect(screen.getByTestId('run-detail-right-column')).toBeInTheDocument();
     expect(screen.getByTestId('node-detail-scroll-region')).toBeInTheDocument();
     expect(screen.queryByText('Live Activity')).not.toBeInTheDocument();
     expect(screen.getAllByText('draft_article').length).toBeGreaterThan(0);
-    expect(screen.getByText('View current node')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Round'), { target: { value: '1' } });
     await waitFor(() =>
-      expect(screen.getByText('draft_article · Round 1')).toBeInTheDocument()
+      expect(screen.getAllByText('draft_article · Round 1').length).toBeGreaterThan(0)
     );
-
-    fireEvent.click(screen.getByText('Raw'));
-    fireEvent.click(screen.getByText('Inspect raw context'));
-    expect(screen.getByText('Run Inspector')).toBeInTheDocument();
-    expect(screen.getAllByText(/context_value/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText('Advanced controls'));
     fireEvent.click(screen.getByText('Drive'));
     expect(await screen.findByText('Result status: completed')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'View current node' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Return to current node' }));
     await waitFor(() =>
-      expect(screen.getByText('draft_article · Round 2')).toBeInTheDocument()
+      expect(screen.getAllByText('draft_article · Round 2').length).toBeGreaterThan(0)
     );
 
-    fireEvent.click(screen.getByText('Callbacks'));
-    expect(await screen.findByText('cb_1')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Callback records'));
+    fireEvent.click(await screen.findByText('cb_1'));
+    expect(screen.getByText('Run Inspector')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Artifacts'));
     fireEvent.click(screen.getByRole('button', { name: 'Open folder' }));  
@@ -310,6 +349,10 @@ describe('RunDetailPage', () => {
     expect(await screen.findByTestId('run-detail-preview')).toBeInTheDocument();
     expect(await screen.findByText('Artifact / Log Preview')).toBeInTheDocument();
     expect(screen.getByText(/ok/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Run' }));
+    await waitFor(() => expect(mockedApi.deleteRun).toHaveBeenCalledWith('run_1'));
+    expect(pushMock).toHaveBeenCalledWith('/runs');
   });
 
   it('prioritizes current focus and disables manual drive while auto-drive is running', async () => {
@@ -430,11 +473,33 @@ describe('RunDetailPage', () => {
       artifacts: [],
       log_refs: [],
       claude_calls: {
-        executor_call_id: null,
+        executor_call_id: 'call_live',
         validator_calls: [],
       },
     });
     mockedApi.stopRun.mockResolvedValue({ run_id: 'run_live', status: 'stopped', stop_reason: 'manual_stop' });
+    mockedApi.deleteRun.mockResolvedValue({
+      run_id: 'run_live',
+      workflow_id: 'wf_live',
+      batch_id: null,
+      workspace_root: '/tmp/run_live',
+      deleted: true,
+    });
+    mockedApi.getClaudeCall.mockResolvedValue({
+      call_id: 'call_live',
+      role: 'executor',
+      status: 'running',
+      started_at: '2026-03-13T00:00:00Z',
+      ended_at: null,
+      exit_code: null,
+      error_message: null,
+      bytes_written: 0,
+      truncated: false,
+      limit_bytes: 2000000,
+      output_path: 'claude_calls/call_live.log',
+      command: 'claude -p',
+      context: {},
+    });
     mockedApi.retryNode.mockResolvedValue({
       run_id: 'run_live',
       node_id: 'draft_article',
@@ -464,11 +529,10 @@ describe('RunDetailPage', () => {
     expect(screen.getByTestId('node-detail-scroll-region')).toBeInTheDocument();
     expect(screen.queryByText('Live Activity')).not.toBeInTheDocument();
     expect(screen.getAllByText('Waiting for executor').length).toBeGreaterThan(0);
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
-    expect(
-      screen.getAllByText('This round is queued and waiting for the next dispatch to start.').length
-    ).toBeGreaterThan(0);
-    expect(screen.getByText('No call yet')).toBeInTheDocument();
+    expect(screen.getByText('Terminal and execution output')).toBeInTheDocument();
+    expect((await screen.findAllByText(/The executor has started, but it still had no output/)).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Auto drive is running' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Delete Run' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Advanced controls'));
     expect(screen.getByRole('button', { name: 'Drive' })).toBeDisabled();
   });

@@ -13,6 +13,7 @@ from uuid import uuid4
 from pipeliner.config import Settings, get_settings
 from pipeliner.runtime.guards import parse_duration
 from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
+from pipeliner.services.execution_trace import ExecutionTraceRecorder
 
 
 @dataclass(slots=True)
@@ -47,6 +48,15 @@ class AuthoringAgent:
         result_path = work_dir / "authoring_result.json"
         stdout_path = work_dir / "authoring_stdout.log"
         stderr_path = work_dir / "authoring_stderr.log"
+        mirror_dir = (
+            project_dir / ".pipeliner" / "logs" / "authoring" / session_id / (claude_call_id or "latest")
+            if project_dir
+            else None
+        )
+        trace_recorder = ExecutionTraceRecorder(
+            work_dir / "execution_events.jsonl",
+            mirror_dir / "execution_events.jsonl" if mirror_dir else None,
+        )
 
         task_payload = {
             "session_id": session_id,
@@ -55,6 +65,14 @@ class AuthoringAgent:
             "base_spec": base_spec,
             "result_file": str(result_path),
         }
+        trace_recorder.log(
+            "dispatch_prepared",
+            session_id=session_id,
+            project_dir=str(project_dir) if project_dir else None,
+            prompt_file=str(prompt_path),
+            task_file=str(task_path),
+            result_file=str(result_path),
+        )
         prompt_text = self._render_prompt(
             intent_brief,
             instruction,
@@ -80,6 +98,12 @@ class AuthoringAgent:
             },
             command=command,
             call_id=claude_call_id,
+            mirror_dir=mirror_dir,
+        )
+        trace_recorder.log(
+            "claude_call_registered",
+            call_id=call_session.call_id,
+            command=" ".join(command),
         )
         started_at = time.perf_counter()
         timeout = self._timeout_seconds()
@@ -91,6 +115,9 @@ class AuthoringAgent:
             output_session=call_session,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
+            mirror_stdout_path=mirror_dir / "stdout.log" if mirror_dir else None,
+            mirror_stderr_path=mirror_dir / "stderr.log" if mirror_dir else None,
+            trace_recorder=trace_recorder,
             timeout=timeout,
         )
         exit_code = result.returncode
@@ -120,19 +147,33 @@ class AuthoringAgent:
             error_message=error_message,
             duration_ms=duration_ms,
         )
+        trace_recorder.log(
+            "claude_call_completed",
+            call_id=call_session.call_id,
+            status="completed" if exit_code == 0 else "failed",
+            exit_code=exit_code,
+            error_message=error_message,
+            duration_ms=duration_ms,
+        )
 
         if exit_code and exit_code != 0:
+            trace_recorder.log("authoring_failed", reason=error_message or f"authoring command failed(exit={exit_code})")
             raise AuthoringAgentError(
                 error_message or f"authoring command failed(exit={exit_code})",
                 metadata,
             )
 
         try:
+            trace_recorder.log("result_loading_started")
             spec_payload = self._load_result_payload(result_path, stdout)
         except Exception as exc:
+            trace_recorder.log("result_loading_failed", error=str(exc))
             raise AuthoringAgentError(f"authoring result invalid: {exc}", metadata) from exc
         if not isinstance(spec_payload, dict):
+            trace_recorder.log("result_loading_failed", error="authoring result must be a JSON object")
             raise AuthoringAgentError("authoring result must be a JSON object", metadata)
+
+        trace_recorder.log("result_loaded")
 
         return AuthoringAgentResult(spec_json=spec_payload, metadata=metadata)
 

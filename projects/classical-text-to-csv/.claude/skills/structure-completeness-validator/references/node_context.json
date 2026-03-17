@@ -2,34 +2,46 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.2.0"
+    "version": "0.5.0"
   },
   "skill": {
     "name": "structure-completeness-validator",
     "role": "validator",
     "validator_id": "structure-completeness-check"
   },
-  "node_id": "structure_analysis",
+  "node_id": "chapter_batch_analysis",
   "node_spec": {
-    "node_id": "structure_analysis",
-    "title": "结构分析与元数据整合",
-    "purpose": "提取并整合元数据信息，包括著作标题、各篇章标题、作者、朝代、著作类型、内容分类、各篇章类型等，为 CSV 生成准备完整数据结构",
+    "node_id": "chapter_batch_analysis",
+    "title": "批量结构分析与元数据整合",
+    "purpose": "对分段后的篇章文档进行批量元数据整合处理，包括整合作品标题、篇章标题、作者、朝代、作品类型、内容分类和篇章类型等，为 CSV 生成准备完整数据结构",
     "archetype": "analyze-structure",
     "depends_on": [
-      "semantic_segmentation"
+      "chapter_batch_segmentation"
     ],
     "inputs": [
       {
-        "name": "segmented_chapters",
+        "name": "segmented_chapters_dir",
         "from": {
           "kind": "node_output",
           "name": null,
-          "node_id": "semantic_segmentation",
-          "output": "segmented_chapters"
+          "node_id": "chapter_batch_segmentation",
+          "output": "segmented_chapters_dir"
+        },
+        "shape": "directory",
+        "required": true,
+        "summary": "语义分段后的篇章文档目录"
+      },
+      {
+        "name": "segmentation_manifest",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "chapter_batch_segmentation",
+          "output": "segmentation_manifest"
         },
         "shape": "structured_data",
         "required": true,
-        "summary": "语义分段后的篇章列表"
+        "summary": "分段处理清单"
       },
       {
         "name": "work_title",
@@ -106,18 +118,23 @@
     ],
     "outputs": [
       {
-        "name": "structured_data",
+        "name": "structured_data_dir",
+        "shape": "directory",
+        "summary": "包含完整元数据的结构化数据文档目录"
+      },
+      {
+        "name": "analysis_manifest",
         "shape": "structured_data",
-        "summary": "包含完整元数据和各篇章段落内容的结构化数据"
+        "summary": "分析处理清单，记录每个篇章的元数据整合结果"
       }
     ],
     "executor": {
-      "skill": "document-structure-analyzer"
+      "skill": "chapter-batch-analysis"
     },
     "validators": [
       {
-        "validator_id": "metadata-extraction-check",
-        "skill": "metadata-extraction-validator"
+        "validator_id": "batch-analysis-check",
+        "skill": "batch-analysis-validator"
       },
       {
         "validator_id": "structure-completeness-check",
@@ -125,12 +142,13 @@
       }
     ],
     "acceptance": {
-      "done_means": "已提取并整合所有元数据，各篇章数据结构完整",
+      "done_means": "已对所有篇章文档完成元数据整合，数据结构符合 CSV 生成要求",
       "pass_condition": [
         "著作标题已正确设置",
         "各篇章标题已正确提取",
         "所有元数据字段已按规则整合",
         "各篇章内段落序号连续无重复",
+        "所有篇章文档的元数据都已处理完成",
         "数据结构符合 CSV 生成要求"
       ]
     },
@@ -139,9 +157,10 @@
     },
     "handoff": {
       "outputs": [
-        "structured_data"
+        "structured_data_dir",
+        "analysis_manifest"
       ]
     }
   },
-  "updated_at": "2026-03-13T02:10:44.028245+00:00"
+  "updated_at": "2026-03-17T07:49:48.809904+00:00"
 }

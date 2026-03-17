@@ -68,6 +68,13 @@ class BatchRunCoordinator:
         thread.start()
         return record.snapshot()
 
+    def recover_incomplete_batches(self) -> None:
+        with self.db.session() as session:
+            service = self._service(session)
+            batches = service.batch_repo.list_incomplete_batches()
+            for batch in batches:
+                service.reconcile_batch_progress(batch.id)
+
     def _run_in_thread(self, *, batch_id: str, run_drive_coordinator: RunDriveCoordinator) -> None:
         try:
             self._execute(batch_id=batch_id, run_drive_coordinator=run_drive_coordinator)

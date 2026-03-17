@@ -2,7 +2,7 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.2.0"
+    "version": "0.5.0"
   },
   "skill": {
     "name": "csv-format-validator",
@@ -13,23 +13,35 @@
   "node_spec": {
     "node_id": "csv_generation",
     "title": "CSV 文件生成",
-    "purpose": "按照标准格式要求生成 CSV 文件，包含完整的表头（著作标题,篇章标题,段落序号,段落内容,作者,著作类型,内容分类,朝代,著作简介,篇章类型,创作年份），确保编码为 UTF-8，分隔符为英文逗号，每个篇章的所有段落按序排列",
+    "purpose": "按照标准格式要求生成 CSV 文件，将所有篇章的结构化数据合并、排序、汇总为单个 CSV 文件，确保编码为 UTF-8，分隔符为英文逗号",
     "archetype": "generate-output",
     "depends_on": [
-      "structure_analysis"
+      "chapter_batch_analysis"
     ],
     "inputs": [
       {
-        "name": "structured_data",
+        "name": "structured_data_dir",
         "from": {
           "kind": "node_output",
           "name": null,
-          "node_id": "structure_analysis",
-          "output": "structured_data"
+          "node_id": "chapter_batch_analysis",
+          "output": "structured_data_dir"
+        },
+        "shape": "directory",
+        "required": true,
+        "summary": "包含完整元数据的结构化数据文档目录"
+      },
+      {
+        "name": "analysis_manifest",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "chapter_batch_analysis",
+          "output": "analysis_manifest"
         },
         "shape": "structured_data",
         "required": true,
-        "summary": "包含完整元数据和各篇章段落内容的结构化数据"
+        "summary": "分析处理清单，用于验证数据完整性"
       }
     ],
     "outputs": [
@@ -72,5 +84,5 @@
       ]
     }
   },
-  "updated_at": "2026-03-13T02:10:44.028703+00:00"
+  "updated_at": "2026-03-17T07:49:48.810348+00:00"
 }

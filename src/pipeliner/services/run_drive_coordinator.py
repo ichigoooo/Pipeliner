@@ -15,6 +15,7 @@ from pipeliner.persistence.repositories import (
 )
 from pipeliner.services.errors import ConflictError
 from pipeliner.services.run_driver import RunDriver
+from pipeliner.services.run_service import RunService
 
 
 @dataclass(slots=True)
@@ -215,3 +216,11 @@ class RunDriveCoordinator:
             record.ended_at = datetime.now(timezone.utc).isoformat()
             record.last_error = error
             record.thread = None
+        with self.db.session() as session:
+            service = RunService(
+                RunRepository(session),
+                WorkflowRepository(session),
+                ArtifactRepository(session),
+                self.settings,
+            )
+            service.mark_driver_failed(run_id, f"driver failed: {error}")

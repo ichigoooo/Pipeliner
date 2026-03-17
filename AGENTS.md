@@ -1,47 +1,292 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-本仓库当前是 **spec-first** 项目，核心内容集中在设计与变更说明，而不是运行时代码。
+本文件为 Agent 编程助手提供项目结构、命令和代码规范指引。
 
-- `docs/`：架构、协议与技术选型文档，例如 `docs/tech-stack-decision.md`。
-- `openspec/changes/implement-pipeliner-mvp/`：当前 MVP 变更提案，包含 `proposal.md`、`design.md`、`tasks.md` 以及各子域 `spec.md`。
-- `temp/`：临时评审材料，仅作讨论输入，不应作为长期真源。
-- `.codex/`：本地自动化与技能配置，不承载产品逻辑。
+## 项目概述
 
-当前尚未提交 `src/` 或 `tests/`。后续落地 Python 实现时，建议将应用代码放入 `src/pipeliner/`，测试放入 `tests/`，并保持与 OpenSpec 任务一一对应。
+Pipeliner 是一个 Python-first 的 agent 工作流编排器，采用 workflow spec 作为唯一机器真源，通过 executor -> validator -> pass/revise/blocked 状态机驱动工作流执行。
 
-## Build, Test, and Development Commands
-当前仓库没有可执行应用或正式构建流程；日常贡献主要围绕文档与规格校对。
+- **Python 版本**: 3.12+
+- **主要框架**: FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, Next.js
+- **测试框架**: pytest (后端), Vitest (前端)
 
-- `rg --files "docs" "openspec"`：快速浏览仓库中的设计与规格文件。
-- `rg -n "Requirement:|Scenario:" "openspec"`：检查规范性需求与场景定义。
-- `git log --oneline`：查看提交历史；当前历史较短，便于保持提交主题清晰。
+---
 
-若新增 Python 代码，请统一使用 `uv` 作为入口，并在 README 或本文件补充实际命令，例如 `uv run pytest`。
-建议新增实现后同步提供最小命令集，例如 `uv sync`、`uv run pytest`、`uv run ruff check .`、`uv run alembic upgrade head`。
+## 项目结构
 
-## Coding Style & Naming Conventions
-- Markdown 使用 ATX 标题（`#`、`##`），段落简洁，优先短句。
-- 规格术语保持一致：使用 `workflow spec`、`artifact manifest`、`callback payload` 等既有命名。目录、文件与示例名优先体现业务语义，例如 `workflow-runtime`、`run-operations`。
-- 新增 Python 代码时使用 4 空格缩进、类型标注和清晰模块边界；文件名采用 `snake_case`。
-- 避免在 `docs/` 与 `openspec/` 中重复定义同一事实，文档应引用真源而非复制。
+```
+src/pipeliner/
+├── protocols/           # 领域协议定义 (Pydantic 模型)
+│   ├── workflow.py      # WorkflowSpec、NodeSpec
+│   ├── callback.py      # NodeCallbackPayload、VerdictStatus
+│   ├── artifact.py      # ArtifactManifest、ArtifactRef
+│   └── guards.py        # RuntimeGuards
+├── services/            # 业务逻辑服务
+│   ├── run_service.py   # Run 生命周期管理
+│   ├── run_driver.py    # 自动驱动调度
+│   ├── workflow_service.py
+│   └── errors.py        # 统一异常定义
+├── persistence/         # SQLAlchemy 模型与 Repository
+├── executor/            # Claude 调度器实现
+├── api/router.py        # FastAPI 路由
+├── storage/             # 本地文件系统 WorkspaceManager
+├── config.py            # Settings (环境变量驱动)
+└── cli.py               # Typer CLI
 
-## Testing Guidelines
-当前没有自动化测试套件。提交设计改动时，至少自检：
+tests/
+├── conftest.py          # pytest fixtures
+├── test_*.py           # 单元测试
+├── api/test_*.py       # API 集成测试
+└── fixtures/           # 测试数据
 
-- 变更是否同步更新 `proposal.md`、`design.md`、`tasks.md` 或对应 `spec.md`。
-- `Requirement` 与 `Scenario` 是否完整、无冲突、可验证。
+web/                     # Next.js 前端
+├── src/app/             # App Router 页面
+├── src/components/      # React 组件
+├── vitest.config.ts     # 前端测试配置
+└── package.json
+```
 
-若引入实现代码，请添加 `tests/test_*.py`，优先覆盖工作流校验、状态机流转、callback 幂等和 artifact 注册，并补一个端到端 MVP 用例。
+---
 
+## 开发命令
 
-## Architecture & Change Workflow
-本仓库以 OpenSpec 变更流作为主线：先在 `openspec/changes/` 中写清 proposal、design、tasks，再推进实现或补充主规格。贡献时优先确认变更落点属于哪个子域，例如 workflow definition、runtime、callback reporting 或 artifact registry，避免跨文档随意扩散。
+### 后端 (Python)
 
-## Security & Configuration Tips
-不要提交本地数据库、run 目录、大体积 artifact、导出的 payload 或任何密钥文件。`temp/` 中的内容默认按可丢弃资料处理；当其中信息需要长期保留时，应整理后迁移到 `docs/` 或 `openspec/`。
+```bash
+# 安装依赖
+uv sync
 
-## Commit & Pull Request Guidelines
-当前提交历史仅有 `first commit`，建议后续统一使用 **简短、祈使句、聚焦单一变更** 的提交标题，例如：`add workflow runtime spec`。
+# 数据库迁移
+uv run alembic upgrade head
+uv run pipeliner db-init
 
-PR 应包含：变更目的、影响目录、关联的 `openspec/changes/...` 路径，以及必要的截图或示例输出（仅在涉及 UI 或 CLI 时提供）。若修改协议，请明确说明兼容性影响与迁移方式；避免把临时产物、数据库文件、运行输出或敏感配置提交到仓库。
+# 启动开发服务器
+uv run uvicorn pipeliner.app:create_app --factory --reload
+
+# 代码检查 (推荐先运行)
+uv run ruff check .
+
+# 测试
+uv run pytest                          # 运行全部测试
+uv run pytest tests/test_runtime.py   # 运行单个测试文件
+uv run pytest -k test_name           # 按名称过滤运行
+uv run pytest tests/test_runtime.py::test_timeout_reconcile_marks_waiting_node_as_attention -v  # 运行单个测试
+
+# 更详细的测试输出
+uv run pytest -v -s --tb=short
+```
+
+### 前端 (Next.js)
+
+```bash
+cd web
+
+# 安装依赖
+npm install
+
+# 开发
+npm run dev                # localhost:3000
+
+# 测试
+npm run test              # Vitest
+npm run test -- --run     # 单次运行 (非 watch 模式)
+
+# 构建
+npm run build
+npm run start
+```
+
+### 一键启动 (推荐)
+
+```bash
+./scripts/dev-up.sh
+```
+
+---
+
+## 代码规范
+
+### 通用规范
+
+- **缩进**: 4 空格 (Python), 2 空格 (前端)
+- **行长**: 最大 100 字符
+- **类型标注**: 必须使用类型标注 (Python)
+- **导入顺序**: 标准库 → 第三方库 → 本地模块 (Python)
+
+### Python 规范
+
+```python
+# 必须使用 from __future__ import annotations
+from __future__ import annotations
+
+# 类型标注使用 | 而非 Union
+def foo(x: str | None) -> int | None: ...
+
+# Pydantic 模型
+class WorkflowSpec(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    workflow_id: str
+    version: str
+    nodes: list[WorkflowNodeSpec]
+
+# 异常定义 (统一在 services/errors.py)
+class NotFoundError(PipelinerError):
+    pass
+
+# 错误消息使用中文
+raise NotFoundError(f"未找到 run: {run_id}")
+```
+
+### 前端规范
+
+- 使用 TypeScript 类型标注
+- 组件使用 functional component + hooks
+- 样式使用 Tailwind CSS
+- 国际化使用 `next-intl`，翻译键遵循 `page.component.element` 层级
+
+### 文件命名
+
+- Python 模块: `snake_case.py` (如 `run_service.py`)
+- React 组件: `PascalCase.tsx` (如 `RunDetail.tsx`)
+- 测试文件: `test_*.py` 或 `*_test.py`
+
+### 目录命名
+
+- 业务模块: `snake_case` (如 `services/`, `persistence/`)
+- 协议定义: `protocols/`
+- 测试目录: 与源码对应，如 `tests/api/`, `tests/persistence/`
+
+---
+
+## 测试规范
+
+### pytest fixtures (tests/conftest.py)
+
+```python
+@pytest.fixture()
+def settings(tmp_path: Path) -> Settings:
+    return Settings(data_dir=tmp_path / ".pipeliner", ...)
+
+@pytest.fixture()
+def client(settings: Settings) -> TestClient:
+    app = create_app(settings)
+    with TestClient(app) as test_client:
+        yield test_client
+```
+
+### 测试文件组织
+
+- `tests/test_*.py`: 单元测试
+- `tests/api/test_*.py`: API 集成测试 (使用 TestClient)
+- `tests/persistence/test_*.py`: 数据库 Repository 测试
+
+### 测试数据
+
+- 使用 `tests/fixtures/` 存放 JSON/YAML 测试数据
+- Workflow fixture: `tests/fixtures/workflows/mvp_review_loop.json`
+
+---
+
+## 错误处理
+
+### 统一异常类 (services/errors.py)
+
+```python
+class PipelinerError(Exception):
+    pass
+
+class NotFoundError(PipelinerError):
+    pass
+
+class ConflictError(PipelinerError):
+    pass
+
+class InvalidStateError(PipelinerError):
+    pass
+
+class ValidationError(PipelinerError):
+    pass
+```
+
+### API 错误响应
+
+- 使用 FastAPI 的 `@app.exception_handler` 统一处理
+- 返回结构化错误 JSON
+
+---
+
+## 数据库迁移
+
+```bash
+# 创建迁移
+uv run alembic revision --autogenerate -m "add_xxx"
+
+# 升级
+uv run alembic upgrade head
+
+# 回滚
+uv run alembic downgrade -1
+```
+
+---
+
+## OpenSpec 变更工作流
+
+本仓库使用 OpenSpec 变更流程：
+
+1. **探索模式**: 使用 `/opsx explore` 讨论需求
+2. **新建变更**: 使用 `/opsx new` 创建 proposal → design → tasks
+3. **实现**: 使用 `/opsx apply` 执行 tasks
+4. **验证**: 使用 `/opsx verify` 确认实现完整
+5. **归档**: 使用 `/opsx archive` 归档变更
+
+变更文件位于 `openspec/changes/`，包含:
+- `proposal.md`: 变更提案
+- `design.md`: 设计方案
+- `tasks.md`: 任务清单
+- `specs/`: 各子域详细规格
+
+---
+
+## 安全与配置
+
+### 不要提交
+
+- 本地数据库文件 (`.pipeliner/`)
+- API 密钥、环境变量文件 (`.env`)
+- 大体积 artifact 文件
+- 临时运行产物
+
+### 环境变量
+
+```bash
+# 后端
+PIPELINER_DATA_DIR=".pipeliner"
+PIPELINER_CLAUDE_EXECUTOR_CMD="claude -p --permission-mode bypassPermissions"
+PIPELINER_CLAUDE_VALIDATOR_CMD="claude -p --permission-mode bypassPermissions"
+
+# 前端代理
+PIPELINER_API_BASE_URL="http://127.0.0.1:8000"
+```
+
+---
+
+## 提交规范
+
+### 提交信息格式
+
+使用简短祈使句，聚焦单一变更：
+
+```
+add workflow runtime spec
+fix run status refresh bug
+implement batch run CSV template
+```
+
+### PR 描述
+
+- 变更目的
+- 影响目录
+- 关联的 `openspec/changes/...` 路径
+- 如有 UI 变更，提供截图或 GIF

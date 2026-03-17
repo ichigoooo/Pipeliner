@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
+import { formatRunStopReason } from '@/lib/run-stop-reason';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function AttentionQueuePage() {
   const t = useTranslations('attention');
   const tc = useTranslations('common');
+  const tr = useTranslations('runs');
   const router = useRouter();
   const [iterationError, setIterationError] = useState<string | null>(null);
   const attentionQuery = useQuery({
@@ -58,7 +60,7 @@ export default function AttentionQueuePage() {
               <StatusBadge value={run.status} />
             </div>
             <p className="mt-4 rounded-3xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {run.stop_reason || t('description')}
+              {formatRunStopReason(run.stop_reason, tr) || t('description')}
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs uppercase tracking-[0.18em] text-stone-500">

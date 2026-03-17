@@ -67,6 +67,7 @@ describe('BatchRunDetailClient', () => {
           row_index: 1,
           inputs: { topic: 'alpha' },
           run_id: 'run_1',
+          run_deleted: false,
           status: 'completed',
           error_message: null,
           created_at: '2026-03-15T01:00:00Z',
@@ -79,6 +80,7 @@ describe('BatchRunDetailClient', () => {
           row_index: 2,
           inputs: {},
           run_id: null,
+          run_deleted: false,
           status: 'failed',
           error_message: 'topic is required',
           created_at: '2026-03-15T01:00:00Z',
@@ -96,7 +98,7 @@ describe('BatchRunDetailClient', () => {
     renderWithClient(<BatchRunDetailClient batchId="batch_1" />);
 
     expect(await screen.findByText('batch_1')).toBeInTheDocument();
-    expect(screen.getByText('View run run_1')).toBeInTheDocument();
+    expect(screen.getByText('View run run_1')).toHaveClass('text-stone-600');
     expect(screen.getByText('topic is required')).toBeInTheDocument();
     expect(screen.getByText('Not started yet')).toBeInTheDocument();
 
@@ -108,5 +110,45 @@ describe('BatchRunDetailClient', () => {
     expect(
       await screen.findByText('Opened folder: /tmp/.pipeliner/runs/mvp-review-loop/run_1')
     ).toBeInTheDocument();
+  });
+
+  it('marks deleted runs and disables open-folder actions', async () => {
+    mockedApi.getBatchRun.mockResolvedValue({
+      batch: {
+        batch_id: 'batch_1',
+        workflow_id: 'mvp-review-loop',
+        version: '0.1.0',
+        status: 'completed',
+        total_count: 1,
+        success_count: 1,
+        failed_count: 0,
+        error_message: null,
+        created_at: '2026-03-15T01:00:00Z',
+        updated_at: '2026-03-15T01:02:00Z',
+        started_at: '2026-03-15T01:00:10Z',
+        ended_at: '2026-03-15T01:01:59Z',
+      },
+      items: [
+        {
+          item_id: 1,
+          row_index: 1,
+          inputs: { topic: 'alpha' },
+          run_id: 'run_deleted',
+          run_deleted: true,
+          status: 'completed',
+          error_message: null,
+          created_at: '2026-03-15T01:00:00Z',
+          updated_at: '2026-03-15T01:01:00Z',
+          started_at: '2026-03-15T01:00:10Z',
+          ended_at: '2026-03-15T01:00:50Z',
+        },
+      ],
+    });
+
+    renderWithClient(<BatchRunDetailClient batchId="batch_1" />);
+
+    expect(await screen.findByText('Run deleted')).toBeInTheDocument();
+    expect(screen.queryByText('View run run_deleted')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Folder' })).toBeDisabled();
   });
 });

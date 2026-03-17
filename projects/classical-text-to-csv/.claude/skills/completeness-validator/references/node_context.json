@@ -2,7 +2,7 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.2.0"
+    "version": "0.5.0"
   },
   "skill": {
     "name": "completeness-validator",
@@ -17,7 +17,7 @@
     "archetype": "validate-output",
     "depends_on": [
       "csv_generation",
-      "semantic_segmentation"
+      "chapter_batch_segmentation"
     ],
     "inputs": [
       {
@@ -33,16 +33,16 @@
         "summary": "生成的 CSV 文件"
       },
       {
-        "name": "segmented_chapters",
+        "name": "segmentation_manifest",
         "from": {
           "kind": "node_output",
           "name": null,
-          "node_id": "semantic_segmentation",
-          "output": "segmented_chapters"
+          "node_id": "chapter_batch_segmentation",
+          "output": "segmentation_manifest"
         },
         "shape": "structured_data",
         "required": true,
-        "summary": "原始分段数据，用于比对验证"
+        "summary": "分段处理清单，用于比对验证"
       }
     ],
     "outputs": [
@@ -54,7 +54,7 @@
       {
         "name": "report",
         "shape": "file",
-        "summary": "处理报告，包含篇章识别结果、分段统计和质量检查结果"
+        "summary": "处理报告，包含结构识别、切块统计、分段统计和质量检查结果"
       }
     ],
     "executor": {
@@ -91,5 +91,5 @@
       ]
     }
   },
-  "updated_at": "2026-03-13T02:10:44.029281+00:00"
+  "updated_at": "2026-03-17T07:49:48.810719+00:00"
 }

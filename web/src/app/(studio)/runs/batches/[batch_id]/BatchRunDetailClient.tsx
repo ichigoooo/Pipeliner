@@ -143,13 +143,18 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
                   <StatusBadge value={item.status} />
                 </td>
                 <td className="px-5 py-4 text-sm text-stone-700">
-                  {item.run_id ? (
+                  {item.run_id && !item.run_deleted ? (
                     <Link
                       href={`/runs/${item.run_id}`}
-                      className="font-medium text-amber-700 transition hover:text-amber-900"
+                      className="font-medium text-stone-600 transition hover:text-stone-900"
                     >
                       {t('viewRun')} {item.run_id}
                     </Link>
+                  ) : item.run_id ? (
+                    <div className="space-y-1">
+                      <span className="font-medium text-stone-700">{item.run_id}</span>
+                      <p className="text-xs text-rose-700">{t('deletedRun')}</p>
+                    </div>
                   ) : (
                     <span className="text-stone-400">{t('noRun')}</span>
                   )}
@@ -158,7 +163,7 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
                 <td className="px-5 py-4">
                   <button
                     type="button"
-                    disabled={!item.run_id || openingRunId === item.run_id}
+                    disabled={!item.run_id || item.run_deleted || openingRunId === item.run_id}
                     onClick={() => item.run_id && openWorkspaceMutation.mutate(item.run_id)}
                     className="rounded-full border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
                   >

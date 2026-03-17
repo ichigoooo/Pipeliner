@@ -6,11 +6,12 @@ import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
-import { api, AuthoringDraft, AuthoringSession } from '@/lib/api';
+import { api, ApiError, AuthoringDraft, AuthoringSession } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
 import { ClaudeTerminalPanel } from '@/components/claude/ClaudeTerminalPanel';
 import { WorkflowInputEditor } from '@/components/authoring/WorkflowInputEditor';
+import { useToast } from '@/components/ui/toast';
 
 function parseSpec(value: string) {
   return JSON.parse(value) as Record<string, unknown>;
@@ -22,9 +23,46 @@ function buildClaudeCallId(prefix: string) {
   return `${prefix}_${timestamp}_${nonce}`;
 }
 
+type PendingGenerateReconcile = {
+  sessionId: string;
+  requestedCallId: string;
+  baselineRevision: number | null;
+  startedAt: number;
+};
+
+function notifyActionError(
+  action: 'publish' | 'generate' | 'continue' | 'save',
+  error: unknown,
+  pushToast: (toast: { title?: string; description?: string; variant?: 'default' | 'error' | 'success' }) => void,
+  t: (key: string) => string
+) {
+  const message = error instanceof Error ? error.message : '请求失败';
+  if (action === 'publish' && error instanceof ApiError && error.status === 409) {
+    pushToast({
+      variant: 'error',
+      title: t('errors.publishFailed'),
+      description: t('errors.publishConflict'),
+    });
+    return;
+  }
+  const key = action === 'publish'
+    ? 'errors.publishFailed'
+    : action === 'generate'
+      ? 'errors.generateFailed'
+      : action === 'continue'
+        ? 'errors.continueFailed'
+        : 'errors.saveFailed';
+  pushToast({
+    variant: 'error',
+    title: t(key),
+    description: message,
+  });
+}
+
 export function AuthoringStudio() {
   const t = useTranslations('authoring');
   const tClaude = useTranslations('claudeTerminal');
+  const { pushToast } = useToast();
   const searchParams = useSearchParams();
   const sessionFromQuery = searchParams.get('session');
   const queryClient = useQueryClient();
@@ -46,7 +84,10 @@ export function AuthoringStudio() {
   );
   const [rawSpec, setRawSpec] = useState('{}');
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [claudeCallId, setClaudeCallId] = useState<string | null>(null);
+  const [pendingGenerateReconcile, setPendingGenerateReconcile] =
+    useState<PendingGenerateReconcile | null>(null);
 
   useEffect(() => {
     if (sessionFromQuery && !queryApplied) {
@@ -89,13 +130,31 @@ export function AuthoringStudio() {
     if (!draftQuery.data) {
       return;
     }
-    setRawSpec(prettyJson(draftQuery.data.spec_json));
-    const callId = draftQuery.data.claude_call_id;
+    const latestDraft = draftQuery.data;
+    setRawSpec(prettyJson(latestDraft.spec_json));
+    const callId = latestDraft.claude_call_id;
     setClaudeCallId((current) => (callId ? callId : current));
-  }, [draftQuery.data?.revision, draftQuery.data?.claude_call_id]);
+    if (
+      pendingGenerateReconcile &&
+      selectedSessionId === pendingGenerateReconcile.sessionId &&
+      (
+        latestDraft.claude_call_id === pendingGenerateReconcile.requestedCallId ||
+        (pendingGenerateReconcile.baselineRevision === null
+          ? latestDraft.revision > 0
+          : latestDraft.revision > pendingGenerateReconcile.baselineRevision)
+      )
+    ) {
+      setPendingGenerateReconcile(null);
+      setError(null);
+      setStatusMessage(t('generateRecovered'));
+    }
+  }, [draftQuery.data, pendingGenerateReconcile, selectedSessionId, t]);
 
   useEffect(() => {
     setClaudeCallId(null);
+    setPendingGenerateReconcile(null);
+    setStatusMessage(null);
+    setError(null);
   }, [selectedSessionId]);
 
   const invalidateSession = async (sessionId: string) => {
@@ -161,6 +220,22 @@ export function AuthoringStudio() {
     },
   });
 
+  const handlePublish = async () => {
+    if (!selectedSessionId || !activeDraft) {
+      return;
+    }
+    setError(null);
+    try {
+      await publishMutation.mutateAsync({
+        sessionId: selectedSessionId,
+        revision: activeDraft.revision,
+      });
+    } catch (mutationError) {
+      notifyActionError('publish', mutationError, pushToast, t);
+      setError((mutationError as Error).message);
+    }
+  };
+
   const activeDraft: AuthoringDraft | undefined = draftQuery.data;
   const currentSession = sessionDetailQuery.data;
   const canPublish = activeDraft ? !activeDraft.lint_report.blocking : false;
@@ -188,6 +263,7 @@ export function AuthoringStudio() {
   const submitCreateSession = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    setStatusMessage(null);
     setClaudeCallId(null);
     try {
       await createSessionMutation.mutateAsync({ title, intent_brief: intentBrief });
@@ -203,6 +279,7 @@ export function AuthoringStudio() {
     }
 
     setError(null);
+    setStatusMessage(null);
     setClaudeCallId(null);
     try {
       const draft = parseSpec(rawSpec);
@@ -220,6 +297,7 @@ export function AuthoringStudio() {
         });
       }
     } catch (mutationError) {
+      notifyActionError(mode === 'save' ? 'save' : 'continue', mutationError, pushToast, t);
       setError((mutationError as Error).message);
     }
   };
@@ -235,18 +313,31 @@ export function AuthoringStudio() {
     }
 
     setError(null);
+    setStatusMessage(null);
     try {
       const draft = parseSpec(rawSpec);
       const callId = buildClaudeCallId('claude_authoring');
       setClaudeCallId(callId);
+      setPendingGenerateReconcile({
+        sessionId: selectedSessionId,
+        requestedCallId: callId,
+        baselineRevision: activeDraft?.revision ?? null,
+        startedAt: Date.now(),
+      });
       await generateMutation.mutateAsync({
         sessionId: selectedSessionId,
         draft,
         note: instruction,
         callId,
       });
+      setPendingGenerateReconcile(null);
+      setError(null);
+      setStatusMessage(null);
     } catch (mutationError) {
+      notifyActionError('generate', mutationError, pushToast, t);
       setError((mutationError as Error).message);
+      setStatusMessage(t('generateReconciling'));
+      await invalidateSession(selectedSessionId);
     }
   };
 
@@ -396,16 +487,17 @@ export function AuthoringStudio() {
               <button
                 type="button"
                 disabled={!selectedSessionId || !activeDraft || !canPublish}
-                onClick={() =>
-                  selectedSessionId &&
-                  activeDraft &&
-                  publishMutation.mutate({ sessionId: selectedSessionId, revision: activeDraft.revision })
-                }
+                onClick={handlePublish}
                 className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200"
               >
                 {t('publish')}
               </button>
             </div>
+            {statusMessage ? (
+              <p className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                {statusMessage}
+              </p>
+            ) : null}
             {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
           </div>
 

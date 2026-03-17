@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import timezone
+from typing import Any
 
 from pipeliner.config import Settings, get_settings
 from pipeliner.persistence.models import CallbackEventModel, NodeRunModel, RunModel
@@ -11,6 +13,7 @@ from pipeliner.persistence.repositories import (
     WorkflowRepository,
 )
 from pipeliner.protocols.callback import NodeCallbackPayload
+from pipeliner.protocols.artifact import ArtifactManifest
 from pipeliner.protocols.workflow import WorkflowNodeSpec, WorkflowSpec
 from pipeliner.runtime.guards import is_timeout_exceeded
 from pipeliner.services.artifact_service import ArtifactService
@@ -113,6 +116,14 @@ class RuntimeCoordinator:
             for node_run in latest.values():
                 if node_run.status not in waiting_statuses:
                     continue
+                call_map = self.run_service._read_round_claude_calls(
+                    self.run_service.get_workspace(run),
+                    node_run.node_id,
+                    node_run.round_no,
+                )
+                stale_issue = self._reconcile_pending_call_issue(run, node_run, call_map)
+                if stale_issue is not None:
+                    continue
                 updated_at = node_run.updated_at
                 if updated_at.tzinfo is None:
                     updated_at = updated_at.replace(tzinfo=timezone.utc)
@@ -129,6 +140,79 @@ class RuntimeCoordinator:
                         }
                     )
         return timed_out
+
+    def reconcile_archived_callbacks(self, run_id: str) -> dict[str, list[dict[str, str]]]:
+        run = self.run_service.get_run(run_id)
+        workspace = self.run_service.get_workspace(run)
+        callback_paths = sorted(
+            workspace.callbacks_dir.glob("*.json"),
+            key=lambda path: self._callback_sort_key(path),
+        )
+        repaired: list[dict[str, str]] = []
+        failed: list[dict[str, str]] = []
+
+        for path in callback_paths:
+            try:
+                payload = NodeCallbackPayload.model_validate(
+                    json.loads(path.read_text(encoding="utf-8"))
+                )
+            except Exception as exc:
+                failed.append({"event_id": path.stem, "error": str(exc)})
+                continue
+
+            if self.callback_repo.get_event(payload.event_id) is not None:
+                continue
+
+            try:
+                self._reconcile_artifacts_for_callback(run, payload)
+                result = self.submit_callback(payload)
+            except Exception as exc:
+                self.callback_repo.session.rollback()
+                failed.append({"event_id": payload.event_id, "error": str(exc)})
+                continue
+
+            repaired.append(
+                {
+                    "event_id": payload.event_id,
+                    "run_status": str(result.get("run_status") or ""),
+                }
+            )
+
+        return {"repaired": repaired, "failed": failed}
+
+    def reconcile_stale_claude_calls(self, run_id: str) -> list[dict[str, str]]:
+        run = self.run_service.get_run(run_id)
+        if run.status in {RunStatus.COMPLETED.value, RunStatus.STOPPED.value}:
+            return []
+        workspace = self.run_service.get_workspace(run)
+        latest = self.run_repo.list_latest_node_runs(run.id)
+        issues: list[dict[str, str]] = []
+
+        for node_run in latest.values():
+            call_map = self.run_service._read_round_claude_calls(
+                workspace,
+                node_run.node_id,
+                node_run.round_no,
+            )
+            if node_run.status in {
+                NodeRunStatus.WAITING_EXECUTOR.value,
+                NodeRunStatus.TIMED_OUT.value,
+            }:
+                issue = self._reconcile_executor_call_issue(run, node_run, call_map)
+                if issue is not None:
+                    issues.append(issue)
+                    continue
+            if node_run.status in {
+                NodeRunStatus.WAITING_VALIDATOR.value,
+                NodeRunStatus.TIMED_OUT.value,
+            }:
+                issue = self._reconcile_validator_call_issue(run, node_run, call_map)
+                if issue is not None:
+                    issues.append(issue)
+
+        if issues:
+            self.run_service.refresh_run_status(run.id)
+        return issues
 
     def _handle_executor_callback(
         self,
@@ -259,3 +343,107 @@ class RuntimeCoordinator:
             node_run.status = NodeRunStatus.PASSED.value
             node_run.waiting_for_role = None
             self.run_service.activate_ready_nodes(run.id)
+
+    def _reconcile_artifacts_for_callback(
+        self,
+        run: RunModel,
+        payload: NodeCallbackPayload,
+    ) -> None:
+        if payload.actor.role != ActorRole.EXECUTOR or payload.submission is None:
+            return
+
+        workspace = self.run_service.get_workspace(run)
+        for ref in payload.submission.artifacts:
+            if self.artifact_repo.get_artifact(run.id, ref.artifact_id, ref.version) is not None:
+                continue
+            manifest_path = self.run_service.workspace.artifact_manifest_path(
+                workspace,
+                ref.artifact_id,
+                ref.version,
+            )
+            if not manifest_path.exists():
+                raise NotFoundError(f"缺少 artifact manifest: {ref.artifact_id}@{ref.version}")
+            manifest = ArtifactManifest.model_validate(
+                json.loads(manifest_path.read_text(encoding="utf-8"))
+            )
+            self.artifact_service.publish_manifest(manifest)
+
+    @staticmethod
+    def _callback_sort_key(path) -> str:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return path.name
+        sent_at = payload.get("sent_at")
+        if isinstance(sent_at, str) and sent_at:
+            return sent_at
+        return path.name
+
+    def _reconcile_executor_call_issue(
+        self,
+        run: RunModel,
+        node_run: NodeRunModel,
+        call_map: dict[str, Any],
+    ) -> dict[str, str] | None:
+        call_id = call_map.get("executor_call_id")
+        call_meta = call_map.get("executor_call")
+        if not call_id or not isinstance(call_meta, dict):
+            return None
+        status = call_meta.get("status")
+        if status == "failed":
+            message = str(call_meta.get("error_message") or "executor call failed")
+            node_run.status = NodeRunStatus.FAILED.value
+            node_run.waiting_for_role = None
+            node_run.stop_reason = message
+            run.status = RunStatus.NEEDS_ATTENTION.value
+            run.stop_reason = message
+            return {"node_id": node_run.node_id, "round_no": str(node_run.round_no), "reason": message}
+        return None
+
+    def _reconcile_validator_call_issue(
+        self,
+        run: RunModel,
+        node_run: NodeRunModel,
+        call_map: dict[str, Any],
+    ) -> dict[str, str] | None:
+        for validator_call in call_map.get("validator_calls", []):
+            validator_id = validator_call.get("validator_id")
+            if not validator_id:
+                continue
+            existing = self.callback_repo.get_validator_round_event(
+                run.id,
+                node_run.node_id,
+                node_run.round_no,
+                validator_id,
+            )
+            if existing is not None:
+                continue
+            call_meta = validator_call.get("meta")
+            if not isinstance(call_meta, dict):
+                continue
+            if call_meta.get("status") != "failed":
+                continue
+            message = str(call_meta.get("error_message") or f"validator {validator_id} call failed")
+            node_run.status = NodeRunStatus.FAILED.value
+            node_run.waiting_for_role = None
+            node_run.stop_reason = message
+            run.status = RunStatus.NEEDS_ATTENTION.value
+            run.stop_reason = message
+            return {
+                "node_id": node_run.node_id,
+                "round_no": str(node_run.round_no),
+                "reason": message,
+            }
+        return None
+
+    def _reconcile_pending_call_issue(
+        self,
+        run: RunModel,
+        node_run: NodeRunModel,
+        call_map: dict[str, Any],
+    ) -> dict[str, str] | None:
+        if node_run.status == NodeRunStatus.WAITING_EXECUTOR.value:
+            return self._reconcile_executor_call_issue(run, node_run, call_map)
+        if node_run.status == NodeRunStatus.WAITING_VALIDATOR.value:
+            return self._reconcile_validator_call_issue(run, node_run, call_map)
+        return None

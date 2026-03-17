@@ -33,6 +33,12 @@ def main() -> int:
             "summary": "validated",
             "target_artifacts": ["article_draft"],
         }
+    elif mode == "pass_versioned":
+        payload["verdict"] = {
+            "status": "pass",
+            "summary": "validated",
+            "target_artifacts": ["article_draft@v1"],
+        }
     elif mode == "revise":
         payload["verdict"] = {
             "status": "revise",

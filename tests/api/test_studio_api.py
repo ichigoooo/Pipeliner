@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from pipeliner.persistence.repositories import RunRepository
+
 
 def _register_workflow(client: TestClient, workflow_fixture: dict) -> None:
     response = client.post("/api/workflows/register", json={"spec": workflow_fixture})
@@ -146,3 +148,87 @@ def test_attention_retry_and_settings_snapshot(
     assert payload["storage"]["backend"]["value"] == "local_fs"
     assert payload["runtime_guards"]["default_timeout"]["value"] == "30m"
     assert isinstance(payload["skills"], list)
+
+
+def test_delete_non_running_run_removes_workspace_and_list_entries(
+    client: TestClient,
+    workflow_fixture: dict,
+    settings,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    run = _start_run(client)
+    workspace_path = settings.data_dir / run["workspace_root"]
+    marker = workspace_path / "nodes" / "marker.txt"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("delete me", encoding="utf-8")
+
+    with client.app.state.db.session() as db:
+        run_repo = RunRepository(db)
+        run_model = run_repo.get_run(run["run_id"])
+        node_run = run_repo.get_latest_node_run(run["run_id"], "draft_article")
+        assert run_model is not None
+        assert node_run is not None
+        run_model.status = "needs_attention"
+        run_model.stop_reason = "blocked"
+        node_run.status = "blocked"
+
+    delete_response = client.delete(f"/api/runs/{run['run_id']}")
+    assert delete_response.status_code == 200
+    delete_payload = delete_response.json()
+    assert delete_payload["run_id"] == run["run_id"]
+    assert delete_payload["deleted"] is True
+    assert not workspace_path.exists()
+
+    runs_response = client.get("/api/runs")
+    assert runs_response.status_code == 200
+    assert all(item["run_id"] != run["run_id"] for item in runs_response.json()["runs"])
+
+    attention_response = client.get("/api/runs/attention")
+    assert attention_response.status_code == 200
+    assert all(item["run_id"] != run["run_id"] for item in attention_response.json()["runs"])
+
+    detail_response = client.get(f"/api/runs/{run['run_id']}")
+    assert detail_response.status_code == 404
+
+
+def test_delete_running_run_is_rejected(
+    client: TestClient,
+    workflow_fixture: dict,
+    settings,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    run = _start_run(client)
+    workspace_path = settings.data_dir / run["workspace_root"]
+
+    response = client.delete(f"/api/runs/{run['run_id']}")
+    assert response.status_code == 400
+    assert "不允许删除" in response.json()["detail"]
+    assert workspace_path.exists()
+
+
+def test_delete_run_succeeds_even_when_workspace_already_missing(
+    client: TestClient,
+    workflow_fixture: dict,
+    settings,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    run = _start_run(client)
+    workspace_path = settings.data_dir / run["workspace_root"]
+    if workspace_path.exists():
+        for child in sorted(workspace_path.rglob("*"), reverse=True):
+            if child.is_file():
+                child.unlink()
+            elif child.is_dir():
+                child.rmdir()
+        workspace_path.rmdir()
+
+    with client.app.state.db.session() as db:
+        run_repo = RunRepository(db)
+        run_model = run_repo.get_run(run["run_id"])
+        assert run_model is not None
+        run_model.status = "stopped"
+        run_model.stop_reason = "manual_stop"
+
+    response = client.delete(f"/api/runs/{run['run_id']}")
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True

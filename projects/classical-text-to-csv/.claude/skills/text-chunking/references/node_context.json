@@ -1,0 +1,88 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.5.0"
+  },
+  "skill": {
+    "name": "text-chunking",
+    "role": "executor",
+    "validator_id": null
+  },
+  "node_id": "text_chunking",
+  "node_spec": {
+    "node_id": "text_chunking",
+    "title": "全文切块",
+    "purpose": "将预处理后的全文按顺序切分为一组连续文档，优先沿自然段、空行或明显结构边界切开，确保每个切块文档不超过 20000 字，为后续结构识别提供稳定输入",
+    "archetype": "split-content",
+    "depends_on": [
+      "text_preprocessing"
+    ],
+    "inputs": [
+      {
+        "name": "preprocessed_text",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_preprocessing",
+          "output": "preprocessed_text"
+        },
+        "shape": "file",
+        "required": true,
+        "summary": "预处理后的完整文本"
+      },
+      {
+        "name": "structure_hint",
+        "from": {
+          "kind": "workflow_input",
+          "name": "structure_hint",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "可选切块提示，帮助尽量在潜在结构边界附近切开"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "text_chunks_dir",
+        "shape": "directory",
+        "summary": "全文切块目录，包含顺序编号的切块文档"
+      },
+      {
+        "name": "chunk_manifest",
+        "shape": "structured_data",
+        "summary": "切块清单，记录每个切块的顺序、字符范围、文件名和长度"
+      }
+    ],
+    "executor": {
+      "skill": "text-chunking"
+    },
+    "validators": [
+      {
+        "validator_id": "text-chunking-check",
+        "skill": "text-chunking-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "全文已切分为连续切块文档，可安全进入后续结构识别",
+      "pass_condition": [
+        "每个切块文档长度不超过 20000 字",
+        "切块顺序与原文顺序严格一致",
+        "所有原文内容都被覆盖且没有重复",
+        "切块清单包含字符范围、长度和文件路径"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "text_chunks_dir",
+        "chunk_manifest"
+      ]
+    }
+  },
+  "updated_at": "2026-03-17T07:49:48.807738+00:00"
+}

@@ -156,6 +156,7 @@ export interface RunSummary {
   stop_reason: string | null;
   created_at: string | null;
   updated_at: string | null;
+  batch_id?: string | null;
   attention_node_count?: number;
 }
 
@@ -174,11 +175,25 @@ export interface BatchRunSummary {
   ended_at: string | null;
 }
 
+export interface DeleteBatchRunResult {
+  batch_id: string;
+  workflow_id: string;
+  deleted_run_ids: string[];
+  deleted: boolean;
+}
+
+export interface BulkDeleteBatchRunsResult {
+  batch_ids: string[];
+  deleted_count: number;
+  deleted: boolean;
+}
+
 export interface BatchRunItem {
   item_id: number;
   row_index: number;
   inputs: Record<string, unknown>;
   run_id: string | null;
+  run_deleted?: boolean;
   status: string;
   error_message: string | null;
   created_at: string | null;
@@ -202,6 +217,7 @@ export interface RunDetail {
     status: string;
     workspace_root: string;
     stop_reason: string | null;
+    batch_id?: string | null;
   };
   workflow: {
     workflow_id: string;
@@ -223,6 +239,14 @@ export interface RunDetail {
     node_id: string;
     round_no: number;
   }>;
+}
+
+export interface DeleteRunResult {
+  run_id: string;
+  workflow_id: string;
+  batch_id: string | null;
+  workspace_root: string;
+  deleted: boolean;
 }
 
 export interface RunArtifactFolderOpenResult {
@@ -405,6 +429,16 @@ export interface SettingValue<T> {
   default: T;
 }
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function readErrorMessage(response: Response): Promise<string> {
   const payload = await response.json().catch(() => ({ detail: '请求失败' }));
   return payload.detail || '请求失败';
@@ -421,7 +455,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw new ApiError(await readErrorMessage(response), response.status);
   }
 
   return response.json() as Promise<T>;
@@ -434,7 +468,7 @@ async function requestForm<T>(path: string, form: FormData): Promise<T> {
     cache: 'no-store',
   });
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw new ApiError(await readErrorMessage(response), response.status);
   }
   return response.json() as Promise<T>;
 }
@@ -444,7 +478,7 @@ async function requestBlob(path: string): Promise<Blob> {
     cache: 'no-store',
   });
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw new ApiError(await readErrorMessage(response), response.status);
   }
   return response.blob();
 }
@@ -536,6 +570,16 @@ export const api = {
       form
     );
   },
+  listBatchRuns: async () => request<{ batches: BatchRunSummary[] }>('batch-runs'),
+  deleteBatchRun: async (batchId: string) =>
+    request<DeleteBatchRunResult>(`batch-runs/${batchId}`, {
+      method: 'DELETE',
+    }),
+  bulkDeleteBatchRuns: async (batchIds: string[]) =>
+    request<BulkDeleteBatchRunsResult>('batch-runs/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ batch_ids: batchIds }),
+    }),
   getBatchRun: async (batchId: string) => request<BatchRunDetail>(`batch-runs/${batchId}`),
   startRun: async (
     workflowId: string,
@@ -554,6 +598,10 @@ export const api = {
     }),
   listAttentionRuns: async () => request<{ runs: AttentionRun[] }>('runs/attention'),
   getRun: async (runId: string) => request<RunDetail>(`runs/${runId}`),
+  deleteRun: async (runId: string) =>
+    request<DeleteRunResult>(`runs/${runId}`, {
+      method: 'DELETE',
+    }),
   getRunOverview: async (runId: string) =>
     request<RunOverview>(`runs/${runId}/debug/overview`),
   getNodeRound: async (runId: string, nodeId: string, roundNo: number) =>

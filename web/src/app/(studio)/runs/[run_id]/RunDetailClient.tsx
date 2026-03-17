@@ -1,13 +1,14 @@
 'use client';
 import type { Node } from '@xyflow/react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import type { RunOverview } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
+import { formatRunStopReason } from '@/lib/run-stop-reason';
 import { formatStatusLabel as formatStatusText } from '@/lib/status';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { TabList } from '@/components/ui/TabList';
@@ -36,14 +37,16 @@ type NodeSelection = {
 };
 
 type TimelineItem = RunOverview['timeline'][number];
+type DispatchableAction = RunOverview['dispatchable'][number];
 
 export function RunDetailClient({ runId }: { runId: string }) {
   const t = useTranslations('runs');
   const tClaude = useTranslations('claudeTerminal');
   const tStatus = useTranslations('status');
+  const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const focusParam = searchParams.get('focus');
+  const focusParam = searchParams?.get('focus') ?? null;
   const [focusApplied, setFocusApplied] = useState(false);
   const [detailTabIndex, setDetailTabIndex] = useState(0);
   const [selectedNode, setSelectedNode] = useState<NodeSelection | null>(null);
@@ -56,14 +59,18 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [artifactActionMessage, setArtifactActionMessage] = useState<string | null>(null);
   const [artifactActionError, setArtifactActionError] = useState<string | null>(null);
+  const [primaryActionError, setPrimaryActionError] = useState<string | null>(null);
   const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
   const [dispatchError, setDispatchError] = useState<string | null>(null);
 
   const runQuery = useQuery({
     queryKey: ['run', runId],
     queryFn: () => api.getRun(runId),
+    retry: false,
     refetchInterval: (query) =>
-      ((query.state.data as { run?: { status?: string } } | undefined)?.run?.status === 'running')
+      query.state.error
+        ? false
+        : ((query.state.data as { run?: { status?: string } } | undefined)?.run?.status === 'running')
         ? ACTIVE_POLL_INTERVAL_MS
         : IDLE_POLL_INTERVAL_MS,
   });
@@ -71,8 +78,11 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const overviewQuery = useQuery({
     queryKey: ['run-overview', runId],
     queryFn: () => api.getRunOverview(runId),
+    retry: false,
     refetchInterval: (query) =>
-      ((query.state.data as { status?: string } | undefined)?.status === 'running')
+      query.state.error
+        ? false
+        : ((query.state.data as { status?: string } | undefined)?.status === 'running')
         ? ACTIVE_POLL_INTERVAL_MS
         : IDLE_POLL_INTERVAL_MS,
   });
@@ -88,8 +98,25 @@ export function RunDetailClient({ runId }: { runId: string }) {
     queryKey: ['run-node-round', runId, selectedNode?.node_id, selectedNode?.round_no],
     queryFn: () => api.getNodeRound(runId, selectedNode!.node_id, selectedNode!.round_no),
     enabled: Boolean(selectedNode),
+    retry: false,
     refetchInterval: () =>
-      runQuery.data?.run.status === 'running' ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS,
+      runQuery.error
+        ? false
+        : runQuery.data?.run.status === 'running'
+          ? ACTIVE_POLL_INTERVAL_MS
+          : IDLE_POLL_INTERVAL_MS,
+  });
+
+  const executorCallId = nodeRoundQuery.data?.claude_calls?.executor_call_id || null;
+  const executorCallQuery = useQuery({
+    queryKey: ['claude-call-meta', executorCallId],
+    queryFn: () => api.getClaudeCall(executorCallId!),
+    enabled: Boolean(executorCallId),
+    retry: false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as { status?: string } | undefined)?.status;
+      return status === 'running' || !status ? ACTIVE_POLL_INTERVAL_MS : false;
+    },
   });
 
   const refresh = async () => {
@@ -100,17 +127,32 @@ export function RunDetailClient({ runId }: { runId: string }) {
     ]);
   };
 
+  const refetchPage = async () => {
+    await Promise.all([
+      runQuery.refetch(),
+      overviewQuery.refetch(),
+      workflowQuery.refetch(),
+      nodeRoundQuery.refetch(),
+    ]);
+  };
+
   const stopMutation = useMutation({
     mutationFn: () => api.stopRun(runId),
     onSuccess: refresh,
   });
 
-  const retryMutation = useMutation({
-    mutationFn: () =>
-      selectedNode
-        ? api.retryNode(runId, selectedNode.node_id, { reason: 'studio retry' })
-        : Promise.reject(new Error('请先选择一个 attention node')),
-    onSuccess: refresh,
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteRun(runId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['runs'] }),
+        queryClient.invalidateQueries({ queryKey: ['attention-runs'] }),
+      ]);
+      router.push('/runs');
+    },
+    onError: (mutationError) => {
+      setPrimaryActionError((mutationError as Error).message);
+    },
   });
 
   const driveMutation = useMutation({
@@ -128,6 +170,73 @@ export function RunDetailClient({ runId }: { runId: string }) {
     },
     onError: (mutationError) => {
       setDriveError((mutationError as Error).message);
+    },
+  });
+
+  const primaryActionMutation = useMutation({
+    mutationFn: async () => {
+      const parsed = Number.parseInt(driveMaxSteps, 10);
+      const maxSteps = Number.isNaN(parsed) || parsed <= 0 ? 100 : parsed;
+      const latest = selectedNode ? overview?.latest_nodes.find((item) => item.node_id === selectedNode.node_id) : null;
+      const viewingHistoricalRound = Boolean(
+        latest && selectedNode && latest.round_no !== selectedNode.round_no
+      );
+      const selectedActions = selectedNode
+        ? (overview?.dispatchable || []).filter(
+            (action) => action.node_id === selectedNode.node_id && action.round_no === selectedNode.round_no
+          )
+        : [];
+      const executorAction = selectedActions.find((action) => action.kind === 'executor');
+      const validatorAction = selectedActions.find(
+        (action) => action.kind === 'validator' && action.validator_id
+      );
+
+      if (viewingHistoricalRound && latest) {
+        return {
+          kind: 'jump' as const,
+          selection: { node_id: latest.node_id, round_no: latest.round_no },
+        };
+      }
+
+      if (selectedNode && selectedLatest && ATTENTION_STATUSES.has(selectedLatest.status)) {
+        await api.retryNode(runId, selectedNode.node_id, { reason: 'studio retry' });
+        const driveResult = await api.driveRun(runId, { max_steps: maxSteps });
+        return { kind: 'drive' as const, driveResult };
+      }
+
+      if (executorAction) {
+        await api.dispatchExecutor(runId, executorAction.node_id, { round_no: executorAction.round_no });
+        return { kind: 'dispatch' as const };
+      }
+
+      if (validatorAction && validatorAction.validator_id) {
+        await api.dispatchValidator(runId, validatorAction.node_id, validatorAction.validator_id, {
+          round_no: validatorAction.round_no,
+        });
+        return { kind: 'dispatch' as const };
+      }
+
+      if ((overview?.dispatchable || []).length > 0) {
+        const driveResult = await api.driveRun(runId, { max_steps: maxSteps });
+        return { kind: 'drive' as const, driveResult };
+      }
+
+      return { kind: 'noop' as const };
+    },
+    onSuccess: async (payload) => {
+      setPrimaryActionError(null);
+      if (payload.kind === 'jump') {
+        selectNodeRound(payload.selection);
+        return;
+      }
+      if (payload.kind === 'drive') {
+        setDriveResult(payload.driveResult);
+        setDriveError(null);
+      }
+      await refresh();
+    },
+    onError: (mutationError) => {
+      setPrimaryActionError((mutationError as Error).message);
     },
   });
 
@@ -207,7 +316,10 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const overview = overviewQuery.data;
   const workflowDetail = workflowQuery.data;
   const nodeRound = nodeRoundQuery.data;
-  const detailTabKeys = ['terminal', 'artifacts', 'callbacks', 'raw'] as const;
+  const executorCallMeta = executorCallQuery.data;
+  const pageLoadError = (runQuery.error || overviewQuery.error || workflowQuery.error) as Error | null;
+  const nodeDetailError = nodeRoundQuery.error as Error | null;
+  const detailTabKeys = ['overview', 'artifacts'] as const;
   const detailTabs = detailTabKeys.map((key) => t(`detailTabs.${key}`));
   const timelineByNodeId = useMemo(() => {
     if (!overview) {
@@ -281,6 +393,41 @@ export function RunDetailClient({ runId }: { runId: string }) {
     const attention = overview.summary?.attention_nodes || [];    if (attention.length > 0) {
       selectNodeRound({ node_id: attention[0].node_id, round_no: attention[0].round_no });      setFocusApplied(true);    }
   }, [focusApplied, focusParam, overview]); 
+
+  useEffect(() => {
+    if (!executorCallMeta || !nodeRound) {
+      return;
+    }
+    if (
+      nodeRound.waiting_for_role === 'executor' &&
+      (executorCallMeta.status === 'completed' || executorCallMeta.status === 'failed')
+    ) {
+      void refresh();
+    }
+  }, [executorCallMeta, nodeRound, refresh]);
+
+  if (pageLoadError && (!run || !overview || !workflowDetail)) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="w-full max-w-xl rounded-[2rem] border border-rose-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
+            {t('connectionIssueTitle')}
+          </p>
+          <p className="mt-3 text-sm leading-6 text-stone-700">{t('connectionIssueHint')}</p>
+          <p className="mt-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            {pageLoadError.message}
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetchPage()}
+            className="mt-4 rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
+          >
+            {t('retryLoad')}
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (!run || !overview || !workflowDetail) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-stone-500">
@@ -296,6 +443,18 @@ export function RunDetailClient({ runId }: { runId: string }) {
 
   const latestByNodeId = new Map(overview.latest_nodes.map((item) => [item.node_id, item]));
   const selectedLatest = selectedNode ? latestByNodeId.get(selectedNode.node_id) : null;
+  const selectedDispatchable = selectedNode
+    ? dispatchable.filter(
+        (action) => action.node_id === selectedNode.node_id && action.round_no === selectedNode.round_no
+      )
+    : [];
+  const selectedExecutorAction = selectedDispatchable.find((action) => action.kind === 'executor');
+  const selectedValidatorActions = selectedDispatchable.filter(
+    (action) => action.kind === 'validator' && action.validator_id
+  );
+  const viewingHistoricalRound = Boolean(
+    selectedNode && selectedLatest && selectedNode.round_no !== selectedLatest.round_no
+  );
   const canRetry = selectedLatest ? ATTENTION_STATUSES.has(selectedLatest.status) : false;
   const driverRunning = overview.driver.status === 'running';
   const currentFocus = overview.current_focus;
@@ -303,6 +462,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
     currentFocus?.node_id === selectedNode?.node_id && currentFocus?.round_no === selectedNode?.round_no;
   const canDrive =
     run.run.status !== 'completed' && run.run.status !== 'stopped' && !driverRunning;
+  const likelyStalled = run.run.status === 'running' && overview.driver.status === 'idle';
   const previewPayload = previewState?.data?.preview;
   const previewTitle =
     previewState && previewState.kind === 'artifact'
@@ -363,7 +523,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
       return t('focus.waiting', { role: waiting_for_role });
     }
     if (stop_reason) {
-      return stop_reason;
+      return formatRunStopReason(stop_reason, t) || stop_reason;
     }
     return formatStatusLabel(status);
   };
@@ -449,15 +609,111 @@ export function RunDetailClient({ runId }: { runId: string }) {
     selectNodeRound({ node_id: currentFocus.node_id, round_no: currentFocus.round_no });
   };
 
+  const formattedRunStopReason = formatRunStopReason(run.run.stop_reason, t);
   const summaryDescription = currentFocus
     ? describeNodeState(currentFocus)
-    : run.run.stop_reason || formatStatusLabel(run.run.status);
+    : formattedRunStopReason || formatStatusLabel(run.run.status);
   const terminalHint =
     nodeRound?.waiting_for_role === 'executor' && !claudeCalls?.executor_call_id
       ? t('focus.queued')
       : nodeRound?.waiting_for_role === 'validator' && validatorCalls.length === 0
         ? t('detail.waitingValidator')
         : null;
+  const executorTerminalEmptyHint =
+    nodeRound?.waiting_for_role === 'executor' && !claudeCalls?.executor_call_id
+      ? t('detail.executorNotStarted')
+      : undefined;
+  const executorActivityHint = (() => {
+    if (nodeRound?.waiting_for_role !== 'executor') {
+      return null;
+    }
+    if (!executorCallMeta) {
+      return executorTerminalEmptyHint || null;
+    }
+    if (executorCallMeta.status === 'running' && executorCallMeta.bytes_written > 0) {
+      return t('detail.executorStreaming');
+    }
+    if (executorCallMeta.status === 'running') {
+      return t('detail.executorStartedNoOutput', {
+        time: formatTimestamp(executorCallMeta.started_at),
+      });
+    }
+    if (executorCallMeta.status === 'completed') {
+      return t('detail.executorFinishedSyncing');
+    }
+    if (executorCallMeta.status === 'failed') {
+      return t('detail.executorFailedSyncing');
+    }
+    return executorTerminalEmptyHint || null;
+  })();
+  const primaryAction = (() => {
+    if (viewingHistoricalRound && selectedLatest) {
+      return {
+        label: t('actions.returnToLatest'),
+        hint: t('actions.returnToLatestHint'),
+        disabled: false,
+      };
+    }
+    if (driverRunning) {
+      return {
+        label: t('actions.running'),
+        hint: t('actions.runningHint'),
+        disabled: true,
+      };
+    }
+    if (canRetry && selectedNode) {
+      return {
+        label: t('actions.retryAndRun'),
+        hint: t('actions.retryAndRunHint'),
+        disabled: false,
+      };
+    }
+    if (selectedExecutorAction) {
+      return {
+        label: t('actions.startExecution'),
+        hint: t('actions.startExecutionHint'),
+        disabled: false,
+      };
+    }
+    if (selectedValidatorActions.length === 1) {
+      return {
+        label: t('actions.startValidation'),
+        hint: t('actions.startValidationHint'),
+        disabled: false,
+      };
+    }
+    if (dispatchable.length > 0 && canDrive) {
+      return {
+        label: t('actions.continueRun'),
+        hint: t('actions.continueRunHint'),
+        disabled: false,
+      };
+    }
+    if (run.run.status === 'completed') {
+      return {
+        label: t('actions.completed'),
+        hint: t('actions.completedHint'),
+        disabled: true,
+      };
+    }
+    if (run.run.status === 'stopped') {
+      return {
+        label: t('actions.stopped'),
+        hint: t('actions.stoppedHint'),
+        disabled: true,
+      };
+    }
+    return {
+      label: t('actions.none'),
+      hint: t('actions.noneHint'),
+      disabled: true,
+    };
+  })();
+  const showStopButton = run.run.status === 'running' || run.run.status === 'needs_attention';
+  const showDeleteButton = run.run.status !== 'running';
+  const showTechnicalOutput = Boolean(
+    claudeCalls?.executor_call_id || validatorCalls.length > 0 || executorTerminalEmptyHint
+  );
 
   const renderPreviewContent = (preview: any) => {
     if (!preview) {
@@ -495,13 +751,23 @@ export function RunDetailClient({ runId }: { runId: string }) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-stone-200 px-6 py-5">
-        <Link href="/runs" className="text-sm font-medium text-stone-500 transition hover:text-stone-900">
-          ← {t('backToRuns')}
-        </Link>
+        <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
+          <Link href="/runs" className="text-stone-500 transition hover:text-stone-900">
+            ← {t('backToRuns')}
+          </Link>
+          {run.run.batch_id ? (
+            <Link
+              href={`/runs/batches/${run.run.batch_id}`}
+              className="text-stone-500 transition hover:text-stone-900"
+            >
+              {t('viewBatch')}
+            </Link>
+          ) : null}
+        </div>
         <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('workspace')}</p>
-            <h1 className="mt-2 text-3xl font-semibold text-stone-900">{run.run.id}</h1>
+            <h1 className="mt-2 text-3xl font-semibold text-stone-500">{run.run.id}</h1>
             <p className="mt-3 text-sm leading-6 text-stone-600">
               {run.workflow.workflow_id}@{run.workflow.version} · workspace {run.run.workspace_root}
             </p>
@@ -514,187 +780,214 @@ export function RunDetailClient({ runId }: { runId: string }) {
         <aside className="grid min-h-0 gap-4 overflow-y-auto">
           <section className="rounded-[2rem] border border-stone-200 bg-stone-950 p-5 text-white shadow-sm">
             <p className="text-xs uppercase tracking-[0.24em] text-stone-400">{t('summary.title')}</p>
-            <div className="mt-4 grid gap-3">
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('summary.runStatus')}</p>
-                    <p className="mt-2 text-sm text-white">{summaryDescription}</p>
-                  </div>
-                  <StatusBadge value={run.run.status} />
+            <div className="mt-4 rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('summary.runStatus')}</p>
+                  <p className="mt-2 text-sm leading-6 text-white">{summaryDescription}</p>
                 </div>
+                <StatusBadge value={run.run.status} />
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('summary.currentNode')}</p>
-                <p className="mt-2 text-sm text-white">{currentFocus?.node_id || t('focus.empty')}</p>
-                <p className="mt-2 text-xs text-stone-300">
-                  {currentFocus ? t('round', { round: currentFocus.round_no }) : run.run.stop_reason || t('none')}
-                </p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('summary.driver')}</p>
-                <p className="mt-2 text-sm text-white">{t('driver.state', { status: overview.driver.status })}</p>
-                <p className="mt-1 text-xs text-stone-300">
-                  {overview.driver.mode ? t('driver.mode', { mode: overview.driver.mode }) : t('driver.idle')}
-                </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-stone-400">{t('summary.currentNode')}</p>
+                  <p className="mt-1 text-sm text-white">{selectedNode?.node_id || currentFocus?.node_id || t('focus.empty')}</p>
+                  <p className="mt-1 text-xs text-stone-300">
+                    {selectedNode ? t('round', { round: selectedNode.round_no }) : currentFocus ? t('round', { round: currentFocus.round_no }) : t('none')}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-stone-400">{t('summary.driver')}</p>
+                  <p className="mt-1 text-sm text-white">{t('driver.state', { status: overview.driver.status })}</p>
+                  <p className="mt-1 text-xs text-stone-300">
+                    {overview.driver.mode ? t('driver.mode', { mode: overview.driver.mode }) : t('driver.idle')}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3">
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('statusCounts')}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-stone-200">
-                  {Object.entries(nodeCounts).length === 0 ? (
-                    <span className="text-xs text-stone-300">{t('none')}</span>
-                  ) : (
-                    Object.entries(nodeCounts).map(([status, count]) => (
-                      <span
-                        key={status}
-                        className="rounded-full bg-white/10 px-3 py-1 text-xs text-stone-100"
-                      >
-                        {status} · {count}
-                      </span>
-                    ))
-                  )}
-                </div>
+            {formattedRunStopReason ? (
+              <div className="mt-4 rounded-3xl border border-amber-300/30 bg-amber-200/10 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-200">{t('stopReason')}</p>
+                <p className="mt-2 text-sm leading-6 text-amber-50">{formattedRunStopReason}</p>
               </div>
+            ) : null}
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('attentionNodes')}</p>
-                {attentionNodes.length === 0 ? (
-                  <p className="mt-2 text-xs text-stone-300">{t('noAttentionNodes')}</p>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    {attentionNodes.map((node) => (
-                      <button
-                        key={`${node.node_id}-${node.round_no}`}
-                        type="button"
-                        onClick={() => selectNodeRound({ node_id: node.node_id, round_no: node.round_no })}
-                        className="w-full rounded-2xl border border-white/10 px-3 py-2 text-left transition hover:border-white/40"
-                      >
-                        <p className="text-sm text-white">{node.node_id}</p>
-                        <p className="mt-1 text-xs text-stone-300">
-                          {t('round', { round: node.round_no })} · {formatStatusLabel(node.status)}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                )}
+            {likelyStalled ? (
+              <div className="mt-4 rounded-3xl border border-amber-300/30 bg-amber-200/10 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-200">{t('summary.driver')}</p>
+                <p className="mt-2 text-sm leading-6 text-amber-50">{t('driver.stalledHint')}</p>
               </div>
+            ) : null}
+          </section>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{t('summary.nextActions')}</p>
-                <p className="mt-2 text-xs text-stone-300">{t('summary.dispatchableCount', { count: dispatchable.length })}</p>
-                {dispatchable.length === 0 ? (
-                  <p className="mt-2 text-xs text-stone-300">{t('noDispatchable')}</p>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    {dispatchable.map((action) => {
-                      const key = `${action.kind}:${action.node_id}:${action.round_no}:${action.validator_id || ''}`;
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 px-3 py-2"
-                        >
-                          <div>
-                            <p className="text-sm text-white">{action.kind}</p>
-                            <p className="mt-1 text-xs text-stone-300">
-                              {action.node_id} · {t('round', { round: action.round_no })}
-                              {action.validator_id ? ` · ${action.validator_id}` : ''}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => dispatchAction(action)}
-                            disabled={driverRunning || dispatchingKey === key}
-                            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-stone-400"
-                          >
-                            {t('summary.dispatchNow')}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {dispatchError ? <p className="mt-2 text-xs text-rose-300">{dispatchError}</p> : null}
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => stopMutation.mutate()}
-                className="rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:border-white/50"
-              >
-                {t('stopRun')}
-              </button>
-              <button
-                type="button"
-                disabled={!canRetry}
-                onClick={() => retryMutation.mutate()}
-                className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-500 disabled:text-stone-200"
-              >
-                {t('retrySelectedNode')}
-              </button>
-              {currentFocus ? (
+          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{t('actions.title')}</p>
+            <p className="mt-2 text-sm text-stone-600">{primaryAction.hint}</p>
+            <button
+              type="button"
+              disabled={primaryAction.disabled || primaryActionMutation.isPending}
+              onClick={() => primaryActionMutation.mutate()}
+              className="mt-4 w-full rounded-full bg-amber-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+            >
+              {primaryActionMutation.isPending ? t('actions.loading') : primaryAction.label}
+            </button>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {showStopButton ? (
+                <button
+                  type="button"
+                  onClick={() => stopMutation.mutate()}
+                  className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
+                >
+                  {t('stopRun')}
+                </button>
+              ) : null}
+              {showDeleteButton ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm(t('deleteConfirm'))) {
+                      return;
+                    }
+                    deleteMutation.mutate();
+                  }}
+                  disabled={deleteMutation.isPending}
+                  className="rounded-full border border-rose-200 px-4 py-2 text-sm font-medium text-rose-800 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                >
+                  {deleteMutation.isPending ? t('actions.loading') : t('deleteRun')}
+                </button>
+              ) : null}
+              {currentFocus && !currentFocusSelected ? (
                 <button
                   type="button"
                   onClick={jumpToCurrentFocus}
-                  className="rounded-full border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:border-amber-200"
+                  className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
                 >
                   {t('summary.viewCurrent')}
                 </button>
               ) : null}
             </div>
+            {primaryActionError ? (
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                {primaryActionError}
+              </div>
+            ) : null}
+          </section>
 
-            <details className="mt-5 rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-stone-300">
+          <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{t('detail.roundSummary')}</p>
+            <p className="mt-2 text-sm font-medium text-stone-900">
+              {selectedNode ? `${selectedNode.node_id} · ${t('round', { round: selectedNode.round_no })}` : t('detail.emptyTitle')}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-stone-600">
+              {nodeRound ? describeNodeState(nodeRound) : t('detail.emptyDescription')}
+            </p>
+            {executorActivityHint ? (
+              <p className="mt-2 text-sm leading-6 text-sky-700">{executorActivityHint}</p>
+            ) : null}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {Object.entries(nodeCounts).length === 0 ? (
+                <span className="rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-500">{t('none')}</span>
+              ) : (
+                Object.entries(nodeCounts).map(([status, count]) => (
+                  <span key={status} className="rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-700">
+                    {formatStatusLabel(status)} · {count}
+                  </span>
+                ))
+              )}
+            </div>
+          </section>
+
+          <details className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
                 {t('summary.advanced')}
               </summary>
-              <p className="mt-3 text-xs text-stone-300">
+              <p className="mt-3 text-sm text-stone-600">
                 {driverRunning ? t('drive.runningDescription') : t('drive.description')}
               </p>
-              <div className="mt-4">
-                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-300">
-                  {t('drive.maxSteps')}
-                </label>
-                <input
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none"
-                  value={driveMaxSteps}
-                  onChange={(event) => setDriveMaxSteps(event.target.value)}
-                  placeholder="100"
-                />
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => driveMutation.mutate()}
-                  disabled={!canDrive || driveMutation.isPending}
-                  className="rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-950 transition hover:bg-stone-200 disabled:cursor-not-allowed disabled:bg-stone-400"
-                >
-                  {t('drive.button')}
-                </button>
-                {driveResult ? (
-                  <button
-                    type="button"
-                    onClick={() => setInspectorData(driveResult)}
-                    className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-white/40"
-                  >
-                    {t('drive.inspect')}
-                  </button>
-                ) : null}
+              <div className="mt-4 space-y-4">
+                <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('summary.nextActions')}</p>
+                  <p className="mt-2 text-sm text-stone-600">{t('summary.dispatchableCount', { count: dispatchable.length })}</p>
+                  {dispatchable.length === 0 ? (
+                    <p className="mt-3 text-sm text-stone-500">{t('noDispatchable')}</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {dispatchable.map((action) => {
+                        const key = `${action.kind}:${action.node_id}:${action.round_no}:${action.validator_id || ''}`;
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-3 py-3"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-stone-900">{action.kind}</p>
+                              <p className="mt-1 text-xs text-stone-500">
+                                {action.node_id} · {t('round', { round: action.round_no })}
+                                {action.validator_id ? ` · ${action.validator_id}` : ''}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void dispatchAction(action as DispatchableAction)}
+                              disabled={driverRunning || dispatchingKey === key}
+                              className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                            >
+                              {t('summary.dispatchNow')}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {dispatchError ? <p className="mt-3 text-sm text-rose-700">{dispatchError}</p> : null}
+                </div>
+
+                <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
+                    {t('drive.maxSteps')}
+                  </label>
+                  <input
+                    className="mt-2 h-11 w-full rounded-2xl border border-stone-200 bg-white px-3 text-sm text-stone-900 outline-none"
+                    value={driveMaxSteps}
+                    onChange={(event) => setDriveMaxSteps(event.target.value)}
+                    placeholder="100"
+                  />
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => driveMutation.mutate()}
+                      disabled={!canDrive || driveMutation.isPending}
+                      className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                    >
+                      {t('drive.button')}
+                    </button>
+                    {driveResult ? (
+                      <button
+                        type="button"
+                        onClick={() => setInspectorData(driveResult)}
+                        className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900"
+                      >
+                        {t('drive.inspect')}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
               {driveResult ? (
-                <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 text-xs text-stone-200">
+                <div className="mt-4 rounded-[1.5rem] border border-stone-200 bg-stone-50 px-4 py-4 text-xs text-stone-700">
                   <p>{t('drive.result', { status: driveResult.status })}</p>
-                  <p className="mt-1">{t('drive.stopReason', { reason: driveResult.stop_reason || t('none') })}</p>
+                  <p className="mt-1">
+                    {t('drive.stopReason', {
+                      reason: formatRunStopReason(driveResult.stop_reason, t) || t('none'),
+                    })}
+                  </p>
                   <p className="mt-1">{t('drive.steps', { count: driveResult.steps.length })}</p>
                 </div>
               ) : null}
-              {driverRunning ? <p className="mt-3 text-xs text-stone-300">{t('drive.disabledWhileRunning')}</p> : null}
-              {driveError ? <p className="mt-3 text-xs text-rose-300">{driveError}</p> : null}
+              {driverRunning ? <p className="mt-3 text-sm text-stone-500">{t('drive.disabledWhileRunning')}</p> : null}
+              {driveError ? <p className="mt-3 text-sm text-rose-700">{driveError}</p> : null}
             </details>
-          </section>
         </aside>
 
         <section
@@ -702,27 +995,6 @@ export function RunDetailClient({ runId }: { runId: string }) {
           className="min-h-0 overflow-y-auto pr-1"
         >
           <div className="flex min-h-full flex-col gap-4">
-          <section className="overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
-            <div className="border-b border-stone-200 px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">{t('graph.title')}</p>
-              <p className="mt-2 text-sm text-stone-600">{t('graph.description')}</p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs text-stone-600">
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-900">{t('graph.legend.current')}</span>
-                <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-900">{t('graph.legend.running')}</span>
-                <span className="rounded-full bg-indigo-100 px-3 py-1 text-indigo-900">{t('graph.legend.waiting')}</span>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">{t('graph.legend.completed')}</span>
-                <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-900">{t('graph.legend.attention')}</span>
-              </div>
-            </div>
-            <div className="h-[480px] bg-stone-50 xl:h-[520px]">
-              <WorkflowGraph
-                initialNodes={graphNodes}
-                initialEdges={workflowDetail.graph.edges as any}
-                onNodeClick={(_event, node) => selectNode(node.id)}
-              />
-            </div>
-          </section>
-
           <section className="relative overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
             <div className="border-b border-stone-200 px-5 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -820,36 +1092,57 @@ export function RunDetailClient({ runId }: { runId: string }) {
                       </p>
                     </div>
                   ) : null}
+                  {executorActivityHint ? (
+                    <div className="rounded-[1.75rem] border border-sky-200 bg-sky-50 p-5 text-sm text-stone-700">
+                      {executorActivityHint}
+                    </div>
+                  ) : null}
                   {terminalHint ? (
-                    <div className="rounded-[1.75rem] border border-stone-200 bg-stone-50 p-5 text-sm text-stone-700">
+                    <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5 text-sm text-stone-700">
                       {terminalHint}
                     </div>
                   ) : null}
-                  <ClaudeTerminalPanel
-                    key={`${selectedNode?.node_id}-${selectedNode?.round_no}-executor`}
-                    callId={
-                      claudeCalls?.executor_call_id ||
-                      (currentFocusSelected ? currentFocus?.executor_call_id : undefined)
-                    }
-                    title={tClaude('executorTitle')}
-                    defaultOpen={Boolean(currentFocusSelected && currentFocus?.waiting_for_role === 'executor')}
-                  />
-                  {validatorCalls.map((item) => (
-                    <ClaudeTerminalPanel
-                      key={`${selectedNode?.node_id}-${selectedNode?.round_no}-${item.validator_id}`}
-                      callId={item.call_id}
-                      title={tClaude('validatorTitle', { id: item.validator_id })}
-                      defaultOpen={Boolean(
-                        currentFocusSelected &&
-                          currentFocus?.waiting_for_role === 'validator' &&
-                          currentFocus.validator_calls.some(
-                            (currentItem) => currentItem.call_id === item.call_id
-                          )
+
+                  {nodeDetailError ? (
+                    <div className="rounded-[1.75rem] border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
+                      {nodeDetailError.message}
+                    </div>
+                  ) : null}
+
+                  <details className="rounded-[1.75rem] border border-stone-200 bg-white p-5">
+                    <summary className="cursor-pointer text-sm font-semibold text-stone-900">
+                      {t('technicalOutput')}
+                    </summary>
+                    <div className="mt-4 space-y-4">
+                      {showTechnicalOutput ? (
+                        <>
+                          <ClaudeTerminalPanel
+                            key={`${selectedNode?.node_id}-${selectedNode?.round_no}-executor`}
+                            callId={
+                              claudeCalls?.executor_call_id ||
+                              (currentFocusSelected ? currentFocus?.executor_call_id : undefined)
+                            }
+                            title={tClaude('executorTitle')}
+                            emptyHint={executorTerminalEmptyHint}
+                          />
+                          {validatorCalls.map((item) => (
+                            <ClaudeTerminalPanel
+                              key={`${selectedNode?.node_id}-${selectedNode?.round_no}-${item.validator_id}`}
+                              callId={item.call_id}
+                              title={tClaude('validatorTitle', { id: item.validator_id })}
+                            />
+                          ))}
+                        </>
+                      ) : (
+                        <p className="text-sm text-stone-500">{executorTerminalEmptyHint || tClaude('empty')}</p>
                       )}
-                    />
-                  ))}
-                  <div className="rounded-[1.75rem] border border-stone-200 bg-white p-5">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">{t('logRefs')}</h3>
+                    </div>
+                  </details>
+
+                  <details className="rounded-[1.75rem] border border-stone-200 bg-white p-5">
+                    <summary className="cursor-pointer text-sm font-semibold text-stone-900">
+                      {t('technicalLogs')}
+                    </summary>
                     <div className="mt-4 space-y-3">
                       {nodeRound.log_refs.length === 0 ? (
                         <p className="text-sm text-stone-500">{t('noLogsInRound')}</p>
@@ -868,7 +1161,62 @@ export function RunDetailClient({ runId }: { runId: string }) {
                         ))
                       )}
                     </div>
-                  </div>
+                  </details>
+
+                  <details className="rounded-[1.75rem] border border-stone-200 bg-white p-5">
+                    <summary className="cursor-pointer text-sm font-semibold text-stone-900">
+                      {t('technicalCallbacks')}
+                    </summary>
+                    <div className="mt-4 space-y-3">
+                      {nodeRound.callbacks.length === 0 ? (
+                        <p className="text-sm text-stone-500">{t('callbacksEmpty')}</p>
+                      ) : (
+                        nodeRound.callbacks.map((callback) => (
+                          <button
+                            key={callback.event_id}
+                            type="button"
+                            onClick={() => setInspectorData(callback)}
+                            className="w-full rounded-3xl border border-stone-200 px-4 py-4 text-left transition hover:border-stone-400"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-stone-900">{callback.event_id}</p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
+                                  {callback.actor_role}
+                                  {callback.validator_id ? ` · ${callback.validator_id}` : ''}
+                                </p>
+                              </div>
+                              <StatusBadge value={callback.execution_status || callback.verdict_status || 'reported'} />
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </details>
+
+                  <details className="rounded-[1.75rem] border border-stone-200 bg-white p-5">
+                    <summary className="cursor-pointer text-sm font-semibold text-stone-900">
+                      {t('technicalRaw')}
+                    </summary>
+                    <div className="mt-4 space-y-4">
+                      <button
+                        type="button"
+                        onClick={() => setInspectorData(nodeRound.context)}
+                        className="rounded-full border border-stone-300 px-4 py-2 text-sm text-stone-800 transition hover:border-stone-900"
+                      >
+                        {t('inspectRawContext')}
+                      </button>
+                      <div className="rounded-[1.5rem] border border-stone-200 bg-stone-950 p-5 text-sm text-stone-100">
+                        <pre className="overflow-auto whitespace-pre-wrap break-all">
+                          {prettyJson({
+                            run,
+                            overview,
+                            nodeRound,
+                          })}
+                        </pre>
+                      </div>
+                    </div>
+                  </details>
                 </div>
               )}
 
@@ -931,57 +1279,31 @@ export function RunDetailClient({ runId }: { runId: string }) {
                   )}
                 </div>
               )}
-
-              {nodeRound && detailTabIndex === 2 && (
-                <div className="space-y-3">
-                  {nodeRound.callbacks.length === 0 ? (
-                    <p className="text-sm text-stone-500">{t('callbacksEmpty')}</p>
-                  ) : (
-                    nodeRound.callbacks.map((callback) => (
-                      <button
-                        key={callback.event_id}
-                        type="button"
-                        onClick={() => setInspectorData(callback)}
-                        className="w-full rounded-3xl border border-stone-200 px-4 py-4 text-left transition hover:border-stone-400"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-stone-900">{callback.event_id}</p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
-                              {callback.actor_role}
-                              {callback.validator_id ? ` · ${callback.validator_id}` : ''}
-                            </p>
-                          </div>
-                          <StatusBadge value={callback.execution_status || callback.verdict_status || 'reported'} />
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-
-              {nodeRound && detailTabIndex === 3 && (
-                <div className="space-y-4">
-                  <button
-                    type="button"
-                    onClick={() => setInspectorData(nodeRound.context)}
-                    className="rounded-full border border-stone-300 px-4 py-2 text-sm text-stone-800 transition hover:border-stone-900"
-                  >
-                    {t('inspectRawContext')}
-                  </button>
-                  <div className="rounded-[1.75rem] border border-stone-200 bg-stone-950 p-5 text-sm text-stone-100">
-                    <pre className="overflow-auto whitespace-pre-wrap break-all">
-                      {prettyJson({
-                        run,
-                        overview,
-                        nodeRound,
-                      })}
-                    </pre>
-                  </div>
-                </div>
-              )}
             </div>
           </section>
+
+          <details className="overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
+            <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-stone-900">
+              {t('graph.title')}
+            </summary>
+            <div className="border-t border-stone-200 px-5 py-4">
+              <p className="text-sm text-stone-600">{t('graph.description')}</p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs text-stone-600">
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-900">{t('graph.legend.current')}</span>
+                <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-900">{t('graph.legend.running')}</span>
+                <span className="rounded-full bg-indigo-100 px-3 py-1 text-indigo-900">{t('graph.legend.waiting')}</span>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">{t('graph.legend.completed')}</span>
+                <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-900">{t('graph.legend.attention')}</span>
+              </div>
+            </div>
+            <div className="h-[360px] border-t border-stone-200 bg-stone-50 xl:h-[420px]">
+              <WorkflowGraph
+                initialNodes={graphNodes}
+                initialEdges={workflowDetail.graph.edges as any}
+                onNodeClick={(_event, node) => selectNode(node.id)}
+              />
+            </div>
+          </details>
           {previewState ? (
             <section
               data-testid="run-detail-preview"

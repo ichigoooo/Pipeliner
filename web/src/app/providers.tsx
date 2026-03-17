@@ -5,6 +5,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { defaultTimeZone } from '@/i18n/config';
 import { I18nProvider } from '@/i18n/provider';
+import { ToastProvider } from '@/components/ui/toast';
 import { getMessages } from '@/i18n/messages';
 import { Locale, defaultLocale, detectBrowserLocale, isValidLocale } from '@/i18n/config';
 import { useLanguageStore } from '@/stores/language';
@@ -59,7 +60,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <I18nWrapper>{children}</I18nWrapper>
+      <ToastProvider><I18nWrapper>{children}</I18nWrapper></ToastProvider>
     </QueryClientProvider>
   );
 }

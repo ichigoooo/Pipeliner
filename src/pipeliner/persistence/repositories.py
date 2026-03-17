@@ -130,6 +130,25 @@ class RunRepository:
         )
         return list(self.session.scalars(stmt))
 
+    def get_batch_id(self, run_id: str) -> str | None:
+        stmt = select(BatchRunItemModel.batch_id).where(BatchRunItemModel.run_id == run_id)
+        return self.session.scalar(stmt)
+
+    def list_batch_ids(self, run_ids: list[str]) -> dict[str, str]:
+        if not run_ids:
+            return {}
+        stmt = (
+            select(BatchRunItemModel.run_id, BatchRunItemModel.batch_id)
+            .where(BatchRunItemModel.run_id.in_(run_ids))
+        )
+        return {run_id: batch_id for run_id, batch_id in self.session.execute(stmt).all()}
+
+    def list_existing_run_ids(self, run_ids: list[str]) -> set[str]:
+        if not run_ids:
+            return set()
+        stmt = select(RunModel.id).where(RunModel.id.in_(run_ids))
+        return set(self.session.scalars(stmt))
+
     def create_node_run(self, node_run: NodeRunModel) -> NodeRunModel:
         self.session.add(node_run)
         self.session.flush()
@@ -193,6 +212,18 @@ class BatchRunRepository:
 
     def get_item(self, item_id: int) -> BatchRunItemModel | None:
         return self.session.get(BatchRunItemModel, item_id)
+
+    def list_batches(self) -> list[BatchRunModel]:
+        stmt = select(BatchRunModel).order_by(BatchRunModel.updated_at.desc())
+        return list(self.session.scalars(stmt))
+
+    def list_incomplete_batches(self) -> list[BatchRunModel]:
+        stmt = (
+            select(BatchRunModel)
+            .where(BatchRunModel.status.in_(["pending", "running"]))
+            .order_by(BatchRunModel.updated_at.desc())
+        )
+        return list(self.session.scalars(stmt))
 
     def list_items(self, batch_id: str) -> list[BatchRunItemModel]:
         stmt = (

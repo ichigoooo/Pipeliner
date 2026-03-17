@@ -18,7 +18,7 @@ from pipeliner.persistence.repositories import (
     WorkflowRepository,
 )
 from pipeliner.protocols.workflow import WorkflowInputDescriptor
-from pipeliner.services.errors import NotFoundError, ValidationError
+from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
 from pipeliner.services.run_service import RunService
 from pipeliner.services.workflow_service import WorkflowService
 
@@ -56,10 +56,13 @@ class BatchRunService:
 
     def build_template_csv(self, workflow_id: str, version: str) -> str:
         spec = self.workflow_service.load_spec_model(workflow_id, version)
-        headers = [item.name for item in spec.inputs]
+        descriptors = [item.normalized_descriptor() for item in spec.inputs]
+        headers = [item.name for item in descriptors]
+        descriptions = [self._describe_input(item) for item in descriptors]
         buffer = io.StringIO()
         writer = csv.writer(buffer)
         writer.writerow(headers)
+        writer.writerow(descriptions)
         return buffer.getvalue()
 
     def parse_csv_inputs(
@@ -70,12 +73,15 @@ class BatchRunService:
     ) -> list[BatchRunRow]:
         spec = self.workflow_service.load_spec_model(workflow_id, version)
         descriptors = {item.name: item.normalized_descriptor() for item in spec.inputs}
+        descriptions = {name: self._describe_input(item) for name, item in descriptors.items()}
         reader = csv.DictReader(io.StringIO(content))
         if reader.fieldnames is None:
             raise ValidationError("CSV 缺少表头")
 
         rows: list[BatchRunRow] = []
         for row_index, row in enumerate(reader, start=1):
+            if row_index == 1 and self._is_description_row(row, descriptions):
+                continue
             inputs: dict[str, Any] = {}
             errors: list[str] = []
             for name, descriptor in descriptors.items():
@@ -139,6 +145,87 @@ class BatchRunService:
 
     def list_batch_items(self, batch_id: str) -> list[BatchRunItemModel]:
         return self.batch_repo.list_items(batch_id)
+
+    def list_batch_summaries(self) -> list[dict[str, Any]]:
+        batches = self.batch_repo.list_batches()
+        items: list[dict[str, Any]] = []
+        for batch in batches:
+            items.append(
+                {
+                    "batch_id": batch.id,
+                    "workflow_id": batch.workflow_id,
+                    "version": batch.workflow_version,
+                    "status": batch.status,
+                    "total_count": batch.total_count,
+                    "success_count": batch.success_count,
+                    "failed_count": batch.failed_count,
+                    "error_message": batch.error_message,
+                    "created_at": batch.created_at.isoformat() if batch.created_at else None,
+                    "updated_at": batch.updated_at.isoformat() if batch.updated_at else None,
+                    "started_at": batch.started_at.isoformat() if batch.started_at else None,
+                    "ended_at": batch.ended_at.isoformat() if batch.ended_at else None,
+                }
+            )
+        return items
+
+    def delete_batch(self, batch_id: str) -> dict[str, Any]:
+        batch = self.reconcile_batch_progress(batch_id)
+        if batch.status in {"pending", "running"}:
+            raise InvalidStateError("运行中的 batch 不允许删除")
+        items = self.batch_repo.list_items(batch_id)
+        deleted_run_ids: list[str] = []
+        for item in items:
+            if not item.run_id:
+                continue
+            run = self.run_repo.get_run(item.run_id)
+            if run is None:
+                continue
+            self.run_service.delete_run(item.run_id)
+            deleted_run_ids.append(item.run_id)
+        self.batch_repo.session.delete(batch)
+        self.batch_repo.session.flush()
+        return {
+            "batch_id": batch.id,
+            "workflow_id": batch.workflow_id,
+            "deleted_run_ids": deleted_run_ids,
+            "deleted": True,
+        }
+
+    def bulk_delete_batches(self, batch_ids: list[str]) -> dict[str, Any]:
+        normalized_ids = list(dict.fromkeys(batch_ids))
+        if not normalized_ids:
+            raise ValidationError("至少需要一个 batch_id")
+        deleted_batches: list[dict[str, Any]] = []
+        for batch_id in normalized_ids:
+            deleted_batches.append(self.delete_batch(batch_id))
+        return {
+            "batch_ids": [item["batch_id"] for item in deleted_batches],
+            "deleted_count": len(deleted_batches),
+            "deleted": True,
+        }
+
+    def reconcile_batch_progress(self, batch_id: str) -> BatchRunModel:
+        batch = self.get_batch_or_404(batch_id)
+        items = self.batch_repo.list_items(batch_id)
+        changed = False
+        for item in items:
+            if item.run_id is None or item.status != "running":
+                continue
+            run = self.run_repo.get_run(item.run_id)
+            if run is None:
+                item.status = "failed"
+                item.error_message = "run 不存在"
+                item.ended_at = self._now()
+                batch.failed_count += 1
+                changed = True
+                continue
+            if run.status in {"completed", "needs_attention", "stopped"}:
+                self.finalize_item_from_run(batch_id, item.id, run.status, run.stop_reason)
+                changed = True
+
+        if changed and all(item.status in {"completed", "failed"} for item in items):
+            self.finalize_batch(batch_id)
+        return batch
 
     def mark_batch_running(self, batch_id: str) -> BatchRunModel:
         batch = self.get_batch_or_404(batch_id)
@@ -241,3 +328,75 @@ class BatchRunService:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{descriptor.name} 必须是合法 JSON") from exc
         return raw
+
+    def _describe_input(self, descriptor: WorkflowInputDescriptor) -> str:
+        summary = descriptor.summary or "无"
+        format_parts = [descriptor.input_type, "必填" if descriptor.required else "可选"]
+        if descriptor.input_type == "enum" and descriptor.options:
+            format_parts.append(f"可选值: {', '.join(descriptor.options)}")
+        constraints = self._format_constraints(descriptor)
+        if constraints:
+            format_parts.append(constraints)
+        if descriptor.default is not None:
+            format_parts.append(f"默认值: {self._format_value(descriptor.default)}")
+        format_text = "，".join(format_parts)
+        example = self._format_value(self._example_value(descriptor))
+        return f"说明: {summary}；格式: {format_text}；示例: {example}"
+
+    @staticmethod
+    def _is_description_row(row: dict[str, Any], descriptions: dict[str, str]) -> bool:
+        if not descriptions:
+            return True
+        for name, description in descriptions.items():
+            value = row.get(name)
+            if value is None:
+                return False
+            if str(value).strip() != description:
+                return False
+        return True
+
+    @staticmethod
+    def _format_constraints(descriptor: WorkflowInputDescriptor) -> str | None:
+        if descriptor.input_type == "number":
+            if descriptor.minimum is not None and descriptor.maximum is not None:
+                return f"范围 {descriptor.minimum}~{descriptor.maximum}"
+            if descriptor.minimum is not None:
+                return f"最小值 {descriptor.minimum}"
+            if descriptor.maximum is not None:
+                return f"最大值 {descriptor.maximum}"
+        if descriptor.input_type in {"string", "file"}:
+            if descriptor.min_length is not None and descriptor.max_length is not None:
+                return f"长度 {descriptor.min_length}~{descriptor.max_length}"
+            if descriptor.min_length is not None:
+                return f"最小长度 {descriptor.min_length}"
+            if descriptor.max_length is not None:
+                return f"最大长度 {descriptor.max_length}"
+            if descriptor.pattern:
+                return f"pattern {descriptor.pattern}"
+        return None
+
+    @staticmethod
+    def _format_value(value: Any) -> str:
+        if isinstance(value, (dict, list, bool, int, float)) or value is None:
+            return json.dumps(value, ensure_ascii=False)
+        return str(value)
+
+    @staticmethod
+    def _example_value(descriptor: WorkflowInputDescriptor) -> Any:
+        if descriptor.default is not None:
+            return descriptor.default
+        if descriptor.input_type == "enum" and descriptor.options:
+            return descriptor.options[0]
+        if descriptor.input_type == "boolean":
+            return True
+        if descriptor.input_type == "number":
+            if descriptor.minimum is not None:
+                return descriptor.minimum
+            if descriptor.maximum is not None:
+                return descriptor.maximum
+            return 1
+        if descriptor.input_type == "json":
+            return {"key": "value"}
+        if descriptor.input_type == "file":
+            return "/path/to/file"
+        return "example"

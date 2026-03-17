@@ -9,6 +9,7 @@ type ClaudeTerminalPanelProps = {
   callId?: string | null;
   title?: string;
   defaultOpen?: boolean;
+  emptyHint?: string;
 };
 
 type ClaudeCallPayload = {
@@ -24,7 +25,12 @@ type ClaudeCallPayload = {
 const POLL_INTERVAL_MS = 1500;
 const POLL_LIMIT = 20000;
 
-export function ClaudeTerminalPanel({ callId, title, defaultOpen = false }: ClaudeTerminalPanelProps) {
+export function ClaudeTerminalPanel({
+  callId,
+  title,
+  defaultOpen = false,
+  emptyHint,
+}: ClaudeTerminalPanelProps) {
   const t = useTranslations('claudeTerminal');
   const tStatus = useTranslations('status');
   const [open, setOpen] = useState(defaultOpen);
@@ -158,7 +164,7 @@ export function ClaudeTerminalPanel({ callId, title, defaultOpen = false }: Clau
       >
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{title || t('title')}</p>
-          <p className="mt-2 text-xs text-stone-500">{callId ? t('ready') : t('empty')}</p>
+          <p className="mt-2 text-xs text-stone-500">{callId ? t('ready') : emptyHint || t('empty')}</p>
         </div>
         <div className="flex items-center gap-3">
           {callId ? <StatusBadge value={status} /> : null}
@@ -187,7 +193,7 @@ export function ClaudeTerminalPanel({ callId, title, defaultOpen = false }: Clau
             ) : content ? (
               <pre className="whitespace-pre-wrap break-all">{content}</pre>
             ) : (
-              <p className="text-stone-400">{t('noOutput')}</p>
+              <p className="text-stone-400">{callId ? t('noOutput') : emptyHint || t('empty')}</p>
             )}
           </div>
           {error ? <p className="text-xs text-rose-700">{error}</p> : null}

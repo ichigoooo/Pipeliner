@@ -81,6 +81,23 @@ class RunService:
             raise NotFoundError(f"未找到 run: {run_id}")
         return run
 
+    def delete_run(self, run_id: str) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        if run.status == RunStatus.RUNNING.value:
+            raise InvalidStateError("运行中 run 不允许删除")
+        batch_id = self.run_repo.get_batch_id(run.id)
+        payload = {
+            "run_id": run.id,
+            "workflow_id": run.workflow_id,
+            "batch_id": batch_id,
+            "workspace_root": run.workspace_root,
+            "deleted": True,
+        }
+        self.run_repo.session.delete(run)
+        self.run_repo.session.flush()
+        self.workspace.delete_run_workspace(run.workflow_id, run.id)
+        return payload
+
     def get_run_spec(self, run: RunModel) -> WorkflowSpec:
         return self.workflow_service.load_spec_model(run.workflow_id, run.workflow_version)
 
@@ -111,6 +128,29 @@ class RunService:
             return run
         if run.status != RunStatus.STOPPED.value:
             run.status = RunStatus.RUNNING.value
+        return run
+
+    def mark_driver_failed(self, run_id: str, reason: str) -> RunModel:
+        run = self.get_run(run_id)
+        if run.status in {
+            RunStatus.COMPLETED.value,
+            RunStatus.NEEDS_ATTENTION.value,
+            RunStatus.STOPPED.value,
+        }:
+            return run
+
+        latest = self.run_repo.list_latest_node_runs(run.id)
+        for node_run in latest.values():
+            if node_run.status in {
+                NodeRunStatus.WAITING_EXECUTOR.value,
+                NodeRunStatus.WAITING_VALIDATOR.value,
+            }:
+                node_run.status = NodeRunStatus.FAILED.value
+                node_run.waiting_for_role = None
+                node_run.stop_reason = reason
+
+        run.status = RunStatus.NEEDS_ATTENTION.value
+        run.stop_reason = reason
         return run
 
     def activate_ready_nodes(self, run_id: str) -> list[NodeRunModel]:
@@ -144,6 +184,7 @@ class RunService:
         spec = self.get_run_spec(run)
         node_runs = self.run_repo.list_node_runs(run.id)
         artifacts = self.artifact_service.list_run_artifacts(run.id)
+        batch_id = self.run_repo.get_batch_id(run.id)
         return {
             "run": run,
             "workflow": {
@@ -153,6 +194,7 @@ class RunService:
             },
             "nodes": node_runs,
             "artifacts": artifacts,
+            "batch_id": batch_id,
         }
 
     def list_run_summaries(self, workflow_id: str | None = None) -> list[dict[str, Any]]:
@@ -161,6 +203,7 @@ class RunService:
             if workflow_id is not None
             else self.run_repo.list_runs()
         )
+        batch_map = self.run_repo.list_batch_ids([run.id for run in runs])
         items: list[dict[str, Any]] = []
         for run in runs:
             latest = self.run_repo.list_latest_node_runs(run.id)
@@ -173,6 +216,7 @@ class RunService:
                     "stop_reason": run.stop_reason,
                     "created_at": run.created_at.isoformat() if run.created_at else None,
                     "updated_at": run.updated_at.isoformat() if run.updated_at else None,
+                    "batch_id": batch_map.get(run.id),
                     "attention_node_count": sum(
                         1
                         for node_run in latest.values()

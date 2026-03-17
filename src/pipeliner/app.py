@@ -22,6 +22,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(_app: FastAPI):
         app_settings.ensure_directories()
         db.create_all()
+        batch_run_coordinator.recover_incomplete_batches()
         yield
         run_drive_coordinator.shutdown()
         batch_run_coordinator.shutdown()

@@ -3,6 +3,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 .pipeliner/
+projects/**/.pipeliner/
 .env
 .env.local
 *.pyc

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,22 @@ class WorkspaceManager:
             artifacts_dir=root / "artifacts",
             callbacks_dir=root / "callbacks",
         )
+
+    def delete_run_workspace(self, workflow_id: str, run_id: str) -> Path:
+        root = (self.settings.run_root / workflow_id / run_id).resolve()
+        run_root = self.settings.run_root.resolve()
+        if root != run_root and run_root not in root.parents:
+            raise ValueError("run workspace 路径非法")
+        if root.exists():
+            shutil.rmtree(root)
+        workflow_root = root.parent
+        if (
+            workflow_root != run_root
+            and workflow_root.exists()
+            and not any(workflow_root.iterdir())
+        ):
+            workflow_root.rmdir()
+        return root
 
     def write_json(self, path: Path, payload: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -58,13 +58,32 @@ async function forward(request: NextRequest, params: { path?: string[] }) {
     headers.set('accept', accept);
   }
 
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body,
-    cache: 'no-store',
-    signal: AbortSignal.timeout(Math.max(headersTimeoutMs, bodyTimeoutMs)),
-  });
+  let response: Response;
+  try {
+    response = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(Math.max(headersTimeoutMs, bodyTimeoutMs)),
+    });
+  } catch (error) {
+    const detail =
+      error instanceof Error
+        ? `无法连接后端服务 ${targetUrl}: ${error.message}`
+        : `无法连接后端服务 ${targetUrl}`;
+    return NextResponse.json(
+      {
+        detail,
+      },
+      {
+        status: 502,
+        headers: {
+          'cache-control': 'no-store',
+        },
+      }
+    );
+  }
 
   const responseHeaders = new Headers(response.headers);
   if (!responseHeaders.get('content-type')) {
@@ -94,6 +113,13 @@ export async function GET(
 }
 
 export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ path?: string[] }> }
+) {
+  return forward(request, await context.params);
+}
+
+export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> }
 ) {

@@ -127,6 +127,10 @@ class RunDriveRequest(BaseModel):
     validator_command_template: str | None = None
 
 
+class BatchBulkDeleteRequest(BaseModel):
+    batch_ids: list[str] = Field(default_factory=list)
+
+
 def get_database(request: Request) -> Database:
     return request.app.state.db
 
@@ -201,6 +205,15 @@ def _runtime_coordinator(session: Session, request: Request) -> RuntimeCoordinat
         ArtifactRepository(session),
         request.app.state.settings,
     )
+
+
+def _reconcile_run_archives(session: Session, request: Request, run_id: str) -> None:
+    coordinator = _runtime_coordinator(session, request)
+    coordinator.reconcile_timeouts()
+    coordinator.reconcile_stale_claude_calls(run_id)
+    if _run_drive_coordinator(request).get_status(run_id).get("status") == "running":
+        return
+    coordinator.reconcile_archived_callbacks(run_id)
 
 
 def _artifact_service(session: Session, request: Request) -> ArtifactService:
@@ -948,6 +961,57 @@ def list_runs(
     return {"runs": service.list_run_summaries(workflow_id=workflow_id)}
 
 
+@router.get("/api/batch-runs")
+def list_batch_runs(
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = BatchRunService(
+        BatchRunRepository(session),
+        RunRepository(session),
+        WorkflowRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+    return {"batches": service.list_batch_summaries()}
+
+
+@router.post("/api/batch-runs/bulk-delete")
+def bulk_delete_batch_runs(
+    request_body: BatchBulkDeleteRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = BatchRunService(
+        BatchRunRepository(session),
+        RunRepository(session),
+        WorkflowRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+    payload = service.bulk_delete_batches(request_body.batch_ids)
+    session.commit()
+    return payload
+
+
+@router.delete("/api/batch-runs/{batch_id}")
+def delete_batch_run(
+    batch_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = BatchRunService(
+        BatchRunRepository(session),
+        RunRepository(session),
+        WorkflowRepository(session),
+        ArtifactRepository(session),
+        request.app.state.settings,
+    )
+    payload = service.delete_batch(batch_id)
+    session.commit()
+    return payload
+
+
 @router.get("/api/batch-runs/{batch_id}")
 def get_batch_run(
     batch_id: str,
@@ -963,6 +1027,9 @@ def get_batch_run(
     )
     batch = service.get_batch_or_404(batch_id)
     items = service.list_batch_items(batch_id)
+    existing_run_ids = service.run_repo.list_existing_run_ids(
+        [item.run_id for item in items if item.run_id]
+    )
     return {
         "batch": {
             "batch_id": batch.id,
@@ -990,10 +1057,23 @@ def get_batch_run(
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
                 "started_at": item.started_at.isoformat() if item.started_at else None,
                 "ended_at": item.ended_at.isoformat() if item.ended_at else None,
+                "run_deleted": bool(item.run_id and item.run_id not in existing_run_ids),
             }
             for item in items
         ],
     }
+
+
+@router.delete("/api/runs/{run_id}")
+def delete_run(
+    run_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _run_service(session, request)
+    payload = service.delete_run(run_id)
+    session.commit()
+    return payload
 
 
 @router.get("/api/runs/{run_id}")
@@ -1002,6 +1082,7 @@ def get_run(
     request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
+    _reconcile_run_archives(session, request, run_id)
     service = _run_service(session, request)
     detail = service.get_run_detail(run_id)
     return {
@@ -1010,6 +1091,7 @@ def get_run(
             "status": detail["run"].status,
             "workspace_root": detail["run"].workspace_root,
             "stop_reason": detail["run"].stop_reason,
+            "batch_id": detail.get("batch_id"),
         },
         "workflow": detail["workflow"],
         "nodes": [
@@ -1060,6 +1142,7 @@ def get_run_debug_overview(
     request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
+    _reconcile_run_archives(session, request, run_id)
     service = _run_service(session, request)
     overview = service.get_run_debug_overview(
         run_id,
@@ -1076,6 +1159,7 @@ def get_run_node_debug_details(
     request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
+    _reconcile_run_archives(session, request, run_id)
     service = _run_service(session, request)
     run_repo = RunRepository(session)
 
@@ -1182,7 +1266,12 @@ def get_run_node_debug_details(
 
 
 @router.get("/api/runs/{run_id}/callbacks")
-def get_run_callbacks(run_id: str, session: SessionDep) -> dict[str, Any]:
+def get_run_callbacks(
+    run_id: str,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    _reconcile_run_archives(session, request, run_id)
     run_repo = RunRepository(session)
     if run_repo.get_run(run_id) is None:
         raise NotFoundError(f"未找到 run: {run_id}")
@@ -1209,6 +1298,7 @@ def get_run_artifacts(
     request: Request,
     session: SessionDep,
 ) -> dict[str, Any]:
+    _reconcile_run_archives(session, request, run_id)
     service = _artifact_service(session, request)
     return {
         "artifacts": [
@@ -1276,7 +1366,7 @@ def run_view(
     session: SessionDep,
 ) -> str:
     detail = get_run(run_id, request, session)
-    callbacks = get_run_callbacks(run_id, session)["events"]
+    callbacks = get_run_callbacks(run_id, request, session)["events"]
     return render_run_view(detail, callbacks)
 
 

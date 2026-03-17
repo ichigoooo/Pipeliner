@@ -1,0 +1,94 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.5.0"
+  },
+  "skill": {
+    "name": "chapter-outline-validator",
+    "role": "validator",
+    "validator_id": "chapter-outline-check"
+  },
+  "node_id": "chapter_outline_scan",
+  "node_spec": {
+    "node_id": "chapter_outline_scan",
+    "title": "篇章线索扫描",
+    "purpose": "逐个读取切块文档，提取局部章节标题、边界和结构线索，再汇总为全书级候选结构，避免结构识别阶段直接处理整本书",
+    "archetype": "recognize-structure",
+    "depends_on": [
+      "text_chunking"
+    ],
+    "inputs": [
+      {
+        "name": "text_chunks_dir",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_chunking",
+          "output": "text_chunks_dir"
+        },
+        "shape": "directory",
+        "required": true,
+        "summary": "按顺序切分后的全文切块目录"
+      },
+      {
+        "name": "chunk_manifest",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "text_chunking",
+          "output": "chunk_manifest"
+        },
+        "shape": "structured_data",
+        "required": true,
+        "summary": "切块清单，帮助将局部线索映射回全书位置"
+      },
+      {
+        "name": "structure_hint",
+        "from": {
+          "kind": "workflow_input",
+          "name": "structure_hint",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "篇章结构提示，帮助更快识别候选章节边界"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "chapter_outline_candidates",
+        "shape": "structured_data",
+        "summary": "候选章节标题、边界、来源切块和结构线索列表"
+      }
+    ],
+    "executor": {
+      "skill": "chapter-outline-scan"
+    },
+    "validators": [
+      {
+        "validator_id": "chapter-outline-check",
+        "skill": "chapter-outline-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "已提取出可靠的候选章节边界和标题线索",
+      "pass_condition": [
+        "至少识别出全书的主要结构线索",
+        "候选边界覆盖所有切块，不出现明显大片遗漏",
+        "每条候选线索都能映射回来源切块和全书位置",
+        "标题和边界信息足以支持下一步定稿"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "chapter_outline_candidates"
+      ]
+    }
+  },
+  "updated_at": "2026-03-17T07:49:48.808154+00:00"
+}
