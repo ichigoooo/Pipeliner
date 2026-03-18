@@ -496,6 +496,40 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function isBackendConnectError(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 502 &&
+    error.message.includes('无法连接后端服务')
+  );
+}
+
+async function requestWithRetry<T>(
+  path: string,
+  init: RequestInit,
+  options?: { retries?: number; backoffMs?: number }
+): Promise<T> {
+  const retries = options?.retries ?? 3;
+  const backoffMs = options?.backoffMs ?? 1000;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return await request<T>(path, init);
+    } catch (error) {
+      lastError = error;
+      if (!isBackendConnectError(error) || attempt >= retries) {
+        throw error;
+      }
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, backoffMs * attempt);
+      });
+    }
+  }
+
+  throw lastError;
+}
+
 async function requestForm<T>(path: string, form: FormData): Promise<T> {
   const response = await fetch(`/api/${path}`, {
     method: 'POST',
@@ -667,7 +701,7 @@ export const api = {
     runId: string,
     payload: { max_steps?: number; executor_command_template?: string; validator_command_template?: string }
   ) =>
-    request<{ run_id: string; status: string; stop_reason: string; steps: Record<string, unknown>[] }>(
+    requestWithRetry<{ run_id: string; status: string; stop_reason: string; steps: Record<string, unknown>[] }>(
       `runs/${runId}/drive`,
       {
         method: 'POST',
@@ -679,7 +713,7 @@ export const api = {
     nodeId: string,
     payload: { round_no?: number; command_template?: string }
   ) =>
-    request<Record<string, unknown>>(`runs/${runId}/nodes/${nodeId}/executor/dispatch`, {
+    requestWithRetry<Record<string, unknown>>(`runs/${runId}/nodes/${nodeId}/executor/dispatch`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -689,7 +723,7 @@ export const api = {
     validatorId: string,
     payload: { round_no?: number; command_template?: string }
   ) =>
-    request<Record<string, unknown>>(
+    requestWithRetry<Record<string, unknown>>(
       `runs/${runId}/nodes/${nodeId}/validators/${validatorId}/dispatch`,
       {
         method: 'POST',

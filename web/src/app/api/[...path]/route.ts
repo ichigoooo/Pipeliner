@@ -6,6 +6,9 @@ const API_BASE_URL =
   'http://127.0.0.1:8000';
 const DEFAULT_HEADERS_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_BODY_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_CONNECT_RETRY_COUNT = 20;
+const DEFAULT_CONNECT_RETRY_BASE_MS = 300;
+const MAX_CONNECT_RETRY_DELAY_MS = 3000;
 
 const parseTimeoutMs = (value: string | undefined, fallback: number) => {
   if (!value) {
@@ -26,6 +29,53 @@ const bodyTimeoutMs = parseTimeoutMs(
   process.env.PIPELINER_API_BODY_TIMEOUT_MS,
   DEFAULT_BODY_TIMEOUT_MS
 );
+const connectRetryCount = parseTimeoutMs(
+  process.env.PIPELINER_API_CONNECT_RETRY_COUNT,
+  DEFAULT_CONNECT_RETRY_COUNT
+);
+const connectRetryBaseMs = parseTimeoutMs(
+  process.env.PIPELINER_API_CONNECT_RETRY_BASE_MS,
+  DEFAULT_CONNECT_RETRY_BASE_MS
+);
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+function extractErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+  const maybeCause = (error as { cause?: unknown }).cause;
+  if (!maybeCause || typeof maybeCause !== 'object') {
+    return null;
+  }
+  const code = (maybeCause as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  const code = extractErrorCode(error)?.toUpperCase();
+  if (code) {
+    return [
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'EPIPE',
+      'ETIMEDOUT',
+      'UND_ERR_CONNECT_TIMEOUT',
+    ].includes(code);
+  }
+
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  return (
+    message.includes('fetch failed') ||
+    message.includes('econnrefused') ||
+    message.includes('connect') ||
+    message.includes('socket') ||
+    message.includes('timed out')
+  );
+}
 
 async function readRequestBody(request: NextRequest): Promise<BodyInit | undefined> {
   if (request.method === 'GET' || request.method === 'HEAD') {
@@ -58,19 +108,34 @@ async function forward(request: NextRequest, params: { path?: string[] }) {
     headers.set('accept', accept);
   }
 
-  let response: Response;
-  try {
-    response = await fetch(targetUrl, {
-      method: request.method,
-      headers,
-      body,
-      cache: 'no-store',
-      signal: AbortSignal.timeout(Math.max(headersTimeoutMs, bodyTimeoutMs)),
-    });
-  } catch (error) {
+  let response: Response | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= connectRetryCount; attempt += 1) {
+    try {
+      response = await fetch(targetUrl, {
+        method: request.method,
+        headers,
+        body,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(Math.max(headersTimeoutMs, bodyTimeoutMs)),
+      });
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      const shouldRetry =
+        attempt < connectRetryCount && isRetryableNetworkError(error);
+      if (!shouldRetry) {
+        break;
+      }
+      await sleep(Math.min(connectRetryBaseMs * attempt, MAX_CONNECT_RETRY_DELAY_MS));
+    }
+  }
+
+  if (!response) {
     const detail =
-      error instanceof Error
-        ? `无法连接后端服务 ${targetUrl}: ${error.message}`
+      lastError instanceof Error
+        ? `无法连接后端服务 ${targetUrl}: ${lastError.message}`
         : `无法连接后端服务 ${targetUrl}`;
     return NextResponse.json(
       {

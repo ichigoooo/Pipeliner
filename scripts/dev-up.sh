@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_HOST="127.0.0.1"
 API_PORT="8000"
 WEB_PORT="3000"
+API_RELOAD="false"
 
 load_env_file() {
   local env_file="$1"
@@ -38,6 +39,38 @@ process_command() {
 process_ppid() {
   local pid="$1"
   ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ' || true
+}
+
+terminate_managed_pid_chain() {
+  local pid="$1"
+  local signal="${2:-TERM}"
+  local current="$pid"
+  local parent_pid
+  local parent_command
+  local chain=()
+  local idx
+
+  [[ -n "$current" ]] || return 0
+
+  while [[ -n "$current" ]]; do
+    chain+=("$current")
+    parent_pid="$(process_ppid "$current")"
+    [[ -n "$parent_pid" ]] || break
+    [[ "$parent_pid" == "1" ]] && break
+    parent_command="$(process_command "$parent_pid")"
+    case "$parent_command" in
+      *"uv run uvicorn pipeliner.app:create_app"*|*"uvicorn pipeliner.app:create_app"*)
+        current="$parent_pid"
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  for (( idx=${#chain[@]}-1; idx>=0; idx-- )); do
+    kill "-$signal" "${chain[$idx]}" >/dev/null 2>&1 || true
+  done
 }
 
 is_managed_pid() {
@@ -92,12 +125,23 @@ ensure_port_available() {
   echo "stopping existing $service_name process on port $port"
   while IFS= read -r pid; do
     [[ -n "$pid" ]] || continue
-    kill "$pid" >/dev/null 2>&1 || true
+    terminate_managed_pid_chain "$pid" "TERM"
   done <<< "$pids"
 
-  for _ in {1..20}; do
-    if [[ -z "$(list_port_pids "$port")" ]]; then
+  for attempt in {1..20}; do
+    pids="$(list_port_pids "$port")"
+    if [[ -z "$pids" ]]; then
       return 0
+    fi
+    while IFS= read -r pid; do
+      [[ -n "$pid" ]] || continue
+      terminate_managed_pid_chain "$pid" "TERM"
+    done <<< "$pids"
+    if [[ "$attempt" -ge 10 ]]; then
+      while IFS= read -r pid; do
+        [[ -n "$pid" ]] || continue
+        terminate_managed_pid_chain "$pid" "KILL"
+      done <<< "$pids"
     fi
     sleep 0.2
   done
@@ -125,6 +169,7 @@ load_env_file "$ROOT_DIR/web/.env.local"
 API_HOST="${PIPELINER_API_HOST:-$API_HOST}"
 API_PORT="${PIPELINER_API_PORT:-$API_PORT}"
 WEB_PORT="${PIPELINER_WEB_PORT:-$WEB_PORT}"
+API_RELOAD="${PIPELINER_API_RELOAD:-$API_RELOAD}"
 
 export PIPELINER_API_BASE_URL="${PIPELINER_API_BASE_URL:-http://$API_HOST:$API_PORT}"
 export NEXT_PUBLIC_PIPELINER_API_BASE_URL="${NEXT_PUBLIC_PIPELINER_API_BASE_URL:-$PIPELINER_API_BASE_URL}"
@@ -141,11 +186,18 @@ uv sync
 uv run alembic upgrade head
 uv run pipeliner db-init
 
-uv run uvicorn pipeliner.app:create_app \
-  --factory \
-  --reload \
-  --host "$API_HOST" \
-  --port "$API_PORT" &
+if [[ "$API_RELOAD" == "true" ]]; then
+  uv run uvicorn pipeliner.app:create_app \
+    --factory \
+    --reload \
+    --host "$API_HOST" \
+    --port "$API_PORT" &
+else
+  uv run uvicorn pipeliner.app:create_app \
+    --factory \
+    --host "$API_HOST" \
+    --port "$API_PORT" &
+fi
 API_PID="$!"
 
 cd "$ROOT_DIR/web"
@@ -155,5 +207,6 @@ WEB_PID="$!"
 
 echo "backend: http://$API_HOST:$API_PORT"
 echo "frontend: http://127.0.0.1:$WEB_PORT"
+echo "backend reload: $API_RELOAD"
 
 wait "$WEB_PID"
