@@ -139,6 +139,10 @@ export interface ClaudeCallMetadata {
   slow_start_at?: string | null;
   slow_start_after_ms?: number | null;
   slow_start_message?: string | null;
+  preflight_failed?: boolean;
+  preflight_host?: string | null;
+  preflight_error?: string | null;
+  preflight_failed_at?: string | null;
   redacted?: boolean;
 }
 

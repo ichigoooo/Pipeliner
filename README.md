@@ -34,10 +34,13 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - batch run 数据模型、CSV 模板生成、逐行校验与串行调度
 - Workflow Studio 批量启动入口、批次详情页与一键打开 run workspace
 - Authoring 操作区一键打开 workflow 项目目录
+- runs/batches 批量删除与历史保留标记，降低运行列表噪音
+- Claude 连接诊断（base URL / API host / proxy 摘要）与 settings 展示
+- Claude 慢启动告警与预检失败提示，避免“无输出=空闲”的误判
 
 已验证：
-- 后端自动化测试通过：`23 passed`
-- 前端 Vitest 通过：`5 passed`
+- 后端自动化测试通过：`83 passed`
+- 前端 Vitest 通过：`25 passed`
 - 真实 `Claude` 联调通过
 - 一条真实 run 已从启动推进到 `completed`
 
@@ -57,6 +60,9 @@ Pipeliner 是一个 Python-first 的 agent 工作流编排器 MVP。
 - 使用 Workflow Studio 完成 authoring、workflow 浏览、run 调试与 settings 溯源
 - 通过 CSV 模板批量启动多条 run，并在批次详情页追踪每一行状态
 - 在 Authoring 中一键打开 workflow 项目目录并检查 skills / scripts
+- 在 `/runs` 和 batch 列表中批量清理已结束条目并保留批次历史
+- 在无 Claude 输出时区分排队、慢启动、预检失败和真实超时
+- 在 `/settings` 查看 Claude 连接诊断来源，快速定位网络与代理问题
 
 ## 技术栈
 

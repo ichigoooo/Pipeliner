@@ -455,3 +455,29 @@ def test_executor_first_byte_timeout_warns_but_waits_for_real_timeout(
     assert overview["status"] == "needs_attention"
     assert overview["latest_nodes"][0]["status"] == "failed"
     assert overview["latest_nodes"][0]["stop_reason"] == "executor command timeout"
+
+
+def test_executor_preflight_failure_records_diagnostics(
+    client: TestClient,
+    workflow_fixture: dict,
+    monkeypatch,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    run = _start_run(client, "mvp-review-loop", "0.1.0")
+    monkeypatch.setenv("PIPELINER_CLAUDE_API_HOST", "definitely.invalid")
+
+    response = client.post(
+        f"/api/runs/{run['run_id']}/nodes/draft_article/executor/dispatch",
+        json={"command_template": "claude -p --permission-mode bypassPermissions"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "failed"
+
+    metadata_response = client.get(f"/api/claude-calls/{payload['claude_call_id']}")
+    assert metadata_response.status_code == 200
+    metadata = metadata_response.json()
+    assert metadata["preflight_failed"] is True
+    assert metadata["preflight_host"] == "definitely.invalid"
+    assert "域名解析失败" in metadata["preflight_error"]
+    assert metadata["exit_code"] == -2

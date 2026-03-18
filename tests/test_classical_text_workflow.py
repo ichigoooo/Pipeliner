@@ -15,7 +15,7 @@ def test_classical_text_workflow_uses_chunked_outline_pipeline() -> None:
     spec, _warnings = service.validate_spec(raw_spec)
 
     assert spec.metadata.workflow_id == "classical-text-to-csv"
-    assert spec.metadata.version == "0.5.0"
+    assert spec.metadata.version == "0.5.1"
 
     nodes = {node.node_id: node for node in spec.nodes}
     assert "text_chunking" in nodes

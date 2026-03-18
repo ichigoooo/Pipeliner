@@ -27,6 +27,19 @@
 - Timeline 展示最新节点状态与 stop reason。
 - Node Detail 可查看 callbacks、artifacts、log refs 与 raw context。
 - Preview 面板支持 JSON/Text/目录预览，binary 会提示不可预览。
+- 运行详情默认跟随当前焦点节点；手动切换历史轮次后会保持固定，直到点击“回到当前节点”。
+- 当终端暂无输出时，页面会区分“排队中 / 已启动但无输出 / 慢启动告警 / 失败摘要”。
+
+## 运行清理与队列维护
+
+- `/runs` 按“需要处理 / 进行中 / 已完成与已停止”分组展示，优先处理 attention 项。
+- 非运行中的 run 支持多选批量删除。
+- 已结束 batch 支持多选批量删除；若关联 run 已删除，批次行会保留历史并标记为 deleted。
+
+## Claude 诊断
+
+- `/settings` 提供 Claude base URL、API host、proxy 摘要及来源信息。
+- 若未检测到有效代理变量，页面会给出显式告警提示，便于优先排查网络/代理配置问题。
 
 ## 节点 Skill 与项目目录
 

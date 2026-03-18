@@ -534,6 +534,7 @@
       "lint": "Lint"
     },
     "lintTab": "Lint ({count})",
+    "graphEmpty": "No graph nodes are available for this version. Check nodes in the workflow spec.",
     "lint": {
       "blockingIssues": "Blocking Issues",
       "warnings": "Warnings",

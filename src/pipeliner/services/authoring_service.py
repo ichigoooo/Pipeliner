@@ -243,6 +243,8 @@ class AuthoringService:
                     error_message=f"authoring spec invalid: {exc}",
                     metadata_json=result.metadata,
                 )
+                # Keep failed generation logs for diagnostics even if the request returns 4xx.
+                self.repo.session.commit()
                 raise ValidationError(f"Claude 生成结果不是合法的 workflow spec: {exc}") from exc
             draft = self.save_draft(session_id, result_spec, instruction=instruction)
             self.repo.create_generation_log(
@@ -263,6 +265,8 @@ class AuthoringService:
                 error_message=str(exc),
                 metadata_json=exc.metadata,
             )
+            # Keep failed generation logs for diagnostics even if the request returns 4xx.
+            self.repo.session.commit()
             raise ValidationError(str(exc)) from exc
 
     def _ensure_depends_on(self, raw_spec: dict[str, Any]) -> dict[str, Any]:

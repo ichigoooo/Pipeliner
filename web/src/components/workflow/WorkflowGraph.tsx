@@ -15,7 +15,6 @@ import {
     BackgroundVariant,
     ReactFlowInstance
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 
 interface WorkflowGraphProps {
     initialNodes: Node[];
@@ -31,6 +30,7 @@ export function WorkflowGraph({
     onPaneClick
 }: WorkflowGraphProps) {
     const wrapperRef = useRef<HTMLDivElement | null>(null);
+    const [canvasHeight, setCanvasHeight] = useState(352);
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
     const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<Node, Edge> | null>(null);
@@ -85,8 +85,27 @@ export function WorkflowGraph({
         return () => observer.disconnect();
     }, [flowInstance]);
 
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper || typeof ResizeObserver === 'undefined') {
+            return;
+        }
+        const parent = wrapper.parentElement;
+        if (!parent) {
+            return;
+        }
+        const updateHeight = () => {
+            const nextHeight = Math.max(Math.round(parent.getBoundingClientRect().height), 352);
+            setCanvasHeight((current) => (current === nextHeight ? current : nextHeight));
+        };
+        updateHeight();
+        const observer = new ResizeObserver(updateHeight);
+        observer.observe(parent);
+        return () => observer.disconnect();
+    }, []);
+
     return (
-        <div ref={wrapperRef} style={{ width: '100%', height: '100%' }}>
+        <div ref={wrapperRef} style={{ width: '100%', height: `${canvasHeight}px` }}>
             <ReactFlow
                 nodes={nodes}
                 edges={edges}

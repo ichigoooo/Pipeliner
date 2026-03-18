@@ -50,19 +50,27 @@ export function WorkflowWorkspace({
   };
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="px-4">
         <TabList tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
 
       <div className="relative flex-1 overflow-hidden bg-stone-50">
         {activeTab === t('tabs.graph') && (
-          <WorkflowGraph
-            initialNodes={nodes}
-            initialEdges={edges}
-            onNodeClick={handleNodeClick}
-            onPaneClick={handlePaneClick}
-          />
+          nodes.length > 0 ? (
+            <div className="h-full min-h-[22rem]">
+              <WorkflowGraph
+                initialNodes={nodes}
+                initialEdges={edges}
+                onNodeClick={handleNodeClick}
+                onPaneClick={handlePaneClick}
+              />
+            </div>
+          ) : (
+            <div className="flex h-full min-h-[22rem] items-center justify-center px-6 text-sm text-stone-500">
+              {t('graphEmpty')}
+            </div>
+          )
         )}
 
         {activeTab === t('tabs.cards') && (

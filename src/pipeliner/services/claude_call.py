@@ -116,6 +116,25 @@ class ClaudeCallSession:
         if self.mirror_meta_path is not None:
             _write_metadata(self.mirror_meta_path, payload)
 
+    def mark_preflight_failure(
+        self,
+        *,
+        host: str,
+        error_message: str,
+    ) -> None:
+        payload = _read_metadata(self.meta_path)
+        payload.update(
+            {
+                "preflight_failed": True,
+                "preflight_host": host,
+                "preflight_error": error_message,
+                "preflight_failed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        _write_metadata(self.meta_path, payload)
+        if self.mirror_meta_path is not None:
+            _write_metadata(self.mirror_meta_path, payload)
+
 
 class ClaudeCallStore:
     def __init__(self, settings: Settings | None = None) -> None:
@@ -165,6 +184,10 @@ class ClaudeCallStore:
             "slow_start_at": None,
             "slow_start_after_ms": None,
             "slow_start_message": None,
+            "preflight_failed": False,
+            "preflight_host": None,
+            "preflight_error": None,
+            "preflight_failed_at": None,
         }
         _write_metadata(meta_path, payload)
         handle = log_path.open("ab")
@@ -438,7 +461,7 @@ def run_streamed_command(
                         bytes_written=output_session.bytes_written,
                     )
             if timeout is not None and not timed_out:
-                if elapsed > timeout:
+                if elapsed >= timeout:
                     process.kill()
                     timed_out = True
                     if trace_recorder is not None:
@@ -517,7 +540,10 @@ def _read_metadata(path: Path) -> dict[str, Any]:
 
 
 def _write_metadata(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    temp_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    temp_path.replace(path)

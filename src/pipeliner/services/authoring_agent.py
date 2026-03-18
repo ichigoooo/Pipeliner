@@ -118,6 +118,10 @@ class AuthoringAgent:
             host = resolve_claude_api_host(env)
             preflight_error = preflight_claude_host(host, trace_recorder)
             if preflight_error:
+                call_session.mark_preflight_failure(
+                    host=host,
+                    error_message=preflight_error,
+                )
                 call_session.complete(
                     status="failed",
                     exit_code=-2,
@@ -142,6 +146,9 @@ class AuthoringAgent:
                     "exit_code": -2,
                     "duration_ms": 0,
                     "claude_call_id": call_session.call_id,
+                    "preflight_failed": True,
+                    "preflight_host": host,
+                    "preflight_error": preflight_error,
                 }
                 trace_recorder.log("authoring_failed", reason=preflight_error)
                 raise AuthoringAgentError(preflight_error, metadata)

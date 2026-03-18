@@ -107,7 +107,7 @@ export function WorkflowVersionClient({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       <div className="border-b border-stone-200 px-6 py-5">
         <Link
           href={`/workflows/${workflowId}`}
@@ -211,7 +211,7 @@ export function WorkflowVersionClient({
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-[28rem] flex-1">
         <WorkflowWorkspace
           spec={workflow.spec}
           cards={workflow.workflow_view.cards}

@@ -2,76 +2,54 @@
 
 ## 目标
 
-将 Workflow Studio 前端与后端能力打通，完整支持“设计工作流 → 发布 → 运行 → 调试 → 迭代”闭环，并确保与现有设计文档一致。+
-## 当前实现概况（基线）
+保持“设计工作流 → 发布 → 运行 → 调试 → 迭代”闭环稳定可运维，持续降低真实使用中的排障成本与操作复杂度。
+
+## 当前实现概况（2026-03 基线）
 
 已具备：
-- workflow spec 注册与校验
-- runtime 状态机、callback 协议与 artifact manifest
-- 运行调度器（CLI 侧 run drive）
-- attention 队列、停止与重试
-- Studio 多视图（cards / graph / spec / lint）
-- run 调试工作台、设置溯源面板
+- Authoring 会话、Claude 生成、发布版本、从版本/attention 发起迭代
+- Run 创建、自动驱动、手动 dispatch、attention 介入、artifact/log 预览
+- Batch run CSV 模板、顺序执行、批次详情与 workspace 打开
+- runs/batches 批量删除、历史保留标记与主列表分组展示
+- Claude 连接诊断（base URL、API host、proxy 摘要）与 settings 可视化
+- 终端无输出时的排队/慢启动/失败状态解释
 
-未完整实现：
-- Authoring 阶段的对话式生成（Claude Code 接入）
-- 运行自动驱动的前端入口
-- 由运行反馈驱动的迭代闭环
-- 产物与日志可读性提升
+当前收口重点：
+- 运行时语义一致性（慢启动、真实超时、artifact 缺失优先级）
+- 失败路径可观测性（预检失败字段、错误分类、日志留存）
+- 文档与 OpenSpec 基线同步（避免实现和规格漂移）
 
-## 里程碑与工作项
+## 阶段规划（滚动）
 
-### 阶段 0：需求矩阵与验收定义
-- 输出需求矩阵（设计文档 → 现状 → 缺口）
-- 定义验收用例（无 CLI 场景）
+### 阶段 A：稳定性收口
+- 统一 executor/validator/authoring 的诊断口径与错误分类
+- 固化慢启动与真实超时语义，并覆盖回归测试
+- 保证失败场景保留可追溯元数据
 
-### 阶段 1：Authoring Claude 接入（核心缺口）
+### 阶段 B：运维体验优化
+- 强化 runs/batches 的行动优先分组与批量清理体验
+- 优化 run detail 的“跟随焦点 / 固定历史轮次”交互
+- 持续压缩“页面无输出但实际在运行”带来的误判成本
 
-后端：
-- 增加 Authoring Agent 服务：输入 intent brief + instruction + spec，输出新 spec
-- 通过命令模板接入 Claude（与 executor/validator 风格一致）
-- 新增 API：`POST /api/authoring/sessions/{id}/generate` 或 `continue` 支持 `use_agent=true`
-- 记录调用日志与失败原因
-
-前端：
-- 新增“生成下一版”入口，区分“仅保存”与“调用 Claude”
-- 显示生成进度、耗时、错误
-- 增加草案差异视图（diff）
-
-### 阶段 2：创作闭环与迭代
-- 支持从已发布版本创建 authoring session
-- 支持从 attention 运行生成草案（携带 rework brief）
-- lint 阻塞错误定位到具体字段
-
-### 阶段 3：运行自动调度（Run Drive）
-- 新增 API：`POST /api/runs/{id}/drive`（复用 RunDriver）
-- 前端 Run 页面提供“一键驱动/继续驱动”入口
-- 保留单节点手动 dispatch
-
-### 阶段 4：产物与日志可读性
-- Artifact 详情页支持 manifest + 可预览
-- 日志引用可只读查看（本地文件）
-- 运行详情补充 callback → artifact 链路
-
-### 阶段 5：产品化收尾
-- 空状态与错误态统一
-- 设置面板补充“来源解释”
-- 端到端无 CLI 流程验证
+### 阶段 C：基线治理
+- 定期同步 README、Studio 使用文档、OpenSpec 主规格
+- 完成已结束 change 的归档，避免需求重复维护
+- 将关键验收路径固化为自动化测试
 
 ## 验收标准（无 CLI）
 
-1. 在 Studio 创建会话并生成草案
-2. 通过 lint 后发布 workflow version
-3. 在 Studio 启动 run 并自动驱动至终态
-4. 在 attention 中处理阻塞与重试
-5. 从运行反馈发起新一轮迭代并再次发布
+1. 用户可在 Studio 完成创建会话、生成草案、发布版本。
+2. 用户可在 Studio 启动 run、自动驱动并定位失败原因。
+3. 用户可在 attention 完成重试或发起迭代，形成回路。
+4. 用户可在 runs/batches 批量清理历史项且不丢失必要追溯信息。
+5. 用户可在 settings/terminal 快速识别 Claude 网络与代理配置问题。
 
 ## 风险与依赖
 
 风险：
-- Claude 调用失败导致草案不稳定
-- diff 与 lint 信息过载影响可用性
+- 外部网络波动导致 Claude 调用失败模式增多
+- 运行状态解释口径不一致导致误操作
 
 依赖：
-- Claude 命令模板与本地可执行环境
-- 持久化与 workspace 目录权限
+- Claude 命令模板与本地网络/代理环境
+- 本地文件系统权限、数据库稳定性与测试覆盖率

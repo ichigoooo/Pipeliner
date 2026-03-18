@@ -534,6 +534,7 @@
       "lint": "检查"
     },
     "lintTab": "检查 ({count})",
+    "graphEmpty": "当前版本没有可展示的节点图，请先检查规范中的 nodes 定义。",
     "lint": {
       "blockingIssues": "阻塞问题",
       "warnings": "警告",

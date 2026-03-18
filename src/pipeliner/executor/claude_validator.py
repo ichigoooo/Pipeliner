@@ -204,6 +204,10 @@ class ClaudeValidatorDispatcher:
             host = resolve_claude_api_host(env)
             preflight_error = preflight_claude_host(host, trace_recorder)
             if preflight_error:
+                call_session.mark_preflight_failure(
+                    host=host,
+                    error_message=preflight_error,
+                )
                 call_session.complete(
                     status="failed",
                     exit_code=-2,
