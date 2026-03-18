@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NextIntlClientProvider } from 'next-intl';
 import { vi } from 'vitest';
@@ -42,6 +42,24 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+vi.mock('@/components/workflow/WorkflowGraph', () => ({
+  WorkflowGraph: ({
+    initialNodes,
+    onNodeClick,
+  }: {
+    initialNodes: Array<{ id: string }>;
+    onNodeClick?: (event: React.MouseEvent, node: { id: string }) => void;
+  }) => (
+    <div data-testid="workflow-graph">
+      {initialNodes.map((node) => (
+        <button key={node.id} type="button" onClick={(event) => onNodeClick?.(event, node)}>
+          {node.id}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
 const mockedApi = vi.mocked(api);
 
 const renderWithClient = (ui: React.ReactElement) => {
@@ -52,11 +70,12 @@ const renderWithClient = (ui: React.ReactElement) => {
       },
     },
   });
-  return render(
+  const renderResult = render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
       <QueryClientProvider client={client}>{ui}</QueryClientProvider>
     </NextIntlClientProvider>
   );
+  return { client, ...renderResult };
 };
 
 describe('RunDetailPage', () => {
@@ -499,6 +518,10 @@ describe('RunDetailPage', () => {
       output_path: 'claude_calls/call_live.log',
       command: 'claude -p',
       context: {},
+      slow_start_detected: true,
+      slow_start_at: '2026-03-13T00:03:00Z',
+      slow_start_after_ms: 180000,
+      slow_start_message: 'slow start',
     });
     mockedApi.retryNode.mockResolvedValue({
       run_id: 'run_live',
@@ -531,9 +554,448 @@ describe('RunDetailPage', () => {
     expect(screen.getAllByText('Waiting for executor').length).toBeGreaterThan(0);
     expect(screen.getByText('Terminal and execution output')).toBeInTheDocument();
     expect((await screen.findAllByText(/The executor has started, but it still had no output/)).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        'The executor has exceeded the first-byte threshold, but the system will keep waiting. You can continue waiting or stop this run manually.'
+      )
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Auto drive is running' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Delete Run' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Advanced controls'));
     expect(screen.getByRole('button', { name: 'Drive' })).toBeDisabled();
+  });
+
+  it('auto-follows current focus until the user manually inspects another node', async () => {
+    mockedApi.getWorkflow.mockResolvedValue({
+      workflow_id: 'wf_follow',
+      version: 'v1',
+      title: 'Workflow Follow',
+      warnings: [],
+      spec: {},
+      workflow_view: {
+        metadata: { workflow_id: 'wf_follow', title: 'Workflow Follow', purpose: 'Follow', version: 'v1', tags: [] },
+        inputs: [],
+        input_descriptors: [],
+        outputs: [],
+        cards: [],
+      },
+      graph: {
+        nodes: [
+          {
+            id: 'draft_article',
+            data: { label: 'Draft Article', node_id: 'draft_article', spec: {} },
+            position: { x: 0, y: 0 },
+          },
+          {
+            id: 'review_article',
+            data: { label: 'Review Article', node_id: 'review_article', spec: {} },
+            position: { x: 240, y: 0 },
+          },
+        ],
+        edges: [],
+      },
+      lint_report: { warnings: [], errors: [], blocking: false },
+    });
+    mockedApi.getRun.mockResolvedValue({
+      run: {
+        id: 'run_follow',
+        status: 'running',
+        workspace_root: '/tmp/run_follow',
+        stop_reason: null,
+      },
+      workflow: {
+        workflow_id: 'wf_follow',
+        version: 'v1',
+        title: 'Workflow Follow',
+      },
+      nodes: [],
+      artifacts: [],
+    });
+
+    const overviewPayloads = [
+      {
+        run_id: 'run_follow',
+        status: 'running',
+        stop_reason: null,
+        workflow: { workflow_id: 'wf_follow', version: 'v1', title: 'Workflow Follow' },
+        summary: {
+          node_counts: { waiting_executor: 1, completed: 1 },
+          attention_nodes: [],
+        },
+        dispatchable: [],
+        timeline: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:00:00Z',
+          },
+          {
+            node_id: 'review_article',
+            round_no: 1,
+            status: 'waiting_executor',
+            waiting_for_role: 'executor',
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:05:00Z',
+          },
+        ],
+        latest_nodes: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+          },
+          {
+            node_id: 'review_article',
+            round_no: 1,
+            status: 'waiting_executor',
+            waiting_for_role: 'executor',
+            stop_reason: null,
+          },
+        ],
+        driver: {
+          run_id: 'run_follow',
+          status: 'running',
+          mode: 'auto',
+          max_steps: 500,
+          started_at: '2026-03-17T08:00:00Z',
+          ended_at: null,
+          last_error: null,
+          stop_reason: null,
+          result_status: null,
+        },
+        current_focus: {
+          node_id: 'draft_article',
+          round_no: 1,
+          status: 'completed',
+          waiting_for_role: null,
+          stop_reason: null,
+          executor_call_id: null,
+          validator_calls: [],
+        },
+        activity: [],
+      },
+      {
+        run_id: 'run_follow',
+        status: 'running',
+        stop_reason: null,
+        workflow: { workflow_id: 'wf_follow', version: 'v1', title: 'Workflow Follow' },
+        summary: {
+          node_counts: { waiting_executor: 1, completed: 1 },
+          attention_nodes: [],
+        },
+        dispatchable: [],
+        timeline: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:00:00Z',
+          },
+          {
+            node_id: 'review_article',
+            round_no: 1,
+            status: 'waiting_executor',
+            waiting_for_role: 'executor',
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:05:00Z',
+          },
+        ],
+        latest_nodes: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+          },
+          {
+            node_id: 'review_article',
+            round_no: 1,
+            status: 'waiting_executor',
+            waiting_for_role: 'executor',
+            stop_reason: null,
+          },
+        ],
+        driver: {
+          run_id: 'run_follow',
+          status: 'running',
+          mode: 'auto',
+          max_steps: 500,
+          started_at: '2026-03-17T08:00:00Z',
+          ended_at: null,
+          last_error: null,
+          stop_reason: null,
+          result_status: null,
+        },
+        current_focus: {
+          node_id: 'review_article',
+          round_no: 1,
+          status: 'waiting_executor',
+          waiting_for_role: 'executor',
+          stop_reason: null,
+          executor_call_id: null,
+          validator_calls: [],
+        },
+        activity: [],
+      },
+      {
+        run_id: 'run_follow',
+        status: 'running',
+        stop_reason: null,
+        workflow: { workflow_id: 'wf_follow', version: 'v1', title: 'Workflow Follow' },
+        summary: {
+          node_counts: { waiting_executor: 1, completed: 1 },
+          attention_nodes: [],
+        },
+        dispatchable: [],
+        timeline: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:00:00Z',
+          },
+          {
+            node_id: 'review_article',
+            round_no: 2,
+            status: 'waiting_validator',
+            waiting_for_role: 'validator',
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:10:00Z',
+          },
+        ],
+        latest_nodes: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+          },
+          {
+            node_id: 'review_article',
+            round_no: 2,
+            status: 'waiting_validator',
+            waiting_for_role: 'validator',
+            stop_reason: null,
+          },
+        ],
+        driver: {
+          run_id: 'run_follow',
+          status: 'running',
+          mode: 'auto',
+          max_steps: 500,
+          started_at: '2026-03-17T08:00:00Z',
+          ended_at: null,
+          last_error: null,
+          stop_reason: null,
+          result_status: null,
+        },
+        current_focus: {
+          node_id: 'review_article',
+          round_no: 2,
+          status: 'waiting_validator',
+          waiting_for_role: 'validator',
+          stop_reason: null,
+          executor_call_id: null,
+          validator_calls: [],
+        },
+        activity: [],
+      },
+      {
+        run_id: 'run_follow',
+        status: 'running',
+        stop_reason: null,
+        workflow: { workflow_id: 'wf_follow', version: 'v1', title: 'Workflow Follow' },
+        summary: {
+          node_counts: { waiting_executor: 1, completed: 1 },
+          attention_nodes: [],
+        },
+        dispatchable: [],
+        timeline: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:00:00Z',
+          },
+          {
+            node_id: 'review_article',
+            round_no: 3,
+            status: 'waiting_executor',
+            waiting_for_role: 'executor',
+            stop_reason: null,
+            rework_brief: null,
+            created_at: null,
+            updated_at: '2026-03-17T08:15:00Z',
+          },
+        ],
+        latest_nodes: [
+          {
+            node_id: 'draft_article',
+            round_no: 1,
+            status: 'completed',
+            waiting_for_role: null,
+            stop_reason: null,
+          },
+          {
+            node_id: 'review_article',
+            round_no: 3,
+            status: 'waiting_executor',
+            waiting_for_role: 'executor',
+            stop_reason: null,
+          },
+        ],
+        driver: {
+          run_id: 'run_follow',
+          status: 'running',
+          mode: 'auto',
+          max_steps: 500,
+          started_at: '2026-03-17T08:00:00Z',
+          ended_at: null,
+          last_error: null,
+          stop_reason: null,
+          result_status: null,
+        },
+        current_focus: {
+          node_id: 'review_article',
+          round_no: 3,
+          status: 'waiting_executor',
+          waiting_for_role: 'executor',
+          stop_reason: null,
+          executor_call_id: null,
+          validator_calls: [],
+        },
+        activity: [],
+      },
+    ];
+
+    let overviewCallCount = 0;
+    mockedApi.getRunOverview.mockImplementation(async () => {
+      const index = Math.min(overviewCallCount, overviewPayloads.length - 1);
+      overviewCallCount += 1;
+      return overviewPayloads[index];
+    });
+
+    mockedApi.getNodeRound.mockImplementation(async (_runId, nodeId, roundNo) => ({
+      node_id: nodeId,
+      round_no: roundNo,
+      status:
+        nodeId === 'draft_article'
+          ? 'completed'
+          : roundNo === 2
+            ? 'waiting_validator'
+            : 'waiting_executor',
+      waiting_for_role:
+        nodeId === 'draft_article'
+          ? null
+          : roundNo === 2
+            ? 'validator'
+            : 'executor',
+      stop_reason: null,
+      rework_brief: null,
+      context: { nodeId, roundNo },
+      callbacks: [],
+      artifacts: [],
+      log_refs: [],
+      claude_calls: {
+        executor_call_id: null,
+        validator_calls: [],
+      },
+    }));
+    mockedApi.getClaudeCall.mockResolvedValue(null as never);
+    mockedApi.stopRun.mockResolvedValue({
+      run_id: 'run_follow',
+      status: 'stopped',
+      stop_reason: 'manual_stop',
+    });
+    mockedApi.deleteRun.mockResolvedValue({
+      run_id: 'run_follow',
+      workflow_id: 'wf_follow',
+      batch_id: null,
+      workspace_root: '/tmp/run_follow',
+      deleted: true,
+    });
+    mockedApi.retryNode.mockResolvedValue({
+      run_id: 'run_follow',
+      node_id: 'review_article',
+      round_no: 2,
+      status: 'waiting_executor',
+    });
+    mockedApi.driveRun.mockResolvedValue({
+      run_id: 'run_follow',
+      status: 'completed',
+      stop_reason: 'terminal_state',
+      steps: [],
+    });
+    mockedApi.previewRunArtifact.mockResolvedValue(null as never);
+    mockedApi.openRunArtifactFolder.mockResolvedValue(null as never);
+    mockedApi.previewRunLog.mockResolvedValue(null as never);
+
+    const { client } = renderWithClient(<RunDetailClient runId="run_follow" />);
+
+    await waitFor(() =>
+      expect(screen.getAllByText('draft_article · Round 1').length).toBeGreaterThan(0)
+    );
+    expect(screen.queryByRole('button', { name: 'View current node' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['run-overview', 'run_follow'] });
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('review_article · Round 1').length).toBeGreaterThan(0)
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'draft_article' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('draft_article · Round 1').length).toBeGreaterThan(0)
+    );
+    expect(screen.getByRole('button', { name: 'View current node' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return to current node' })).toBeInTheDocument();
+
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['run-overview', 'run_follow'] });
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('draft_article · Round 1').length).toBeGreaterThan(0)
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View current node' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('review_article · Round 2').length).toBeGreaterThan(0)
+    );
+    expect(screen.queryByRole('button', { name: 'View current node' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['run-overview', 'run_follow'] });
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText('review_article · Round 3').length).toBeGreaterThan(0)
+    );
   });
 });

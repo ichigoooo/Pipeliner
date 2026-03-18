@@ -4,7 +4,7 @@
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
     "purpose": "将整部古籍文本处理成标准格式的 CSV 文件。为避免结构识别阶段直接吞整本书导致长时间无输出，工作流会先对预处理后的全文进行切块，生成一组顺序文档，每个文档不超过 20000 字，再基于这些切块做篇章线索扫描、结构定稿、按篇章拆文档和后续批量处理。",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "tags": [
       "classical-text",
       "csv-generation",
@@ -760,7 +760,7 @@
   ],
   "defaults": {
     "runtime_guards": {
-      "timeout": "30m",
+      "timeout": "2h",
       "first_byte_timeout": "180s",
       "max_rework_rounds": 3,
       "blocked_requires_manual": true,

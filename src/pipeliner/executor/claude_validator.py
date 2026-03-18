@@ -33,6 +33,13 @@ from pipeliner.services.errors import ConflictError, InvalidStateError, NotFound
 from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.run_service import RunService
 from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
+from pipeliner.services.claude_env import (
+    build_claude_env,
+    detect_cli_network_error,
+    is_claude_command,
+    preflight_claude_host,
+    resolve_claude_api_host,
+)
 from pipeliner.services.execution_trace import ExecutionTraceRecorder
 from pipeliner.types import ExecutionStatus, NodeRunStatus, VerdictStatus
 
@@ -191,11 +198,44 @@ class ClaudeValidatorDispatcher:
             dirs["validators_dir"] / f"{validator_id}.claude_call.json",
             {"call_id": call_session.call_id, "validator_id": validator_id},
         )
+        env = self._validator_env(task_path, context_path, result_path)
+        if is_claude_command(command):
+            env = build_claude_env(env, trace_recorder)
+            host = resolve_claude_api_host(env)
+            preflight_error = preflight_claude_host(host, trace_recorder)
+            if preflight_error:
+                call_session.complete(
+                    status="failed",
+                    exit_code=-2,
+                    error_message=preflight_error,
+                    duration_ms=0,
+                )
+                trace_recorder.log(
+                    "claude_call_completed",
+                    call_id=call_session.call_id,
+                    status="failed",
+                    exit_code=-2,
+                    error_message=preflight_error,
+                    duration_ms=0,
+                )
+                payload = self._build_failure_callback(
+                    run_id=run.id,
+                    node_id=node.node_id,
+                    round_no=node_run.round_no,
+                    validator_id=validator.validator_id,
+                    message=preflight_error,
+                )
+                result = self.runtime.submit_callback(payload)
+                self.run_repo.session.commit()
+                response = self._failure_result(run, node, node_run, payload.event_id, result)
+                response["claude_call_id"] = call_session.call_id
+                return response
+
         started_at = time.perf_counter()
         result = run_streamed_command(
             command=command,
             cwd=project_root,
-            env=self._validator_env(task_path, context_path, result_path),
+            env=env,
             input_text=prompt_text,
             output_session=call_session,
             stdout_path=stdout_path,
@@ -204,15 +244,15 @@ class ClaudeValidatorDispatcher:
             mirror_stderr_path=mirror_dir / "stderr.log",
             trace_recorder=trace_recorder,
             first_byte_timeout=self._first_byte_timeout_seconds(spec),
+            timeout=self._timeout_seconds(spec),
         )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         error_message = None
-        if result.first_byte_timed_out:
-            error_message = "validator first byte timeout"
-        elif result.timed_out:
+        network_error = detect_cli_network_error(result.stdout, result.stderr)
+        if result.timed_out:
             error_message = "validator command timeout"
         elif result.returncode != 0:
-            error_message = f"validator command failed(exit={result.returncode})"
+            error_message = network_error or f"validator command failed(exit={result.returncode})"
         call_session.complete(
             status="completed" if result.returncode == 0 else "failed",
             exit_code=result.returncode,
@@ -242,6 +282,7 @@ class ClaudeValidatorDispatcher:
                 message=failure_message,
             )
             result = self.runtime.submit_callback(payload)
+            self.run_repo.session.commit()
             response = self._failure_result(run, node, node_run, payload.event_id, result)
             response["claude_call_id"] = call_session.call_id
             return response
@@ -255,6 +296,7 @@ class ClaudeValidatorDispatcher:
                 message=f"validator 未生成结果文件: {result_path}",
             )
             result = self.runtime.submit_callback(payload)
+            self.run_repo.session.commit()
             response = self._failure_result(run, node, node_run, payload.event_id, result)
             response["claude_call_id"] = call_session.call_id
             return response
@@ -283,12 +325,14 @@ class ClaudeValidatorDispatcher:
                 message=f"validator 结果文件无效: {exc}",
             )
             result = self.runtime.submit_callback(payload)
+            self.run_repo.session.commit()
             response = self._failure_result(run, node, node_run, payload.event_id, result)
             response["claude_call_id"] = call_session.call_id
             return response
 
         trace_recorder.log("callback_submit_started", event_id=callback_payload.event_id)
         result = self.runtime.submit_callback(callback_payload)
+        self.run_repo.session.commit()
         trace_recorder.log(
             "callback_submit_succeeded",
             event_id=callback_payload.event_id,
@@ -312,6 +356,12 @@ class ClaudeValidatorDispatcher:
     def _first_byte_timeout_seconds(self, spec) -> float | None:
         try:
             return parse_duration(spec.runtime_guards_or_default().first_byte_timeout).total_seconds()
+        except Exception:
+            return None
+
+    def _timeout_seconds(self, spec) -> float | None:
+        try:
+            return parse_duration(spec.runtime_guards_or_default().timeout).total_seconds()
         except Exception:
             return None
 

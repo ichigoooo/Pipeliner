@@ -146,8 +146,14 @@ def test_attention_retry_and_settings_snapshot(
     payload = settings_response.json()["settings"]
     assert payload["executor_command"]["source"] in {"default", "env"}
     assert payload["storage"]["backend"]["value"] == "local_fs"
-    assert payload["runtime_guards"]["default_timeout"]["value"] == "30m"
+    assert payload["runtime_guards"]["default_timeout"]["value"] == "2h"
     assert isinstance(payload["skills"], list)
+    assert "claude_diagnostics" in payload
+    diagnostics = payload["claude_diagnostics"]
+    assert "base_url" in diagnostics
+    assert "api_host" in diagnostics
+    assert "proxy" in diagnostics
+    assert isinstance(diagnostics["proxy"]["missing"], bool)
 
 
 def test_delete_non_running_run_removes_workspace_and_list_entries(
@@ -232,3 +238,35 @@ def test_delete_run_succeeds_even_when_workspace_already_missing(
     response = client.delete(f"/api/runs/{run['run_id']}")
     assert response.status_code == 200
     assert response.json()["deleted"] is True
+
+
+def test_bulk_delete_runs_removes_multiple_non_running_runs(
+    client: TestClient,
+    workflow_fixture: dict,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    run_a = _start_run(client)
+    run_b = _start_run(client)
+
+    with client.app.state.db.session() as db:
+        run_repo = RunRepository(db)
+        for run_id in (run_a["run_id"], run_b["run_id"]):
+            run_model = run_repo.get_run(run_id)
+            assert run_model is not None
+            run_model.status = "completed"
+
+    response = client.post(
+        "/api/runs/bulk-delete",
+        json={"run_ids": [run_a["run_id"], run_b["run_id"]]},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["deleted"] is True
+    assert payload["deleted_count"] == 2
+    assert payload["run_ids"] == [run_a["run_id"], run_b["run_id"]]
+
+    runs_response = client.get("/api/runs")
+    assert runs_response.status_code == 200
+    remaining_ids = {item["run_id"] for item in runs_response.json()["runs"]}
+    assert run_a["run_id"] not in remaining_ids
+    assert run_b["run_id"] not in remaining_ids

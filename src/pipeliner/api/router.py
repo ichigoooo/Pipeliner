@@ -131,6 +131,10 @@ class BatchBulkDeleteRequest(BaseModel):
     batch_ids: list[str] = Field(default_factory=list)
 
 
+class RunBulkDeleteRequest(BaseModel):
+    run_ids: list[str] = Field(default_factory=list)
+
+
 def get_database(request: Request) -> Database:
     return request.app.state.db
 
@@ -925,6 +929,18 @@ def reconcile_timeouts(
     coordinator = _runtime_coordinator(session, request)
     items = coordinator.reconcile_timeouts()
     return {"timed_out": items, "count": len(items)}
+
+
+@router.post("/api/runs/bulk-delete")
+def bulk_delete_runs(
+    request_body: RunBulkDeleteRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    service = _run_service(session, request)
+    payload = service.bulk_delete_runs(request_body.run_ids)
+    session.commit()
+    return payload
 
 
 @router.get("/api/runs/attention")

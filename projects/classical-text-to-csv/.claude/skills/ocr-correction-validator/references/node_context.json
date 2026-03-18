@@ -2,7 +2,7 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.5.0"
+    "version": "0.5.1"
   },
   "skill": {
     "name": "ocr-correction-validator",
@@ -63,5 +63,5 @@
       ]
     }
   },
-  "updated_at": "2026-03-17T07:49:48.807564+00:00"
+  "updated_at": "2026-03-17T14:36:52.322786+00:00"
 }

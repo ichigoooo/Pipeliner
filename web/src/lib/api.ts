@@ -135,6 +135,10 @@ export interface ClaudeCallMetadata {
   output_path: string;
   command: string | null;
   context: Record<string, unknown>;
+  slow_start_detected?: boolean;
+  slow_start_at?: string | null;
+  slow_start_after_ms?: number | null;
+  slow_start_message?: string | null;
   redacted?: boolean;
 }
 
@@ -246,6 +250,12 @@ export interface DeleteRunResult {
   workflow_id: string;
   batch_id: string | null;
   workspace_root: string;
+  deleted: boolean;
+}
+
+export interface BulkDeleteRunsResult {
+  run_ids: string[];
+  deleted_count: number;
   deleted: boolean;
 }
 
@@ -393,6 +403,7 @@ export interface AttentionRun {
 export interface SettingsSnapshot {
   executor_command: SettingValue<string>;
   validator_command: SettingValue<string>;
+  claude_diagnostics?: ClaudeDiagnostics;
   storage: {
     backend: SettingValue<string>;
     data_dir: SettingValue<string>;
@@ -427,6 +438,26 @@ export interface SettingValue<T> {
   source: string;
   env_key: string;
   default: T;
+}
+
+export interface ClaudeDiagnostics {
+  base_url: DiagnosticValue<string>;
+  api_host: DiagnosticValue<string>;
+  proxy: {
+    process_keys: string[];
+    shell_keys: string[];
+    effective_keys: string[];
+    missing: boolean;
+  };
+  sources: {
+    settings_path: string;
+    settings_loaded: boolean;
+  };
+}
+
+export interface DiagnosticValue<T> {
+  value: T;
+  source: string;
 }
 
 export class ApiError extends Error {
@@ -601,6 +632,11 @@ export const api = {
   deleteRun: async (runId: string) =>
     request<DeleteRunResult>(`runs/${runId}`, {
       method: 'DELETE',
+    }),
+  bulkDeleteRuns: async (runIds: string[]) =>
+    request<BulkDeleteRunsResult>('runs/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ run_ids: runIds }),
     }),
   getRunOverview: async (runId: string) =>
     request<RunOverview>(`runs/${runId}/debug/overview`),

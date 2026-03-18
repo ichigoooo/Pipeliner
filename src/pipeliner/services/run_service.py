@@ -98,6 +98,19 @@ class RunService:
         self.workspace.delete_run_workspace(run.workflow_id, run.id)
         return payload
 
+    def bulk_delete_runs(self, run_ids: list[str]) -> dict[str, Any]:
+        normalized_ids = list(dict.fromkeys(run_ids))
+        if not normalized_ids:
+            raise ValidationError("至少需要一个 run_id")
+        deleted_runs: list[dict[str, Any]] = []
+        for run_id in normalized_ids:
+            deleted_runs.append(self.delete_run(run_id))
+        return {
+            "run_ids": [item["run_id"] for item in deleted_runs],
+            "deleted_count": len(deleted_runs),
+            "deleted": True,
+        }
+
     def get_run_spec(self, run: RunModel) -> WorkflowSpec:
         return self.workflow_service.load_spec_model(run.workflow_id, run.workflow_version)
 

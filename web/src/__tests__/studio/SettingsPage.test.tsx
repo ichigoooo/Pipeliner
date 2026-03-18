@@ -132,6 +132,20 @@ describe('SettingsPage', () => {
             used_by: ['wf_test@v1:draft_article'],
           },
         ],
+        claude_diagnostics: {
+          base_url: { value: 'https://api.example.com/v1', source: 'env' },
+          api_host: { value: 'api.example.com', source: 'derived' },
+          proxy: {
+            process_keys: ['HTTP_PROXY'],
+            shell_keys: ['HTTP_PROXY', 'HTTPS_PROXY'],
+            effective_keys: ['HTTP_PROXY', 'HTTPS_PROXY'],
+            missing: false,
+          },
+          sources: {
+            settings_path: '/Users/test/.claude/settings.json',
+            settings_loaded: true,
+          },
+        },
       },
     });
 
@@ -143,5 +157,8 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('env').length).toBeGreaterThan(0);
     expect(screen.getByText('draft-skill')).toBeInTheDocument();
     expect(screen.getByText('wf_test@v1:draft_article')).toBeInTheDocument();
+    expect(screen.getByText('Claude Base URL')).toBeInTheDocument();
+    expect(screen.getByText('https://api.example.com/v1')).toBeInTheDocument();
+    expect(screen.getByText('Proxy detected')).toBeInTheDocument();
   });
 });

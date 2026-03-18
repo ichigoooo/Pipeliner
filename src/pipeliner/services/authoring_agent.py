@@ -13,6 +13,13 @@ from uuid import uuid4
 from pipeliner.config import Settings, get_settings
 from pipeliner.runtime.guards import parse_duration
 from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
+from pipeliner.services.claude_env import (
+    build_claude_env,
+    detect_cli_network_error,
+    is_claude_command,
+    preflight_claude_host,
+    resolve_claude_api_host,
+)
 from pipeliner.services.execution_trace import ExecutionTraceRecorder
 
 
@@ -105,12 +112,46 @@ class AuthoringAgent:
             call_id=call_session.call_id,
             command=" ".join(command),
         )
+        env = self._authoring_env(task_path, result_path, project_dir)
+        if is_claude_command(command):
+            env = build_claude_env(env, trace_recorder)
+            host = resolve_claude_api_host(env)
+            preflight_error = preflight_claude_host(host, trace_recorder)
+            if preflight_error:
+                call_session.complete(
+                    status="failed",
+                    exit_code=-2,
+                    error_message=preflight_error,
+                    duration_ms=0,
+                )
+                trace_recorder.log(
+                    "claude_call_completed",
+                    call_id=call_session.call_id,
+                    status="failed",
+                    exit_code=-2,
+                    error_message=preflight_error,
+                    duration_ms=0,
+                )
+                metadata = {
+                    "command": " ".join(command),
+                    "prompt_file": str(prompt_path),
+                    "task_file": str(task_path),
+                    "result_file": str(result_path),
+                    "stdout_file": str(stdout_path),
+                    "stderr_file": str(stderr_path),
+                    "exit_code": -2,
+                    "duration_ms": 0,
+                    "claude_call_id": call_session.call_id,
+                }
+                trace_recorder.log("authoring_failed", reason=preflight_error)
+                raise AuthoringAgentError(preflight_error, metadata)
+
         started_at = time.perf_counter()
         timeout = self._timeout_seconds()
         result = run_streamed_command(
             command=command,
             cwd=project_dir or work_dir,
-            env=self._authoring_env(task_path, result_path, project_dir),
+            env=env,
             input_text=prompt_text,
             output_session=call_session,
             stdout_path=stdout_path,
@@ -137,10 +178,11 @@ class AuthoringAgent:
             "claude_call_id": call_session.call_id,
         }
         error_message = None
+        network_error = detect_cli_network_error(stdout, stderr)
         if result.timed_out:
             error_message = "authoring command timeout"
         elif exit_code and exit_code != 0:
-            error_message = f"authoring command failed(exit={exit_code})"
+            error_message = network_error or f"authoring command failed(exit={exit_code})"
         call_session.complete(
             status="completed" if exit_code == 0 else "failed",
             exit_code=exit_code,

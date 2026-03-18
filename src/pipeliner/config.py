@@ -13,7 +13,7 @@ class Settings:
         default_factory=lambda: Path(os.getenv("PIPELINER_DATA_DIR", ".pipeliner")).resolve()
     )
     default_timeout: str = field(
-        default_factory=lambda: os.getenv("PIPELINER_DEFAULT_TIMEOUT", "30m")
+        default_factory=lambda: os.getenv("PIPELINER_DEFAULT_TIMEOUT", "2h")
     )
     authoring_timeout: str = field(
         default_factory=lambda: os.getenv("PIPELINER_AUTHORING_TIMEOUT", "20m")

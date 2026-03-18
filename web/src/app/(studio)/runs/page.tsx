@@ -37,6 +37,7 @@ export default function RunsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
   const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
@@ -47,7 +48,8 @@ export default function RunsPage() {
       setDeletingRunId(runId);
       setDeleteError(null);
     },
-    onSuccess: async () => {
+    onSuccess: async (_payload, runId) => {
+      setSelectedRunIds((current) => current.filter((item) => item !== runId));
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
     },
     onError: (mutationError) => {
@@ -55,6 +57,20 @@ export default function RunsPage() {
     },
     onSettled: () => {
       setDeletingRunId(null);
+    },
+  });
+
+  const bulkDeleteRunsMutation = useMutation({
+    mutationFn: (runIds: string[]) => api.bulkDeleteRuns(runIds),
+    onMutate: () => {
+      setDeleteError(null);
+    },
+    onSuccess: async () => {
+      setSelectedRunIds([]);
+      await queryClient.invalidateQueries({ queryKey: ['runs'] });
+    },
+    onError: (mutationError) => {
+      setDeleteError((mutationError as Error).message);
     },
   });
 
@@ -154,9 +170,18 @@ export default function RunsPage() {
     );
   };
 
+  const toggleRunSelection = (runId: string) => {
+    setSelectedRunIds((current) =>
+      current.includes(runId)
+        ? current.filter((item) => item !== runId)
+        : [...current, runId]
+    );
+  };
+
   const renderRunCard = (run: (typeof filteredRuns)[number]) => {
     const batchId = run.batch_id;
     const canDelete = run.status !== 'running';
+    const isSelected = selectedRunIds.includes(run.run_id);
     const reason = formatRunStopReason(run.stop_reason, t);
     const summary =
       reason ||
@@ -197,6 +222,17 @@ export default function RunsPage() {
             </div>
           </Link>
           <div className="flex shrink-0 flex-col items-end gap-2">
+            {canDelete ? (
+              <label className="flex items-center gap-2 text-xs font-medium text-stone-500">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleRunSelection(run.run_id)}
+                  className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                />
+                {t('selectRun')}
+              </label>
+            ) : null}
             {batchId ? (
               <button
                 type="button"
@@ -433,9 +469,28 @@ export default function RunsPage() {
               <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{t('groups.actionable')}</p>
               <p className="mt-1 text-sm text-stone-600">{t('groups.actionableHint')}</p>
             </div>
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
-              {groupedRuns.actionable.length}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+                {groupedRuns.actionable.length}
+              </span>
+              {selectedRunIds.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm(t('bulkDeleteRunConfirm', { count: selectedRunIds.length }))) {
+                      return;
+                    }
+                    bulkDeleteRunsMutation.mutate(selectedRunIds);
+                  }}
+                  disabled={bulkDeleteRunsMutation.isPending}
+                  className="rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                >
+                  {bulkDeleteRunsMutation.isPending
+                    ? t('actions.loading')
+                    : t('bulkDeleteRun', { count: selectedRunIds.length })}
+                </button>
+              ) : null}
+            </div>
           </div>
           {groupedRuns.actionable.length === 0 ? (
             <div className="rounded-[2rem] border border-dashed border-stone-300 bg-white p-8 text-sm text-stone-500">

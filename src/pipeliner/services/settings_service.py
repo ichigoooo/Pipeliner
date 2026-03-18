@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from pipeliner.config import Settings
 from pipeliner.persistence.repositories import WorkflowRepository
+from pipeliner.services.claude_env import collect_claude_diagnostics
 
 
 class SettingsService:
@@ -96,7 +97,7 @@ class SettingsService:
                 "default_timeout": self._env_value(
                     "PIPELINER_DEFAULT_TIMEOUT",
                     self.settings.default_timeout,
-                    "30m",
+                    "2h",
                 ),
                 "authoring_timeout": self._env_value(
                     "PIPELINER_AUTHORING_TIMEOUT",
@@ -149,6 +150,7 @@ class SettingsService:
                 },
             ],
             "skills": sorted(observed_skills.values(), key=lambda item: item["skill"]),
+            "claude_diagnostics": collect_claude_diagnostics(dict(os.environ)),
         }
 
     def _env_value(

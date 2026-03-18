@@ -48,6 +48,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const searchParams = useSearchParams();
   const focusParam = searchParams?.get('focus') ?? null;
   const [focusApplied, setFocusApplied] = useState(false);
+  const [followCurrentFocus, setFollowCurrentFocus] = useState(true);
   const [detailTabIndex, setDetailTabIndex] = useState(0);
   const [selectedNode, setSelectedNode] = useState<NodeSelection | null>(null);
   const [inspectorData, setInspectorData] = useState<unknown>(null);
@@ -112,6 +113,20 @@ export function RunDetailClient({ runId }: { runId: string }) {
     queryKey: ['claude-call-meta', executorCallId],
     queryFn: () => api.getClaudeCall(executorCallId!),
     enabled: Boolean(executorCallId),
+    retry: false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as { status?: string } | undefined)?.status;
+      return status === 'running' || !status ? ACTIVE_POLL_INTERVAL_MS : false;
+    },
+  });
+  const activeValidatorCallId =
+    nodeRoundQuery.data?.waiting_for_role === 'validator'
+      ? nodeRoundQuery.data?.claude_calls?.validator_calls?.[0]?.call_id || null
+      : null;
+  const validatorCallQuery = useQuery({
+    queryKey: ['claude-call-meta', activeValidatorCallId],
+    queryFn: () => api.getClaudeCall(activeValidatorCallId!),
+    enabled: Boolean(activeValidatorCallId),
     retry: false,
     refetchInterval: (query) => {
       const status = (query.state.data as { status?: string } | undefined)?.status;
@@ -312,11 +327,36 @@ export function RunDetailClient({ runId }: { runId: string }) {
     }
   };
 
+  const applyNodeSelection = (
+    selection: NodeSelection,
+    options?: { resetTab?: boolean; followCurrentFocus?: boolean }
+  ) => {
+    const resetTab = options?.resetTab ?? true;
+    setSelectedNode((current) =>
+      current?.node_id === selection.node_id && current.round_no === selection.round_no ? current : selection
+    );
+    if (options?.followCurrentFocus !== undefined) {
+      setFollowCurrentFocus(options.followCurrentFocus);
+    }
+    if (resetTab) {
+      setDetailTabIndex(0);
+    }
+  };
+
+  const selectNodeRound = (selection: NodeSelection, resetTab = true) => {
+    applyNodeSelection(selection, { resetTab });
+  };
+
+  const selectNodeRoundManually = (selection: NodeSelection, resetTab = true) => {
+    applyNodeSelection(selection, { resetTab, followCurrentFocus: false });
+  };
+
   const run = runQuery.data;
   const overview = overviewQuery.data;
   const workflowDetail = workflowQuery.data;
   const nodeRound = nodeRoundQuery.data;
   const executorCallMeta = executorCallQuery.data;
+  const validatorCallMeta = validatorCallQuery.data;
   const pageLoadError = (runQuery.error || overviewQuery.error || workflowQuery.error) as Error | null;
   const nodeDetailError = nodeRoundQuery.error as Error | null;
   const detailTabKeys = ['overview', 'artifacts'] as const;
@@ -349,50 +389,50 @@ export function RunDetailClient({ runId }: { runId: string }) {
     if (!overview) {
       return;
     }
+    const defaultSelection = overview.current_focus
+      ? { node_id: overview.current_focus.node_id, round_no: overview.current_focus.round_no }
+      : overview.latest_nodes.length > 0
+        ? {
+            node_id: overview.latest_nodes[0].node_id,
+            round_no: overview.latest_nodes[0].round_no,
+          }
+        : null;
     if (!selectedNode) {
-      if (overview.current_focus) {
-        setSelectedNode({ node_id: overview.current_focus.node_id, round_no: overview.current_focus.round_no });
-        setDetailTabIndex(0);
-        return;
+      if (defaultSelection) {
+        applyNodeSelection(defaultSelection, { followCurrentFocus });
       }
-      if (overview.latest_nodes.length > 0) {
-        setSelectedNode({
-          node_id: overview.latest_nodes[0].node_id,
-          round_no: overview.latest_nodes[0].round_no,
-        });
-      }
+      return;
+    }
+    if (
+      followCurrentFocus &&
+      defaultSelection &&
+      (selectedNode.node_id !== defaultSelection.node_id || selectedNode.round_no !== defaultSelection.round_no)
+    ) {
+      applyNodeSelection(defaultSelection, { followCurrentFocus: true });
       return;
     }
     const selectedExists = overview.timeline.some(
       (item) => item.node_id === selectedNode.node_id && item.round_no === selectedNode.round_no
     );
     if (!selectedExists) {
-      if (overview.current_focus) {
-        setSelectedNode({ node_id: overview.current_focus.node_id, round_no: overview.current_focus.round_no });
-        setDetailTabIndex(0);
-      } else if (overview.latest_nodes.length > 0) {
-        setSelectedNode({
-          node_id: overview.latest_nodes[0].node_id,
-          round_no: overview.latest_nodes[0].round_no,
-        });
+      if (defaultSelection) {
+        applyNodeSelection(defaultSelection, { followCurrentFocus });
       } else {
         setSelectedNode(null);
       }
     }
-  }, [overview, selectedNode]);
+  }, [followCurrentFocus, overview, selectedNode]);
 
-  const selectNodeRound = (selection: NodeSelection, resetTab = true) => {
-    setSelectedNode((current) =>
-      current?.node_id === selection.node_id && current.round_no === selection.round_no ? current : selection
-    );    if (resetTab) {
-      setDetailTabIndex(0);    }
-  }; 
   useEffect(() => {
     if (!overview || focusApplied || focusParam !== 'attention') {
-      return;    }
-    const attention = overview.summary?.attention_nodes || [];    if (attention.length > 0) {
-      selectNodeRound({ node_id: attention[0].node_id, round_no: attention[0].round_no });      setFocusApplied(true);    }
-  }, [focusApplied, focusParam, overview]); 
+      return;
+    }
+    const attention = overview.summary?.attention_nodes || [];
+    if (attention.length > 0) {
+      selectNodeRoundManually({ node_id: attention[0].node_id, round_no: attention[0].round_no });
+      setFocusApplied(true);
+    }
+  }, [focusApplied, focusParam, overview]);
 
   useEffect(() => {
     if (!executorCallMeta || !nodeRound) {
@@ -405,6 +445,18 @@ export function RunDetailClient({ runId }: { runId: string }) {
       void refresh();
     }
   }, [executorCallMeta, nodeRound, refresh]);
+
+  useEffect(() => {
+    if (!validatorCallMeta || !nodeRound) {
+      return;
+    }
+    if (
+      nodeRound.waiting_for_role === 'validator' &&
+      (validatorCallMeta.status === 'completed' || validatorCallMeta.status === 'failed')
+    ) {
+      void refresh();
+    }
+  }, [nodeRound, refresh, validatorCallMeta]);
 
   if (pageLoadError && (!run || !overview || !workflowDetail)) {
     return (
@@ -528,29 +580,6 @@ export function RunDetailClient({ runId }: { runId: string }) {
     return formatStatusLabel(status);
   };
 
-  /*
-  const selectNodeRound = (selection: NodeSelection, resetTab = true) => {
-    setSelectedNode((current) =>
-      current?.node_id === selection.node_id && current.round_no === selection.round_no ? current : selection
-    );
-    if (resetTab) {
-      setDetailTabIndex(0);
-    }
-  };
-
-  useEffect(() => {
-    if (!overview || focusApplied || focusParam !== 'attention') {
-      return;
-    }
-    const attention = overview.summary?.attention_nodes || [];  
-    if (attention.length > 0) {
-      selectNodeRound({ node_id: attention[0].node_id, round_no: attention[0].round_no });
-      setFocusApplied(true);
-    }
-  }, [focusApplied, focusParam, overview]);
-
-
-  */
   const graphNodes = (workflowDetail.graph.nodes as Node[]).map((node) => {
     const nodeId =
       typeof node.data === 'object' && node.data && 'node_id' in node.data
@@ -599,14 +628,17 @@ export function RunDetailClient({ runId }: { runId: string }) {
     if (!latest) {
       return;
     }
-    selectNodeRound({ node_id: latest.node_id, round_no: latest.round_no });
+    selectNodeRoundManually({ node_id: latest.node_id, round_no: latest.round_no });
   };
 
   const jumpToCurrentFocus = () => {
     if (!currentFocus) {
       return;
     }
-    selectNodeRound({ node_id: currentFocus.node_id, round_no: currentFocus.round_no });
+    applyNodeSelection(
+      { node_id: currentFocus.node_id, round_no: currentFocus.round_no },
+      { followCurrentFocus: true }
+    );
   };
 
   const formattedRunStopReason = formatRunStopReason(run.run.stop_reason, t);
@@ -646,6 +678,21 @@ export function RunDetailClient({ runId }: { runId: string }) {
     }
     return executorTerminalEmptyHint || null;
   })();
+  const slowStartMeta =
+    nodeRound?.waiting_for_role === 'executor'
+      ? executorCallMeta
+      : nodeRound?.waiting_for_role === 'validator'
+        ? validatorCallMeta
+        : null;
+  const slowStartHint =
+    slowStartMeta?.status === 'running' &&
+    Boolean(slowStartMeta?.slow_start_detected) &&
+    (slowStartMeta?.bytes_written ?? 0) === 0
+      ? t('detail.slowStartWarning', {
+          role: nodeRound?.waiting_for_role || 'executor',
+          time: formatTimestamp(slowStartMeta?.slow_start_at || slowStartMeta?.started_at),
+        })
+      : null;
   const primaryAction = (() => {
     if (viewingHistoricalRound && selectedLatest) {
       return {
@@ -711,6 +758,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
   })();
   const showStopButton = run.run.status === 'running' || run.run.status === 'needs_attention';
   const showDeleteButton = run.run.status !== 'running';
+  const showJumpToCurrentFocus = Boolean(currentFocus && !currentFocusSelected && !followCurrentFocus);
   const showTechnicalOutput = Boolean(
     claudeCalls?.executor_call_id || validatorCalls.length > 0 || executorTerminalEmptyHint
   );
@@ -857,7 +905,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
                   {deleteMutation.isPending ? t('actions.loading') : t('deleteRun')}
                 </button>
               ) : null}
-              {currentFocus && !currentFocusSelected ? (
+              {showJumpToCurrentFocus ? (
                 <button
                   type="button"
                   onClick={jumpToCurrentFocus}
@@ -1020,7 +1068,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
                         value={selectedNode?.round_no ?? ''}
                         onChange={(event) =>
                           selectedNode
-                            ? selectNodeRound(
+                            ? selectNodeRoundManually(
                                 {
                                   node_id: selectedNode.node_id,
                                   round_no: Number.parseInt(event.target.value, 10),
@@ -1063,7 +1111,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
 
               {nodeRound && detailTabIndex === 0 && (
                 <div className="space-y-4">
-                  {currentFocus && !currentFocusSelected ? (
+                  {showJumpToCurrentFocus ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] border border-stone-200 bg-stone-50 p-5">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
@@ -1095,6 +1143,11 @@ export function RunDetailClient({ runId }: { runId: string }) {
                   {executorActivityHint ? (
                     <div className="rounded-[1.75rem] border border-sky-200 bg-sky-50 p-5 text-sm text-stone-700">
                       {executorActivityHint}
+                    </div>
+                  ) : null}
+                  {slowStartHint ? (
+                    <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+                      {slowStartHint}
                     </div>
                   ) : null}
                   {terminalHint ? (

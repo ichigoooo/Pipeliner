@@ -93,6 +93,38 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-4">
+          <SettingsSection title={t('sections.claudeDiagnostics')}>
+            <div className="space-y-3 text-sm text-stone-700">
+              <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeBaseUrl')}</p>
+                <p className="mt-2 break-all text-stone-900">{settings.claude_diagnostics?.base_url?.value}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-400">
+                  {settings.claude_diagnostics?.base_url?.source}
+                </p>
+              </div>
+              <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeApiHost')}</p>
+                <p className="mt-2 break-all text-stone-900">{settings.claude_diagnostics?.api_host?.value}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-400">
+                  {settings.claude_diagnostics?.api_host?.source}
+                </p>
+              </div>
+              <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeProxy')}</p>
+                <p className="mt-2 text-stone-900">
+                  {settings.claude_diagnostics?.proxy?.missing ? t('labels.proxyMissing') : t('labels.proxyPresent')}
+                </p>
+                {settings.claude_diagnostics?.proxy?.missing ? (
+                  <p className="mt-2 text-xs text-red-600">{t('labels.proxyMissingHint')}</p>
+                ) : (
+                  <p className="mt-2 text-xs text-stone-500">
+                    {t('labels.proxyKeys')}:{' '}
+                    {(settings.claude_diagnostics?.proxy?.effective_keys || []).join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </SettingsSection>
           <SettingsSection title={t('sections.providerBindings')}>
             {settings.providers.map((provider) => (
               <div key={`${provider.provider}-${provider.role}`} className="rounded-3xl bg-stone-50 p-4 text-sm">

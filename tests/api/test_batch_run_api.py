@@ -210,6 +210,12 @@ def test_delete_completed_batch_removes_batch_and_child_runs(
     run_id = detail_payload["items"][0]["run_id"]
     assert run_id is not None
 
+    with client.app.state.db.session() as db:
+        run_repo = RunRepository(db)
+        run_model = run_repo.get_run(run_id)
+        assert run_model is not None
+        run_model.status = "completed"
+
     delete_response = client.delete(f"/api/batch-runs/{batch_id}")
     assert delete_response.status_code == 200
     payload = delete_response.json()
@@ -259,7 +265,14 @@ def test_bulk_delete_batches_removes_multiple_completed_batches(
         )
         assert create_response.status_code == 200
         batch_id = create_response.json()["batch_id"]
-        _wait_for_batch(client, batch_id)
+        detail_payload = _wait_for_batch(client, batch_id)
+        run_id = detail_payload["items"][0]["run_id"]
+        assert run_id is not None
+        with client.app.state.db.session() as db:
+            run_repo = RunRepository(db)
+            run_model = run_repo.get_run(run_id)
+            assert run_model is not None
+            run_model.status = "completed"
         batch_ids.append(batch_id)
 
     delete_response = client.post(

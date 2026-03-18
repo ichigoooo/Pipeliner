@@ -26,6 +26,7 @@ vi.mock('@/lib/api', () => ({
     listRuns: vi.fn(),
     listBatchRuns: vi.fn(),
     deleteRun: vi.fn(),
+    bulkDeleteRuns: vi.fn(),
     deleteBatchRun: vi.fn(),
     bulkDeleteBatchRuns: vi.fn(),
   },
@@ -58,6 +59,7 @@ describe('RunsPage', () => {
     mockedApi.listBatchRuns.mockReset();
     mockedApi.listBatchRuns.mockResolvedValue({ batches: [] });
     mockedApi.deleteRun.mockReset();
+    mockedApi.bulkDeleteRuns.mockReset();
     mockedApi.deleteBatchRun.mockReset();
     mockedApi.bulkDeleteBatchRuns.mockReset();
     pushMock.mockReset();
@@ -164,7 +166,7 @@ describe('RunsPage', () => {
 
     expect(await screen.findByText('Batch runs')).toBeInTheDocument();
     expect(await screen.findByText('batch_1')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByText('View Batch')[0]);
+    fireEvent.click(screen.getByText('batch_1'));
     expect(pushMock).toHaveBeenCalledWith('/runs/batches/batch_1');
   });
 
@@ -250,7 +252,7 @@ describe('RunsPage', () => {
     fireEvent.click(checkboxes[1]);
     fireEvent.click(screen.getByRole('button', { name: 'Delete 2 selected batches' }));
     await waitFor(() => {
-      expect(mockedApi.bulkDeleteBatchRuns).toHaveBeenCalledWith(['batch_a', 'batch_b']);
+      expect(mockedApi.bulkDeleteBatchRuns).toHaveBeenCalledWith(['batch_b', 'batch_a']);
     });
   });
 
@@ -284,6 +286,50 @@ describe('RunsPage', () => {
     expect(confirmMock).toHaveBeenCalled();
     await waitFor(() => {
       expect(mockedApi.deleteRun).toHaveBeenCalledWith('run_attention');
+    });
+  });
+
+  it('bulk deletes selected non-running runs', async () => {
+    mockedApi.listRuns.mockResolvedValue({
+      runs: [
+        {
+          run_id: 'run_b',
+          workflow_id: 'wf_alpha',
+          version: '1.0.1',
+          status: 'completed',
+          stop_reason: null,
+          created_at: '2026-03-16T12:00:00Z',
+          updated_at: '2026-03-16T12:10:00Z',
+          attention_node_count: 0,
+          batch_id: null,
+        },
+        {
+          run_id: 'run_a',
+          workflow_id: 'wf_alpha',
+          version: '1.0.0',
+          status: 'needs_attention',
+          stop_reason: 'validator blocked',
+          created_at: '2026-03-16T10:00:00Z',
+          updated_at: '2026-03-16T10:10:00Z',
+          attention_node_count: 1,
+          batch_id: null,
+        },
+      ],
+    });
+    mockedApi.bulkDeleteRuns.mockResolvedValue({
+      run_ids: ['run_a', 'run_b'],
+      deleted_count: 2,
+      deleted: true,
+    });
+
+    renderWithClient(<RunsPage />);
+
+    const checkboxes = await screen.findAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete 2 selected runs' }));
+    await waitFor(() => {
+      expect(mockedApi.bulkDeleteRuns).toHaveBeenCalledWith(['run_a', 'run_b']);
     });
   });
 });

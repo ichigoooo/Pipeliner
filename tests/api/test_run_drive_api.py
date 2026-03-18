@@ -106,6 +106,51 @@ def test_run_creation_auto_drives_and_exposes_live_overview(
     assert final_overview["driver"]["status"] == "completed"
 
 
+def test_auto_drive_commits_progress_before_driver_finishes(
+    client: TestClient,
+    workflow_fixture: dict,
+    settings,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    executor_script = Path("tests/fixtures/mock_claude_executor_slow.py").resolve()
+    validator_script = Path("tests/fixtures/mock_pipeline_validator_sequence.py").resolve()
+    settings.claude_executor_cmd = f"{sys.executable} {executor_script} {{task_file}}"
+    settings.claude_validator_cmd = f"{sys.executable} {validator_script}"
+
+    response = client.post(
+        "/api/runs",
+        json={
+            "workflow_id": "mvp-review-loop",
+            "version": "0.1.0",
+            "inputs": {"topic": "auto drive visible progress"},
+            "auto_drive": True,
+        },
+    )
+    assert response.status_code == 200
+    run_id = response.json()["run_id"]
+
+    started = time.monotonic()
+    observed_round_two = False
+    while time.monotonic() - started < 5:
+        overview_response = client.get(f"/api/runs/{run_id}/debug/overview")
+        assert overview_response.status_code == 200
+        overview = overview_response.json()
+        if overview["driver"]["status"] != "running":
+            break
+        latest_nodes = {
+            (item["node_id"], item["round_no"]): item
+            for item in overview["latest_nodes"]
+        }
+        if ("draft_article", 2) in latest_nodes:
+            observed_round_two = True
+            break
+        time.sleep(0.05)
+
+    assert observed_round_two is True
+    final_overview = _wait_for_driver(client, run_id)
+    assert final_overview["driver"]["status"] == "completed"
+
+
 def test_manual_drive_conflicts_with_active_auto_driver(
     client: TestClient,
     workflow_fixture: dict,
@@ -377,12 +422,13 @@ def test_dispatch_executor_prompt_includes_executor_skill(
     assert '"event": "process_exited"' in events_text
 
 
-def test_executor_first_byte_timeout_is_classified_as_failure(
+def test_executor_first_byte_timeout_warns_but_waits_for_real_timeout(
     client: TestClient,
     workflow_fixture: dict,
     settings,
 ) -> None:
     workflow_fixture["defaults"]["runtime_guards"]["first_byte_timeout"] = "1s"
+    workflow_fixture["defaults"]["runtime_guards"]["timeout"] = "2s"
     _register_workflow(client, workflow_fixture)
     run = _start_run(client, "mvp-review-loop", "0.1.0")
     executor_script = Path("tests/fixtures/mock_claude_executor_hang.py").resolve()
@@ -396,9 +442,16 @@ def test_executor_first_byte_timeout_is_classified_as_failure(
     payload = response.json()
     assert payload["status"] == "failed"
 
+    claude_call_id = payload["claude_call_id"]
+    metadata_response = client.get(f"/api/claude-calls/{claude_call_id}")
+    assert metadata_response.status_code == 200
+    metadata = metadata_response.json()
+    assert metadata["slow_start_detected"] is True
+    assert metadata["slow_start_after_ms"] is not None
+
     overview_response = client.get(f"/api/runs/{run['run_id']}/debug/overview")
     assert overview_response.status_code == 200
     overview = overview_response.json()
     assert overview["status"] == "needs_attention"
     assert overview["latest_nodes"][0]["status"] == "failed"
-    assert overview["latest_nodes"][0]["stop_reason"] == "executor first byte timeout"
+    assert overview["latest_nodes"][0]["stop_reason"] == "executor command timeout"

@@ -95,6 +95,27 @@ class ClaudeCallSession:
         if self.mirror_meta_path is not None:
             _write_metadata(self.mirror_meta_path, payload)
 
+    def mark_slow_start(
+        self,
+        *,
+        elapsed_ms: int,
+        message: str,
+    ) -> None:
+        payload = _read_metadata(self.meta_path)
+        if payload.get("slow_start_detected"):
+            return
+        payload.update(
+            {
+                "slow_start_detected": True,
+                "slow_start_at": datetime.now(timezone.utc).isoformat(),
+                "slow_start_after_ms": elapsed_ms,
+                "slow_start_message": message,
+            }
+        )
+        _write_metadata(self.meta_path, payload)
+        if self.mirror_meta_path is not None:
+            _write_metadata(self.mirror_meta_path, payload)
+
 
 class ClaudeCallStore:
     def __init__(self, settings: Settings | None = None) -> None:
@@ -140,6 +161,10 @@ class ClaudeCallStore:
             "command": " ".join(command) if command else None,
             "context": context,
             "pid": None,
+            "slow_start_detected": False,
+            "slow_start_at": None,
+            "slow_start_after_ms": None,
+            "slow_start_message": None,
         }
         _write_metadata(meta_path, payload)
         handle = log_path.open("ab")
@@ -388,17 +413,23 @@ def run_streamed_command(
         timed_out = False
         first_byte_timed_out = False
         first_output_logged = False
+        first_byte_warning_logged = False
         last_heartbeat = time.perf_counter()
         while selector.get_map():
             elapsed = time.perf_counter() - started
             if (
                 first_byte_timeout is not None
                 and not first_output_logged
+                and not first_byte_warning_logged
                 and output_session.bytes_written == 0
                 and elapsed > first_byte_timeout
             ):
-                process.kill()
                 first_byte_timed_out = True
+                first_byte_warning_logged = True
+                output_session.mark_slow_start(
+                    elapsed_ms=int(elapsed * 1000),
+                    message="Claude 已启动，但首字节等待时间已超过阈值，仍可继续等待。",
+                )
                 if trace_recorder is not None:
                     trace_recorder.log(
                         "first_byte_timeout_reached",
