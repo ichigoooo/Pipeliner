@@ -24,12 +24,18 @@
 
 html {
   color-scheme: light;
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
+  background-image:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 36rem),
+    radial-gradient(circle at top right, rgba(120, 113, 108, 0.1), transparent 28rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0));
   color: var(--foreground);
   font-family: var(--font-space-grotesk), sans-serif;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -46,6 +52,16 @@ button {
 pre,
 code {
   font-family: var(--font-ibm-plex-mono), monospace;
+}
+
+::selection {
+  background: rgba(245, 158, 11, 0.2);
+  color: #1c1917;
+}
+
+:where(a, button, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid rgba(245, 158, 11, 0.85);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {

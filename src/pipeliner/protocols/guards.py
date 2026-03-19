@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 class RuntimeGuards(BaseModel):
     timeout: str = Field(default="2h")
     first_byte_timeout: str = Field(default="180s")
-    max_rework_rounds: int = Field(default=3, ge=1)
+    max_rework_rounds: int = Field(default=6, ge=1)
     blocked_requires_manual: bool = True
     failure_requires_manual: bool = True
 

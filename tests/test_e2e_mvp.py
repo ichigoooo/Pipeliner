@@ -248,3 +248,98 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
         and node["status"] == "blocked"
         for node in final_detail.json()["nodes"]
     )
+
+
+def test_revise_round_limit_uses_global_floor_when_workflow_sets_lower_value(
+    client,
+    workflow_fixture,
+    settings,
+    workspace_manager,
+) -> None:
+    settings.default_max_rework_rounds = 6
+    register_response = client.post("/api/workflows/register", json={"spec": workflow_fixture})
+    assert register_response.status_code == 200
+
+    run_response = client.post(
+        "/api/runs",
+        json={
+            "workflow_id": "mvp-review-loop",
+            "version": "0.1.0",
+            "inputs": {"topic": "AI agents"},
+            "auto_drive": False,
+        },
+    )
+    assert run_response.status_code == 200
+    run_info = run_response.json()
+
+    for round_no in (1, 2, 3):
+        version = f"v{round_no}"
+        _publish_artifact(
+            client,
+            settings,
+            workspace_manager,
+            run_info,
+            "draft_article",
+            "article_draft",
+            version,
+            round_no,
+            f"draft {version}",
+        )
+        executor_response = client.post(
+            "/api/callbacks",
+            json={
+                "schema_version": "pipeliner.callback/v1alpha1",
+                "event_id": f"evt_exec_floor_{round_no}",
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "run_id": run_info["run_id"],
+                "node_id": "draft_article",
+                "round_no": round_no,
+                "actor": {"role": "executor"},
+                "execution": {"status": "completed"},
+                "submission": {
+                    "artifacts": [{"artifact_id": "article_draft", "version": version}]
+                },
+            },
+        )
+        assert executor_response.status_code == 200
+
+        revise_response = client.post(
+            "/api/callbacks",
+            json={
+                "schema_version": "pipeliner.callback/v1alpha1",
+                "event_id": f"evt_val_floor_{round_no}",
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "run_id": run_info["run_id"],
+                "node_id": "draft_article",
+                "round_no": round_no,
+                "actor": {"role": "validator", "validator_id": "content-review"},
+                "execution": {"status": "completed"},
+                "verdict": {
+                    "status": "revise",
+                    "target_artifacts": [{"artifact_id": "article_draft", "version": version}],
+                    "summary": "Need another iteration",
+                },
+                "rework_brief": {
+                    "must_fix": [
+                        {
+                            "target": "title",
+                            "problem": "weak",
+                            "expected": "clearer",
+                        }
+                    ],
+                    "preserve": ["tone"],
+                    "resubmit_instruction": "submit a stronger draft",
+                },
+            },
+        )
+        assert revise_response.status_code == 200
+
+    detail_response = client.get(f"/api/runs/{run_info['run_id']}")
+    assert detail_response.status_code == 200
+    rounds = [
+        node
+        for node in detail_response.json()["nodes"]
+        if node["node_id"] == "draft_article"
+    ]
+    assert any(item["round_no"] == 4 and item["status"] == "waiting_executor" for item in rounds)
+    assert not any(item["round_no"] == 3 and item["status"] == "rework_limit" for item in rounds)

@@ -762,7 +762,7 @@
     "runtime_guards": {
       "timeout": "2h",
       "first_byte_timeout": "180s",
-      "max_rework_rounds": 3,
+      "max_rework_rounds": 6,
       "blocked_requires_manual": true,
       "failure_requires_manual": true
     }

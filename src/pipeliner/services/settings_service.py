@@ -79,7 +79,9 @@ class SettingsService:
                     "PIPELINER_DATABASE_URL",
                     self.settings.database_url,
                     f"sqlite:///{self.settings.database_path}",
-                    redact=lambda value: value if value.startswith("sqlite:///") else "***REDACTED***",
+                    redact=lambda value: (
+                        value if value.startswith("sqlite:///") else "***REDACTED***"
+                    ),
                 ),
                 "path": {
                     "value": str(self.settings.database_path),
@@ -107,7 +109,7 @@ class SettingsService:
                 "default_max_rework_rounds": self._env_value(
                     "PIPELINER_DEFAULT_MAX_REWORK_ROUNDS",
                     self.settings.default_max_rework_rounds,
-                    3,
+                    6,
                 ),
                 "blocked_requires_manual": self._env_value(
                     "PIPELINER_BLOCKED_REQUIRES_MANUAL",

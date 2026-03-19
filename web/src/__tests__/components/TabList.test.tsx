@@ -12,8 +12,9 @@ describe('TabList', () => {
       <TabList tabs={tabs} activeTab="Tab 1" onTabChange={mockOnTabChange} />
     );
     
-    expect(screen.getByText('Tab 1')).toHaveClass('border-amber-500');
-    expect(screen.getByText('Tab 2')).toHaveClass('border-transparent');
+    expect(screen.getByText('Tab 1')).toHaveClass('bg-white');
+    expect(screen.getByText('Tab 1')).toHaveClass('text-stone-950');
+    expect(screen.getByText('Tab 2')).toHaveClass('text-stone-500');
     
     fireEvent.click(screen.getByText('Tab 2'));
     expect(mockOnTabChange).toHaveBeenCalledWith('Tab 2');

@@ -114,7 +114,15 @@
   "authoring": {
     "title": "Authoring",
     "subtitle": "Conversation + canonical draft",
-    "description": "Intent brief, revision history, raw spec and publish gate are all in one workspace.",
+    "description": "Lock the active session, guide the draft with instructions, then clear blocking issues before publishing.",
+    "cockpit": "Authoring cockpit",
+    "heroTitle": "Keep intent, spec editing, and publish checks on one authoring path",
+    "heroDescription": "The redesigned authoring workspace separates session navigation, draft guidance, raw spec editing, synchronized preview, and publish readiness into a clearer working rhythm.",
+    "heroSteps": {
+      "session": "Choose a session",
+      "guide": "Write the instruction",
+      "publish": "Review and publish"
+    },
     "newSession": "New Authoring Session",
     "continueSession": "Continue Session",
     "createSession": "Create Session",
@@ -127,13 +135,33 @@
     "revision": "Revision",
     "canonicalSpec": "Canonical workflow spec",
     "instruction": "Authoring instruction",
+    "instructionHint": "Describe this round of changes first, then decide whether to save, continue, or let Claude generate the draft directly.",
+    "sessionExplorer": "Session explorer",
+    "sessionExplorerHint": "Select an existing session to recover context, or create a new draft branch below.",
+    "currentCycle": "Current authoring cycle",
+    "publishReadiness": "Publish readiness",
+    "publishReadinessHint": "Publishing only after blocking issues reach zero reduces noisy versions.",
+    "latestDraft": "Latest draft",
+    "latestDraftHint": "This remains the only canonical source. Edit the JSON directly and inspect the synchronized preview on the right.",
+    "workflowPreview": "Synchronized preview",
+    "workflowPreviewHint": "Cards, graph, inputs, and lint all derive from the same spec so you can verify changes immediately.",
+    "publishedVersion": "Published version",
+    "notPublished": "Not published yet",
+    "warnings": "Warnings",
+    "latestRevision": "Latest revision",
+    "draftCount": "Draft count",
+    "selectedBadge": "Current",
+    "allClear": "Ready to publish",
+    "publishBlocked": "Blocking issues remain",
+    "loadRevision": "Load into editor",
     "field": {
       "sessionTitle": "Session title",
       "intentBrief": "Intent brief"
     },
     "placeholder": {
       "sessionTitle": "Session title",
-      "intentBrief": "Intent brief"
+      "intentBrief": "Intent brief",
+      "instruction": "For example: add input contracts, clarify done_means for each node, and bump the version to 0.2.0."
     },
     "help": {
       "newSession": "Create a new authoring session to produce a workflow draft.",
@@ -187,6 +215,9 @@
       "workspaceHint": "Select a session to view synchronized cards / graph / spec / lint views.",
       "instruction": "Instruction is required for generation."
     },
+    "sessionEmpty": "No authoring sessions yet. Create the first draft track below.",
+    "messageEmpty": "No session messages yet. They will appear here after save, continue, or publish actions.",
+    "historyEmpty": "No revision history yet. Save or continue once to create one.",
     "published": "Published as",
     "selectedSession": "Selected Session",
     "updated": "Updated",

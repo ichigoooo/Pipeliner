@@ -2,7 +2,7 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.5.1"
+    "version": "0.5.2"
   },
   "skill": {
     "name": "chapter-batch-analysis",
@@ -162,5 +162,5 @@
       ]
     }
   },
-  "updated_at": "2026-03-18T15:19:15.811722+00:00"
+  "updated_at": "2026-03-19T11:06:34.019378+00:00"
 }

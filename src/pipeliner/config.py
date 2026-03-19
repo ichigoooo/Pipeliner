@@ -19,7 +19,7 @@ class Settings:
         default_factory=lambda: os.getenv("PIPELINER_AUTHORING_TIMEOUT", "20m")
     )
     default_max_rework_rounds: int = field(
-        default_factory=lambda: int(os.getenv("PIPELINER_DEFAULT_MAX_REWORK_ROUNDS", "3"))
+        default_factory=lambda: int(os.getenv("PIPELINER_DEFAULT_MAX_REWORK_ROUNDS", "6"))
     )
     blocked_requires_manual: bool = field(
         default_factory=lambda: os.getenv("PIPELINER_BLOCKED_REQUIRES_MANUAL", "true").lower()

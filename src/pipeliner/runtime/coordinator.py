@@ -12,8 +12,8 @@ from pipeliner.persistence.repositories import (
     RunRepository,
     WorkflowRepository,
 )
-from pipeliner.protocols.callback import NodeCallbackPayload
 from pipeliner.protocols.artifact import ArtifactManifest
+from pipeliner.protocols.callback import NodeCallbackPayload
 from pipeliner.protocols.workflow import WorkflowNodeSpec, WorkflowSpec
 from pipeliner.runtime.guards import is_timeout_exceeded
 from pipeliner.services.artifact_service import ArtifactService
@@ -304,8 +304,12 @@ class RuntimeCoordinator:
             return
         if verdict.status == VerdictStatus.REVISE:
             guards = spec.runtime_guards_or_default()
+            max_rework_rounds = max(
+                guards.max_rework_rounds,
+                self.settings.default_max_rework_rounds,
+            )
             next_round = node_run.round_no + 1
-            if next_round > guards.max_rework_rounds:
+            if next_round > max_rework_rounds:
                 node_run.status = NodeRunStatus.REWORK_LIMIT.value
                 node_run.stop_reason = "exceeded max_rework_rounds"
                 node_run.waiting_for_role = None
@@ -397,7 +401,11 @@ class RuntimeCoordinator:
             node_run.stop_reason = message
             run.status = RunStatus.NEEDS_ATTENTION.value
             run.stop_reason = message
-            return {"node_id": node_run.node_id, "round_no": str(node_run.round_no), "reason": message}
+            return {
+                "node_id": node_run.node_id,
+                "round_no": str(node_run.round_no),
+                "reason": message,
+            }
         return None
 
     def _reconcile_validator_call_issue(

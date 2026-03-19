@@ -114,7 +114,15 @@
   "authoring": {
     "title": "创作",
     "subtitle": "对话 + 规范草案",
-    "description": "Intent brief、revision history、raw spec 和 publish gate 都在同一工作区里。",
+    "description": "先锁定当前会话，再用指令推进草案演化，最后检查阻塞项并发布。",
+    "cockpit": "创作驾驶台",
+    "heroTitle": "把意图、规范与发布检查收束到同一条创作主线",
+    "heroDescription": "新的 authoring 工作区把会话导航、创作指令、原始规范、同步预览和发布状态拆成清晰层级，减少来回滚动与上下文切换。",
+    "heroSteps": {
+      "session": "选会话",
+      "guide": "写指令",
+      "publish": "检视并发布"
+    },
     "newSession": "新建创作会话",
     "continueSession": "继续会话",
     "createSession": "创建会话",
@@ -127,13 +135,33 @@
     "revision": "版本",
     "canonicalSpec": "规范工作流定义",
     "instruction": "创作指令",
+    "instructionHint": "先描述这一轮要改什么，再决定是保存、继续会话还是让 Claude 直接生成。",
+    "sessionExplorer": "会话导航",
+    "sessionExplorerHint": "先选中已有会话查看上下文，或者在下方创建新的草案分支。",
+    "currentCycle": "当前创作周期",
+    "publishReadiness": "发布准备度",
+    "publishReadinessHint": "阻塞问题归零后再发布，能显著减少无效版本。",
+    "latestDraft": "最新草稿",
+    "latestDraftHint": "这里仍然是唯一机器真源。直接编辑 JSON，右侧的结构视图会同步变化。",
+    "workflowPreview": "同步预览",
+    "workflowPreviewHint": "卡片、图谱、输入与 lint 都从同一份规范派生，用来快速检查编辑结果。",
+    "publishedVersion": "已发布版本",
+    "notPublished": "尚未发布",
+    "warnings": "警告",
+    "latestRevision": "最新版本",
+    "draftCount": "草稿数",
+    "selectedBadge": "当前",
+    "allClear": "可发布",
+    "publishBlocked": "仍有阻塞项",
+    "loadRevision": "载入到编辑器",
     "field": {
       "sessionTitle": "会话标题",
       "intentBrief": "Intent Brief（意图简介）"
     },
     "placeholder": {
       "sessionTitle": "会话标题",
-      "intentBrief": "意图简介"
+      "intentBrief": "意图简介",
+      "instruction": "例如：补齐 inputs 契约、明确每个节点的 done_means，并把版本号提升到 0.2.0。"
     },
     "help": {
       "newSession": "创建一个新的创作会话，用于生成 workflow 草案。",
@@ -187,6 +215,9 @@
       "workspaceHint": "选择一个会话以查看同步的 cards / graph / spec / lint 视图。",
       "instruction": "请先填写生成指令。"
     },
+    "sessionEmpty": "还没有创作会话。先在下方创建第一条草案轨迹。",
+    "messageEmpty": "当前还没有会话消息。保存、继续或发布后会出现在这里。",
+    "historyEmpty": "当前还没有版本历史。先保存或继续一次。",
     "published": "已发布为",
     "selectedSession": "已选会话",
     "updated": "更新于",

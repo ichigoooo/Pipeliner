@@ -292,7 +292,7 @@ class ProjectInitializer:
             "inputs": [],
             "outputs": [],
             "nodes": [],
-            "defaults": {"runtime_guards": {"timeout": "2h", "max_rework_rounds": 3}},
+            "defaults": {"runtime_guards": {"timeout": "2h", "max_rework_rounds": 6}},
             "extensions": {},
         }
 
