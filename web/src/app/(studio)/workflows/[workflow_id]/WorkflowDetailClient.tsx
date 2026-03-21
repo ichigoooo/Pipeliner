@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export function WorkflowDetailClient({ workflowId }: { workflowId: string }) {
@@ -23,11 +24,11 @@ export function WorkflowDetailClient({ workflowId }: { workflowId: string }) {
       </Link>
       <div className="mt-4 flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('versions')}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('versions')}</p>
+            <HelpTooltip content={t('selectVersionHint')} label={t('versions')} />
+          </div>
           <h1 className="mt-3 text-3xl font-semibold text-stone-900">{workflowId}</h1>
-          <p className="mt-3 text-sm leading-6 text-stone-600">
-            {t('selectVersionHint')}
-          </p>
         </div>
       </div>
 

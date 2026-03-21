@@ -125,6 +125,8 @@ describe('WorkflowVersionClient', () => {
     renderWithClient(<WorkflowVersionClient workflowId="classical-text-to-csv" version="0.2.0" />);
 
     expect(await screen.findByText('Workflow title')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Version details' })).toBeInTheDocument();
+    expect(screen.queryByText('Create a new authoring session from this published version.')).not.toBeInTheDocument();
     const purpose = screen.getByTestId('workflow-purpose');
     expect(purpose.className).toContain('max-h-24');
     expect(screen.getByRole('button', { name: 'Expand description' })).toHaveAttribute('aria-expanded', 'false');

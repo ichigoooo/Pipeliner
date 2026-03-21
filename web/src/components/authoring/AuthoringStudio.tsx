@@ -11,6 +11,8 @@ import { classNames, formatTimestamp, prettyJson } from '@/lib/format';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
 import { ClaudeTerminalPanel } from '@/components/claude/ClaudeTerminalPanel';
 import { WorkflowInputEditor } from '@/components/authoring/WorkflowInputEditor';
+import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { useToast } from '@/components/ui/toast';
 
 const PANEL_CLASS =
@@ -58,13 +60,13 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={classNames(
-        'rounded-[1.15rem] px-4 py-3 text-sm font-medium transition duration-200 active:translate-y-px',
+        'inline-flex min-w-0 items-center justify-center overflow-hidden rounded-[1.15rem] px-4 py-3 font-medium transition duration-200 active:translate-y-px',
         variantClassName,
         disabled &&
           'cursor-not-allowed border-stone-200 bg-stone-100 text-stone-400 shadow-none hover:translate-y-0 hover:border-stone-200 hover:bg-stone-100'
       )}
     >
-      {children}
+      {typeof children === 'string' ? <AdaptiveButtonLabel text={children} /> : children}
     </button>
   );
 }
@@ -443,36 +445,39 @@ export function AuthoringStudio() {
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(120,113,108,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(120,113,108,0.06)_1px,transparent_1px)] [background-size:26px_26px]" />
 
       <div className="relative mx-auto flex min-h-full max-w-[1820px] flex-col gap-5 p-4 lg:p-6">
-        <section className="overflow-hidden rounded-[2.5rem] border border-stone-200/80 bg-[linear-gradient(135deg,rgba(255,252,247,0.96),rgba(246,240,231,0.92))] p-6 shadow-[0_32px_90px_-44px_rgba(68,64,60,0.45)]">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-end">
+        <section className="overflow-hidden rounded-[2.2rem] border border-stone-200/80 bg-[linear-gradient(135deg,rgba(255,252,247,0.96),rgba(246,240,231,0.92))] p-5 shadow-[0_24px_70px_-42px_rgba(68,64,60,0.42)]">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
             <div>
-              <p className="text-[0.72rem] font-semibold tracking-[0.26em] text-stone-500">
-                {t('cockpit')}
-              </p>
-              <h1 className="mt-4 max-w-4xl text-4xl font-semibold tracking-[-0.045em] text-stone-950 text-balance sm:text-5xl">
+              <div className="flex items-center gap-2">
+                <p className="text-[0.72rem] font-semibold tracking-[0.26em] text-stone-500">
+                  {t('title')}
+                </p>
+                <HelpTooltip content={t('description')} label={t('title')} />
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-stone-950 sm:text-[2.15rem]">
                 {t('heroTitle')}
               </h1>
-              <p className="mt-4 max-w-3xl text-sm leading-7 text-stone-600 sm:text-[0.95rem]">
-                {t('heroDescription')}
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
+                {t('subtitle')}
               </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-stone-700">
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full border border-stone-200 bg-white/70 px-3 py-1 text-[11px] font-medium text-stone-700">
                   01 · {t('heroSteps.session')}
                 </span>
-                <span className="rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-stone-700">
+                <span className="rounded-full border border-stone-200 bg-white/70 px-3 py-1 text-[11px] font-medium text-stone-700">
                   02 · {t('heroSteps.guide')}
                 </span>
-                <span className="rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-stone-700">
+                <span className="rounded-full border border-stone-200 bg-white/70 px-3 py-1 text-[11px] font-medium text-stone-700">
                   03 · {t('heroSteps.publish')}
                 </span>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-3">
               {summary.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-[1.6rem] border border-stone-200/80 bg-white/80 px-4 py-4 shadow-[0_18px_32px_-28px_rgba(68,64,60,0.4)]"
+                  className="rounded-[1.45rem] border border-stone-200/80 bg-white/82 px-4 py-4 shadow-[0_18px_32px_-28px_rgba(68,64,60,0.4)]"
                 >
                   <p className="text-xs font-medium tracking-[0.12em] text-stone-500">
                     {item.label}
@@ -490,13 +495,11 @@ export function AuthoringStudio() {
           <aside className="flex min-h-0 flex-col gap-5">
             <section className={classNames(PANEL_CLASS, 'flex min-h-0 flex-col overflow-hidden')}>
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="flex items-center gap-2">
                   <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                     {t('sessionExplorer')}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-stone-600">
-                    {t('sessionExplorerHint')}
-                  </p>
+                  <HelpTooltip content={t('sessionExplorerHint')} label={t('sessionExplorer')} />
                 </div>
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-600">
                   {t('total', { count: sessions.length })}
@@ -593,13 +596,11 @@ export function AuthoringStudio() {
             </section>
 
             <section className={classNames(PANEL_CLASS, 'bg-[linear-gradient(180deg,rgba(255,251,244,0.95),rgba(250,247,241,0.92))]')}>
-              <div>
+              <div className="flex items-center gap-2">
                 <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                   {t('newSession')}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-stone-600">
-                  {t('help.newSession')}
-                </p>
+                <HelpTooltip content={t('help.newSession')} label={t('newSession')} />
               </div>
 
               <form className="mt-5 space-y-4" onSubmit={submitCreateSession}>
@@ -699,13 +700,11 @@ export function AuthoringStudio() {
                 </div>
 
                 <div className="rounded-[1.8rem] border border-stone-200/80 bg-white/80 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                       {t('instruction')}
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-stone-600">
-                      {t('instructionHint')}
-                    </p>
+                    <HelpTooltip content={t('instructionHint')} label={t('instruction')} />
                   </div>
 
                   <textarea
@@ -763,13 +762,11 @@ export function AuthoringStudio() {
             <div className="grid min-h-0 flex-1 gap-5 2xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
               <section className={classNames(PANEL_CLASS, 'flex min-h-[34rem] flex-col')}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                       {t('latestDraft')}
                     </p>
-                    <p className="mt-2 max-w-xl text-sm leading-6 text-stone-600">
-                      {t('latestDraftHint')}
-                    </p>
+                    <HelpTooltip content={t('latestDraftHint')} label={t('latestDraft')} />
                   </div>
                   <div className="rounded-[1.2rem] border border-stone-200 bg-stone-50 px-4 py-3 text-right text-xs text-stone-600">
                     <p className="font-medium tracking-[0.12em] text-stone-500">
@@ -795,13 +792,11 @@ export function AuthoringStudio() {
 
               <section className={classNames(PANEL_CLASS, 'flex min-h-[34rem] flex-col overflow-hidden')}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                       {t('workflowPreview')}
                     </p>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-                      {t('workflowPreviewHint')}
-                    </p>
+                    <HelpTooltip content={t('workflowPreviewHint')} label={t('workflowPreview')} />
                   </div>
                   <div
                     className={classNames(
@@ -848,13 +843,14 @@ export function AuthoringStudio() {
               )}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="flex items-center gap-2">
                   <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                     {t('publishReadiness')}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-stone-600">
-                    {t('publishReadinessHint')}
-                  </p>
+                  <HelpTooltip
+                    content={t('publishReadinessHint')}
+                    label={t('publishReadiness')}
+                  />
                 </div>
                 <span
                   className={classNames(
@@ -906,13 +902,14 @@ export function AuthoringStudio() {
 
             <section className={classNames(PANEL_CLASS, 'flex min-h-0 flex-col overflow-hidden')}>
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="flex items-center gap-2">
                   <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                     {t('revisionHistory')}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-stone-600">
-                    {t('help.revisionHistory')}
-                  </p>
+                  <HelpTooltip
+                    content={t('help.revisionHistory')}
+                    label={t('revisionHistory')}
+                  />
                 </div>
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-600">
                   {draftList.length}
@@ -969,13 +966,11 @@ export function AuthoringStudio() {
 
             <section className={classNames(PANEL_CLASS, 'flex min-h-0 flex-col overflow-hidden')}>
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="flex items-center gap-2">
                   <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                     {t('messages')}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-stone-600">
-                    {t('help.messages')}
-                  </p>
+                  <HelpTooltip content={t('help.messages')} label={t('messages')} />
                 </div>
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-600">
                   {messages.length}

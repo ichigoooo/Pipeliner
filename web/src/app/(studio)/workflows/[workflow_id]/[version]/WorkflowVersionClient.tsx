@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
+import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { WorkflowBatchStartPanel } from '@/components/workflow/WorkflowBatchStartPanel';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
 import { WorkflowRunStartPanel } from '@/components/workflow/WorkflowRunStartPanel';
@@ -117,7 +119,10 @@ export function WorkflowVersionClient({
         </Link>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('workspace')}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('workspace')}</p>
+              <HelpTooltip content={t('iterateHint')} label={t('workspace')} />
+            </div>
             <h1 className="mt-2 text-3xl font-semibold text-stone-900">
               {workflow.workflow_view.metadata.title}
             </h1>
@@ -149,42 +154,41 @@ export function WorkflowVersionClient({
               </div>
             ) : null}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
             <div className="rounded-full bg-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
               {workflow.version}
             </div>
             <button
               type="button"
               onClick={() => iterateMutation.mutate()}
-              className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
+              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-amber-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
             >
-              {t('iterate')}
+              <AdaptiveButtonLabel text={t('iterate')} maxFontSize={12} />
             </button>
             <button
               type="button"
               onClick={() => downloadTemplateMutation.mutate()}
               disabled={downloadTemplateMutation.isPending}
-              className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
             >
-              {t('downloadTemplate')}
+              <AdaptiveButtonLabel text={t('downloadTemplate')} maxFontSize={12} />
             </button>
             <button
               type="button"
               onClick={() => togglePanel('batch')}
-              className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
             >
-              {t('batchStart')}
+              <AdaptiveButtonLabel text={t('batchStart')} maxFontSize={12} />
             </button>
             <button
               type="button"
               onClick={() => togglePanel('run')}
-              className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
             >
-              {t('startRun')}
+              <AdaptiveButtonLabel text={t('startRun')} maxFontSize={12} />
             </button>
           </div>
         </div>
-        <p className="mt-3 text-xs text-stone-500">{t('iterateHint')}</p>
         {iterationError ? <p className="mt-2 text-xs text-rose-700">{iterationError}</p> : null}
         {activePanel === 'run' ? (
           <WorkflowRunStartPanel

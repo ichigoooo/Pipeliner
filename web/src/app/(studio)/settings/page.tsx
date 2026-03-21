@@ -5,12 +5,24 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { api, SettingValue } from '@/lib/api';
 import { prettyJson } from '@/lib/format';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { LanguageSelector } from './components/LanguageSelector';
 
-function SettingRow<T>({ label, setting }: { label: string; setting: SettingValue<T> }) {
+function SettingRow<T>({
+  label,
+  help,
+  setting,
+}: {
+  label: string;
+  help?: string;
+  setting: SettingValue<T>;
+}) {
   return (
     <div className="grid gap-2 rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-stone-700 md:grid-cols-[180px_minmax(0,1fr)_120px]">
-      <div className="font-medium text-stone-900">{label}</div>
+      <div className="flex items-center gap-2 font-medium text-stone-900">
+        <span>{label}</span>
+        {help ? <HelpTooltip content={help} label={label} /> : null}
+      </div>
       <div className="break-all">{String(setting.value)}</div>
       <div className="text-xs uppercase tracking-[0.18em] text-stone-500">{setting.source}</div>
     </div>
@@ -46,9 +58,11 @@ export default function SettingsPage() {
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-8">
-        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+          <HelpTooltip content={t('description')} label={t('title')} />
+        </div>
         <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('subtitle')}</h1>
-        <p className="mt-3 text-sm leading-6 text-stone-600">{t('description')}</p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -67,8 +81,11 @@ export default function SettingsPage() {
           </SettingsSection>
 
           <SettingsSection title={t('sections.observability')}>
-            <SettingRow label={t('labels.claudeTrace')} setting={settings.observability.claude_trace_enabled} />
-            <p className="text-xs text-stone-500">{t('labels.claudeTraceHint')}</p>
+            <SettingRow
+              label={t('labels.claudeTrace')}
+              help={t('labels.claudeTraceHint')}
+              setting={settings.observability.claude_trace_enabled}
+            />
           </SettingsSection>
 
           <SettingsSection title={t('sections.runtimeGuards')}>
@@ -110,12 +127,18 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeProxy')}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeProxy')}</p>
+                  <HelpTooltip
+                    content={t('labels.proxyMissingHint')}
+                    label={t('labels.claudeProxy')}
+                  />
+                </div>
                 <p className="mt-2 text-stone-900">
                   {settings.claude_diagnostics?.proxy?.missing ? t('labels.proxyMissing') : t('labels.proxyPresent')}
                 </p>
                 {settings.claude_diagnostics?.proxy?.missing ? (
-                  <p className="mt-2 text-xs text-red-600">{t('labels.proxyMissingHint')}</p>
+                  <p className="mt-2 text-xs text-red-600">{t('labels.proxyMissing')}</p>
                 ) : (
                   <p className="mt-2 text-xs text-stone-500">
                     {t('labels.proxyKeys')}:{' '}

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { prettyJson } from '@/lib/format';
+import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import {
   WorkflowInputDescriptor,
   buildInitialFormValues,
@@ -80,20 +82,24 @@ export function WorkflowRunStartPanel({
   return (
     <div className="mt-4 rounded-[2rem] border border-stone-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-2">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
             {mode === 'structured' ? t('runInputsForm') : t('runInputs')}
           </label>
-          <p className="mt-2 text-xs text-stone-500">
-            {mode === 'structured' ? t('runInputsFormHint') : t('runInputsRawHint')}
-          </p>
+          <HelpTooltip
+            content={mode === 'structured' ? t('runInputsFormHint') : t('runInputsRawHint')}
+            label={mode === 'structured' ? t('runInputsForm') : t('runInputs')}
+          />
         </div>
         <button
           type="button"
           onClick={() => setMode((current) => (current === 'structured' ? 'raw' : 'structured'))}
-          className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+          className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
         >
-          {mode === 'structured' ? t('switchToRaw') : t('switchToForm')}
+          <AdaptiveButtonLabel
+            text={mode === 'structured' ? t('switchToRaw') : t('switchToForm')}
+            maxFontSize={12}
+          />
         </button>
       </div>
 
@@ -198,16 +204,16 @@ export function WorkflowRunStartPanel({
           type="button"
           onClick={mode === 'structured' ? submitStructured : submitRaw}
           disabled={isSubmitting}
-          className="rounded-full bg-stone-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
+          className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full bg-stone-950 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
         >
-          {t('launchRun')}
+          <AdaptiveButtonLabel text={t('launchRun')} maxFontSize={12} />
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+          className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
         >
-          {t('cancel')}
+          <AdaptiveButtonLabel text={t('cancel')} maxFontSize={12} />
         </button>
         {localError ? <p className="text-xs text-rose-700">{localError}</p> : null}
         {error ? <p className="text-xs text-rose-700">{error}</p> : null}

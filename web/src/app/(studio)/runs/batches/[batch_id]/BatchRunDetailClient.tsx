@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
@@ -165,9 +166,9 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
                     type="button"
                     disabled={!item.run_id || item.run_deleted || openingRunId === item.run_id}
                     onClick={() => item.run_id && openWorkspaceMutation.mutate(item.run_id)}
-                    className="rounded-full border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                    className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-3 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
                   >
-                    {t('openFolder')}
+                    <AdaptiveButtonLabel text={t('openFolder')} maxFontSize={12} />
                   </button>
                 </td>
               </tr>

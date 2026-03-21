@@ -9,6 +9,8 @@ import { api } from '@/lib/api';
 import type { BatchRunSummary } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
 import { formatRunStopReason } from '@/lib/run-stop-reason';
+import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 const ACTIVE_BATCH_STATUSES = new Set(['pending', 'running']);
@@ -239,9 +241,9 @@ export default function RunsPage() {
                 onClick={() => {
                   router.push(`/runs/batches/${batchId}`);
                 }}
-                className="rounded-full border border-stone-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-600 transition hover:border-amber-400 hover:text-amber-900"
+                className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-200 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-stone-600 transition hover:border-amber-400 hover:text-amber-900"
               >
-                {t('viewBatch')}
+                <AdaptiveButtonLabel text={t('viewBatch')} maxFontSize={11} />
               </button>
             ) : null}
             {canDelete ? (
@@ -254,9 +256,12 @@ export default function RunsPage() {
                   deleteMutation.mutate(run.run_id);
                 }}
                 disabled={deletingRunId === run.run_id}
-                className="rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-rose-200 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
               >
-                {deletingRunId === run.run_id ? t('actions.loading') : t('deleteRun')}
+                <AdaptiveButtonLabel
+                  text={deletingRunId === run.run_id ? t('actions.loading') : t('deleteRun')}
+                  maxFontSize={11}
+                />
               </button>
             ) : null}
             <StatusBadge value={run.status} />
@@ -319,8 +324,8 @@ export default function RunsPage() {
                 {t('selectBatch')}
               </label>
             ) : null}
-            <span className="rounded-full border border-stone-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-600">
-              {t('viewBatch')}
+            <span className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-200 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-stone-600">
+              <AdaptiveButtonLabel text={t('viewBatch')} maxFontSize={11} />
             </span>
             {canDeleteBatch ? (
               <button
@@ -332,9 +337,12 @@ export default function RunsPage() {
                   deleteBatchMutation.mutate(batch.batch_id);
                 }}
                 disabled={deletingBatchId === batch.batch_id || bulkDeleteBatchMutation.isPending}
-                className="rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-rose-200 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
               >
-                {deletingBatchId === batch.batch_id ? t('actions.loading') : t('deleteBatch')}
+                <AdaptiveButtonLabel
+                  text={deletingBatchId === batch.batch_id ? t('actions.loading') : t('deleteBatch')}
+                  maxFontSize={11}
+                />
               </button>
             ) : null}
             <StatusBadge value={batch.status} />
@@ -347,9 +355,11 @@ export default function RunsPage() {
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-8">
-        <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+          <HelpTooltip content={t('listDescription')} label={t('title')} />
+        </div>
         <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('list')}</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">{t('listDescription')}</p>
       </div>
 
       {runsQuery.error ? (
@@ -427,9 +437,9 @@ export default function RunsPage() {
       <div className="space-y-6">
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className="flex items-center gap-2">
               <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{t('groups.batch')}</p>
-              <p className="mt-1 text-sm text-stone-600">{t('groups.batchHint')}</p>
+              <HelpTooltip content={t('groups.batchHint')} label={t('groups.batch')} />
             </div>
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
@@ -445,11 +455,16 @@ export default function RunsPage() {
                     bulkDeleteBatchMutation.mutate(selectedBatchIds);
                   }}
                   disabled={bulkDeleteBatchMutation.isPending}
-                  className="rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                  className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-rose-200 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
                 >
-                  {bulkDeleteBatchMutation.isPending
-                    ? t('actions.loading')
-                    : t('bulkDeleteBatch', { count: selectedBatchIds.length })}
+                  <AdaptiveButtonLabel
+                    text={
+                      bulkDeleteBatchMutation.isPending
+                        ? t('actions.loading')
+                        : t('bulkDeleteBatch', { count: selectedBatchIds.length })
+                    }
+                    maxFontSize={11}
+                  />
                 </button>
               ) : null}
             </div>
@@ -465,9 +480,12 @@ export default function RunsPage() {
 
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className="flex items-center gap-2">
               <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{t('groups.actionable')}</p>
-              <p className="mt-1 text-sm text-stone-600">{t('groups.actionableHint')}</p>
+              <HelpTooltip
+                content={t('groups.actionableHint')}
+                label={t('groups.actionable')}
+              />
             </div>
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
@@ -483,11 +501,16 @@ export default function RunsPage() {
                     bulkDeleteRunsMutation.mutate(selectedRunIds);
                   }}
                   disabled={bulkDeleteRunsMutation.isPending}
-                  className="rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                  className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-rose-200 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:text-rose-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
                 >
-                  {bulkDeleteRunsMutation.isPending
-                    ? t('actions.loading')
-                    : t('bulkDeleteRun', { count: selectedRunIds.length })}
+                  <AdaptiveButtonLabel
+                    text={
+                      bulkDeleteRunsMutation.isPending
+                        ? t('actions.loading')
+                        : t('bulkDeleteRun', { count: selectedRunIds.length })
+                    }
+                    maxFontSize={11}
+                  />
                 </button>
               ) : null}
             </div>
@@ -503,9 +526,9 @@ export default function RunsPage() {
 
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className="flex items-center gap-2">
               <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{t('groups.active')}</p>
-              <p className="mt-1 text-sm text-stone-600">{t('groups.activeHint')}</p>
+              <HelpTooltip content={t('groups.activeHint')} label={t('groups.active')} />
             </div>
             <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900">
               {groupedRuns.active.length}
@@ -527,9 +550,9 @@ export default function RunsPage() {
         >
           <summary className="cursor-pointer px-5 py-4">
             <div className="flex items-center justify-between gap-3">
-              <div>
+              <div className="flex items-center gap-2">
                 <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{t('groups.archived')}</p>
-                <p className="mt-1 text-sm text-stone-600">{t('groups.archivedHint')}</p>
+                <HelpTooltip content={t('groups.archivedHint')} label={t('groups.archived')} />
               </div>
               <div className="flex items-center gap-3">
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">

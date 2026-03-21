@@ -10,6 +10,8 @@ import type { RunOverview } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
 import { formatRunStopReason } from '@/lib/run-stop-reason';
 import { formatStatusLabel as formatStatusText } from '@/lib/status';
+import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { TabList } from '@/components/ui/TabList';
 import { InspectorPanel } from '@/components/ui/InspectorPanel';
@@ -876,18 +878,20 @@ export function RunDetailClient({ runId }: { runId: string }) {
               type="button"
               disabled={primaryAction.disabled || primaryActionMutation.isPending}
               onClick={() => primaryActionMutation.mutate()}
-              className="mt-4 w-full rounded-full bg-amber-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+              className="mt-4 inline-flex w-full min-w-0 items-center justify-center overflow-hidden rounded-full bg-amber-300 px-4 py-3 font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
             >
-              {primaryActionMutation.isPending ? t('actions.loading') : primaryAction.label}
+              <AdaptiveButtonLabel
+                text={primaryActionMutation.isPending ? t('actions.loading') : primaryAction.label}
+              />
             </button>
             <div className="mt-4 flex flex-wrap gap-3">
               {showStopButton ? (
                 <button
                   type="button"
                   onClick={() => stopMutation.mutate()}
-                  className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
+                  className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-medium text-stone-800 transition hover:border-stone-900"
                 >
-                  {t('stopRun')}
+                  <AdaptiveButtonLabel text={t('stopRun')} />
                 </button>
               ) : null}
               {showDeleteButton ? (
@@ -900,18 +904,20 @@ export function RunDetailClient({ runId }: { runId: string }) {
                     deleteMutation.mutate();
                   }}
                   disabled={deleteMutation.isPending}
-                  className="rounded-full border border-rose-200 px-4 py-2 text-sm font-medium text-rose-800 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                  className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-rose-200 px-4 py-2 font-medium text-rose-800 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
                 >
-                  {deleteMutation.isPending ? t('actions.loading') : t('deleteRun')}
+                  <AdaptiveButtonLabel
+                    text={deleteMutation.isPending ? t('actions.loading') : t('deleteRun')}
+                  />
                 </button>
               ) : null}
               {showJumpToCurrentFocus ? (
                 <button
                   type="button"
                   onClick={jumpToCurrentFocus}
-                  className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
+                  className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-medium text-stone-800 transition hover:border-stone-900"
                 >
-                  {t('summary.viewCurrent')}
+                  <AdaptiveButtonLabel text={t('summary.viewCurrent')} />
                 </button>
               ) : null}
             </div>
@@ -950,9 +956,12 @@ export function RunDetailClient({ runId }: { runId: string }) {
               <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
                 {t('summary.advanced')}
               </summary>
-              <p className="mt-3 text-sm text-stone-600">
-                {driverRunning ? t('drive.runningDescription') : t('drive.description')}
-              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <HelpTooltip
+                  content={driverRunning ? t('drive.runningDescription') : t('drive.description')}
+                  label={t('summary.advanced')}
+                />
+              </div>
               <div className="mt-4 space-y-4">
                 <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('summary.nextActions')}</p>
@@ -979,9 +988,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
                               type="button"
                               onClick={() => void dispatchAction(action as DispatchableAction)}
                               disabled={driverRunning || dispatchingKey === key}
-                              className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
                             >
-                              {t('summary.dispatchNow')}
+                              <AdaptiveButtonLabel text={t('summary.dispatchNow')} maxFontSize={12} />
                             </button>
                           </div>
                         );
@@ -1006,17 +1015,17 @@ export function RunDetailClient({ runId }: { runId: string }) {
                       type="button"
                       onClick={() => driveMutation.mutate()}
                       disabled={!canDrive || driveMutation.isPending}
-                      className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+                      className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
                     >
-                      {t('drive.button')}
+                      <AdaptiveButtonLabel text={t('drive.button')} maxFontSize={12} />
                     </button>
                     {driveResult ? (
                       <button
                         type="button"
                         onClick={() => setInspectorData(driveResult)}
-                        className="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900"
+                        className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-800 transition hover:border-stone-900"
                       >
-                        {t('drive.inspect')}
+                        <AdaptiveButtonLabel text={t('drive.inspect')} maxFontSize={12} />
                       </button>
                     ) : null}
                   </div>
@@ -1124,9 +1133,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
                       <button
                         type="button"
                         onClick={jumpToCurrentFocus}
-                        className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 transition hover:border-stone-900"
+                        className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-medium text-stone-800 transition hover:border-stone-900"
                       >
-                        {t('detail.returnToCurrent')}
+                        <AdaptiveButtonLabel text={t('detail.returnToCurrent')} />
                       </button>
                     </div>
                   ) : null}
@@ -1255,9 +1264,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
                       <button
                         type="button"
                         onClick={() => setInspectorData(nodeRound.context)}
-                        className="rounded-full border border-stone-300 px-4 py-2 text-sm text-stone-800 transition hover:border-stone-900"
+                        className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 text-stone-800 transition hover:border-stone-900"
                       >
-                        {t('inspectRawContext')}
+                        <AdaptiveButtonLabel text={t('inspectRawContext')} />
                       </button>
                       <div className="rounded-[1.5rem] border border-stone-200 bg-stone-950 p-5 text-sm text-stone-100">
                         <pre className="overflow-auto whitespace-pre-wrap break-all">
@@ -1307,23 +1316,23 @@ export function RunDetailClient({ runId }: { runId: string }) {
                             <button
                               type="button"
                               onClick={() => void openArtifactFolder(artifact.artifact_id, artifact.version)}
-                              className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
+                              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-amber-300 px-3 py-1 font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
                             >
-                              {t('preview.openFolder')}
+                              <AdaptiveButtonLabel text={t('preview.openFolder')} maxFontSize={12} />
                             </button>
                             <button
                               type="button"
                               onClick={() => void copyArtifactUri(artifact.storage_uri)}
-                              className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+                              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-3 py-1 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
                             >
-                              {t('artifactActions.copyUri')}
+                              <AdaptiveButtonLabel text={t('artifactActions.copyUri')} maxFontSize={12} />
                             </button>
                             <button
                               type="button"
                               onClick={() => void loadArtifactPreview(artifact.artifact_id, artifact.version)}
-                              className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+                              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-3 py-1 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
                             >
-                              {t('artifactActions.preview')}
+                              <AdaptiveButtonLabel text={t('artifactActions.preview')} maxFontSize={12} />
                             </button>
                           </div>
                         </div>
@@ -1340,8 +1349,10 @@ export function RunDetailClient({ runId }: { runId: string }) {
               {t('graph.title')}
             </summary>
             <div className="border-t border-stone-200 px-5 py-4">
-              <p className="text-sm text-stone-600">{t('graph.description')}</p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs text-stone-600">
+              <div className="mb-4 flex items-center gap-2">
+                <HelpTooltip content={t('graph.description')} label={t('graph.title')} />
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-stone-600">
                 <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-900">{t('graph.legend.current')}</span>
                 <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-900">{t('graph.legend.running')}</span>
                 <span className="rounded-full bg-indigo-100 px-3 py-1 text-indigo-900">{t('graph.legend.waiting')}</span>
@@ -1371,9 +1382,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
                 <button
                   type="button"
                   onClick={() => setPreviewState(null)}
-                  className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-500"
+                  className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-3 py-1 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-500"
                 >
-                  {t('preview.close')}
+                  <AdaptiveButtonLabel text={t('preview.close')} maxFontSize={12} />
                 </button>
               </div>
               {previewLoading ? (

@@ -106,7 +106,7 @@ describe('RunsPage', () => {
 
     renderWithClient(<RunsPage />);
 
-    expect(await screen.findByText('Run List')).toBeInTheDocument();
+    expect(await screen.findByText('Run History')).toBeInTheDocument();
     expect(await screen.findByText('run_attention')).toBeInTheDocument();
     expect(await screen.findByText('run_running')).toBeInTheDocument();
     expect(screen.getByText('Needs attention')).toBeInTheDocument();

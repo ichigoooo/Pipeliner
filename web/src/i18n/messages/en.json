@@ -1,8 +1,8 @@
 {
   "dashboard": {
-    "header": "Workflow Studio",
-    "title": "Developer-first control surface for authoring, runs, attention handling, and config provenance.",
-    "subtitle": "All views are derived from the same canonical workflow spec. No more second sources from graph, cards, or debug panels.",
+    "header": "Pipeliner",
+    "title": "Manage workflows and runs",
+    "subtitle": "Create, publish, run, and handle issues from one place.",
     "stats": {
       "publishedWorkflows": "Published Workflows",
       "runs": "Runs",
@@ -11,50 +11,50 @@
     "shortcuts": {
       "authoring": {
         "eyebrow": "Authoring",
-        "title": "Create or revise a workflow draft",
-        "body": "Continue a session, inspect revisions, edit raw spec, and publish only when lint passes."
+        "title": "Start authoring",
+        "body": "Choose a session, update the spec, review results, and publish when checks pass."
       },
       "catalog": {
         "eyebrow": "Workflow Catalog",
-        "title": "Inspect registered versions",
-        "body": "Browse cards, graph, spec, and lint from one canonical workflow version."
+        "title": "View workflows",
+        "body": "Browse published versions and inspect each workflow at a glance."
       },
       "workspace": {
-        "eyebrow": "Run Workspace",
-        "title": "Trace callbacks, artifacts, and rounds",
-        "body": "Use the run workspace to inspect node rounds, context payloads, and intervention actions."
+        "eyebrow": "Run History",
+        "title": "View run details",
+        "body": "Track status, inspect node progress, and handle runs that need attention."
       },
       "settings": {
         "eyebrow": "Settings",
-        "title": "See resolved config provenance",
-        "body": "Compare the effective command templates, storage paths, and runtime guard defaults."
+        "title": "Adjust system settings",
+        "body": "Review active settings, connectivity, and runtime defaults."
       }
     }
   },
   "sidebar": {
     "title": "Pipeliner",
-    "subtitle": "Workflow Studio",
-    "description": "Inspect workflow specs, author drafts, debug runs, and track resolved config.",
+    "subtitle": "Workflow Orchestration",
+    "description": "Author workflows, inspect versions, track runs, and handle issues.",
     "nav": {
       "dashboard": "Dashboard",
       "authoring": "Authoring",
       "workflows": "Workflows",
       "runs": "Runs",
-      "attention": "Attention Queue",
+      "attention": "Needs Action",
       "settings": "Settings"
     }
   },
   "settings": {
     "title": "Settings",
-    "subtitle": "Resolved configuration + provenance",
-    "description": "Developers can see the current effective values and whether they come from 'default' or 'env'.",
+    "subtitle": "System Settings",
+    "description": "Review active settings, connectivity, and where each value comes from.",
     "sections": {
       "commandTemplates": "Command templates",
       "storageDatabase": "Storage + database",
       "runtimeGuards": "Runtime guards",
-      "claudeDiagnostics": "Claude connectivity diagnostics",
-      "providerBindings": "Provider bindings",
-      "observedSkills": "Observed skills",
+      "claudeDiagnostics": "Claude connectivity",
+      "providerBindings": "Model bindings",
+      "observedSkills": "Active skills",
       "rawSnapshot": "Raw snapshot",
       "observability": "Observability"
     },
@@ -113,38 +113,38 @@
   },
   "authoring": {
     "title": "Authoring",
-    "subtitle": "Conversation + canonical draft",
-    "description": "Lock the active session, guide the draft with instructions, then clear blocking issues before publishing.",
-    "cockpit": "Authoring cockpit",
-    "heroTitle": "Keep intent, spec editing, and publish checks on one authoring path",
-    "heroDescription": "The redesigned authoring workspace separates session navigation, draft guidance, raw spec editing, synchronized preview, and publish readiness into a clearer working rhythm.",
+    "subtitle": "Update the spec, review results, and publish a version",
+    "description": "Use one page to choose a session, edit the spec, and finish publish checks.",
+    "cockpit": "Authoring",
+    "heroTitle": "Start authoring",
+    "heroDescription": "Choose a session, continue editing the spec, review the result, and finish publish checks.",
     "heroSteps": {
       "session": "Choose a session",
       "guide": "Write the instruction",
       "publish": "Review and publish"
     },
-    "newSession": "New Authoring Session",
+    "newSession": "New Session",
     "continueSession": "Continue Session",
     "createSession": "Create Session",
     "saveDraft": "Save Raw Draft",
     "continue": "Continue Session",
     "publish": "Publish Latest Revision",
     "sessions": "Sessions",
-    "messages": "Messages",
-    "revisionHistory": "Revision History",
+    "messages": "Activity",
+    "revisionHistory": "History",
     "revision": "Revision",
     "canonicalSpec": "Canonical workflow spec",
-    "instruction": "Authoring instruction",
+    "instruction": "This change",
     "instructionHint": "Describe this round of changes first, then decide whether to save, continue, or let Claude generate the draft directly.",
-    "sessionExplorer": "Session explorer",
-    "sessionExplorerHint": "Select an existing session to recover context, or create a new draft branch below.",
-    "currentCycle": "Current authoring cycle",
-    "publishReadiness": "Publish readiness",
+    "sessionExplorer": "Choose session",
+    "sessionExplorerHint": "Pick an existing session or create a new branch below.",
+    "currentCycle": "Current version",
+    "publishReadiness": "Publish check",
     "publishReadinessHint": "Publishing only after blocking issues reach zero reduces noisy versions.",
-    "latestDraft": "Latest draft",
-    "latestDraftHint": "This remains the only canonical source. Edit the JSON directly and inspect the synchronized preview on the right.",
-    "workflowPreview": "Synchronized preview",
-    "workflowPreviewHint": "Cards, graph, inputs, and lint all derive from the same spec so you can verify changes immediately.",
+    "latestDraft": "Current spec",
+    "latestDraftHint": "This is the spec used by the current session. Edit it directly and the preview will update on the right.",
+    "workflowPreview": "Preview",
+    "workflowPreviewHint": "Review cards, graph, inputs, and checks here to confirm the impact of your changes.",
     "publishedVersion": "Published version",
     "notPublished": "Not published yet",
     "warnings": "Warnings",
@@ -155,26 +155,26 @@
     "publishBlocked": "Blocking issues remain",
     "loadRevision": "Load into editor",
     "field": {
-      "sessionTitle": "Session title",
-      "intentBrief": "Intent brief"
+      "sessionTitle": "Session name",
+      "intentBrief": "Goal"
     },
     "placeholder": {
-      "sessionTitle": "Session title",
-      "intentBrief": "Intent brief",
+      "sessionTitle": "Session name",
+      "intentBrief": "Goal",
       "instruction": "For example: add input contracts, clarify done_means for each node, and bump the version to 0.2.0."
     },
     "help": {
-      "newSession": "Create a new authoring session to produce a workflow draft.",
-      "sessionTitle": "Human-readable name to identify this session.",
-      "intentBrief": "One-sentence goal with inputs/outputs and acceptance criteria.",
-      "instruction": "Describe what to change or refine in the current draft.",
-      "canonicalSpec": "This is the only canonical source. All views derive from this JSON.",
-      "messages": "System messages and publish events for this session.",
-      "revisionHistory": "Each save/continue creates a new revision you can revisit."
+      "newSession": "Create a new session to start a fresh change branch.",
+      "sessionTitle": "Human-readable name used to distinguish this session.",
+      "intentBrief": "A one-line goal that explains the intended outcome of this change.",
+      "instruction": "Describe what should change before you save, continue, or generate.",
+      "canonicalSpec": "This is the spec used by the current session. All derived views come from this JSON.",
+      "messages": "System events, generation logs, and publish activity for this session.",
+      "revisionHistory": "Each save or continue action creates a version you can revisit."
     },
     "inputs": {
-      "title": "Workflow inputs",
-      "description": "Configure structured input metadata and keep it synchronized with the canonical spec.",
+      "title": "Input definition",
+      "description": "Define run inputs here and keep them aligned with the current spec.",
       "add": "Add input",
       "remove": "Remove",
       "empty": "No workflow inputs yet. Add one to define the run-start contract.",
@@ -236,25 +236,25 @@
   },
   "workflows": {
     "title": "Workflows",
-    "list": "Workflow List",
-    "details": "Workflow Details",
+    "list": "All Workflows",
+    "details": "View Versions",
     "version": "Version",
-    "versions": "Workflow versions",
+    "versions": "Version List",
     "startRun": "Start Run",
     "downloadTemplate": "Download Template",
     "batchStart": "Batch Launch",
     "noWorkflows": "No workflows found",
     "backToWorkflows": "Back to workflows",
     "backToVersions": "Back to versions",
-    "description": "Select a version to enter the cards / graph / spec / lint synchronized workspace.",
-    "selectVersionHint": "Select a version to enter the cards / graph / spec / lint workspace.",
+    "description": "Browse published workflows and open a specific version for details.",
+    "selectVersionHint": "Choose a version to inspect structure, inputs, and checks.",
     "created": "Created",
     "createdAt": "Created {date}",
     "schema": "Schema",
     "warnings": "Warnings",
     "noWarnings": "No warnings",
-    "workspace": "Workflow workspace",
-    "loadingWorkspace": "Loading workflow workspace...",
+    "workspace": "Version details",
+    "loadingWorkspace": "Loading version details...",
     "runInputs": "Run inputs (JSON)",
     "runInputsForm": "Run inputs (form)",
     "runInputsFormHint": "Use the structured form generated from workflow input metadata.",
@@ -280,7 +280,7 @@
   },
   "runs": {
     "title": "Runs",
-    "list": "Run List",
+    "list": "Run History",
     "details": "Run Details",
     "version": "Version",
     "status": "Status",
@@ -294,9 +294,9 @@
     "context": "Context",
     "logs": "Logs",
     "noRuns": "No runs found",
-    "loading": "Loading run workspace...",
+    "loading": "Loading run details...",
     "backToRuns": "Back to runs",
-    "workspace": "Run workspace",
+    "workspace": "Run details",
     "deleteRun": "Delete Run",
     "deleteConfirm": "Delete this run and its workspace directory? This cannot be undone.",
     "deleteFailed": "Failed to delete run",
@@ -605,8 +605,8 @@
     "reported": "Reported"
   },
   "attention": {
-    "title": "Attention Queue",
-    "description": "Runs that need manual intervention",
+    "title": "Needs Action",
+    "description": "Handle issues",
     "status": {
       "blocked": "Blocked",
       "failed": "Failed",
@@ -618,6 +618,6 @@
       "stop": "Stop"
     },
     "iterate": "Iterate",
-    "iterateHint": "Start an authoring session from an attention run to refine the workflow."
+    "iterateHint": "Start a new authoring session from this run to fix or refine the workflow."
   }
 }

@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { prettyJson } from '@/lib/format';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import {
   WorkflowInputDescriptor,
   WorkflowInputType,
@@ -97,7 +98,6 @@ export function WorkflowInputEditor({ rawSpec, onChange, compact = false }: Work
   const sectionSpacing = compact ? 'mt-3 space-y-3' : 'mt-4 space-y-4';
   const gridGap = compact ? 'gap-3' : 'gap-4';
   const inputHeight = compact ? 'h-10' : 'h-11';
-  const headerSpacing = compact ? 'mt-1.5' : 'mt-2';
   const buttonPadding = compact ? 'px-3 py-1.5' : 'px-4 py-2';
 
   const commitInputs = (nextInputs: WorkflowInputDescriptor[]) => {
@@ -130,11 +130,14 @@ export function WorkflowInputEditor({ rawSpec, onChange, compact = false }: Work
   return (
     <div className={`rounded-[2rem] border border-stone-200 bg-white ${containerPadding} shadow-sm`}>
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
             {t('inputs.title')}
           </p>
-          <p className={`${headerSpacing} text-xs text-stone-500`}>{t('inputs.description')}</p>
+          <HelpTooltip
+            content={t('inputs.description')}
+            label={t('inputs.title')}
+          />
         </div>
         <button
           type="button"

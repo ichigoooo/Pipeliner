@@ -51,7 +51,7 @@ describe('WorkflowRunStartPanel', () => {
     fireEvent.change(screen.getByRole('combobox'), {
       target: { value: 'history' },
     });
-    fireEvent.click(screen.getByText('Launch Run'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch Run' }));
 
     expect(handleSubmit).toHaveBeenCalledWith({
       topic: 'history',
@@ -72,11 +72,11 @@ describe('WorkflowRunStartPanel', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Use Raw JSON'));
+    fireEvent.click(screen.getByRole('button', { name: 'Use Raw JSON' }));
     fireEvent.change(screen.getByDisplayValue('{}'), {
       target: { value: '{\n  "topic": "science"\n}' },
     });
-    fireEvent.click(screen.getByText('Launch Run'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch Run' }));
 
     expect(handleSubmit).toHaveBeenCalledWith({ topic: 'science' });
   });
@@ -107,7 +107,7 @@ describe('WorkflowRunStartPanel', () => {
     fireEvent.change(screen.getByPlaceholderText('Enter a local file path'), {
       target: { value: '/tmp/source.md' },
     });
-    fireEvent.click(screen.getByText('Launch Run'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch Run' }));
 
     expect(screen.getByText(/batch launches/i)).toBeInTheDocument();
     expect(handleSubmit).toHaveBeenCalledWith({ source_file: '/tmp/source.md' });
@@ -143,7 +143,7 @@ describe('WorkflowRunStartPanel', () => {
     fireEvent.change(screen.getByPlaceholderText('Enter a local file path'), {
       target: { value: '/tmp/source.txt' },
     });
-    fireEvent.click(screen.getByText('Launch Run'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch Run' }));
 
     expect(screen.queryByText('Must be at most null characters')).not.toBeInTheDocument();
     expect(handleSubmit).toHaveBeenCalledWith({ source_text: '/tmp/source.txt' });

@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 
 const MAX_PREVIEW_LENGTH = 120;
 
@@ -51,11 +52,11 @@ export default function WorkflowsPage() {
     <div className="p-6 lg:p-8">
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+            <HelpTooltip content={t('description')} label={t('title')} />
+          </div>
           <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('list')}</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600">
-            {t('noWorkflows')}
-          </p>
         </div>
         <Link
           href="/authoring"

@@ -151,7 +151,7 @@ describe('SettingsPage', () => {
 
     renderWithClient(<SettingsPage />);
 
-    expect(await screen.findByText('Resolved configuration + provenance')).toBeInTheDocument();
+    expect(await screen.findByText('System Settings')).toBeInTheDocument();
     expect(screen.getByText('Executor')).toBeInTheDocument();
     expect(screen.getAllByText('claude -p').length).toBeGreaterThan(0);
     expect(screen.getAllByText('env').length).toBeGreaterThan(0);

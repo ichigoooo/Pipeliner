@@ -330,7 +330,7 @@ describe('RunDetailPage', () => {
 
     renderWithClient(<RunDetailClient runId="run_1" />);
 
-    expect(await screen.findByText('Run workspace')).toBeInTheDocument();
+    expect(await screen.findByText('Run details')).toBeInTheDocument();
     expect(await screen.findByText('Run overview')).toBeInTheDocument();
     expect(await screen.findByText('Recommended action')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Retry and run' })).toBeInTheDocument();
@@ -348,7 +348,7 @@ describe('RunDetailPage', () => {
     );
 
     fireEvent.click(screen.getByText('Advanced controls'));
-    fireEvent.click(screen.getByText('Drive'));
+    fireEvent.click(screen.getByRole('button', { name: 'Drive' }));
     expect(await screen.findByText('Result status: completed')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Return to current node' }));
