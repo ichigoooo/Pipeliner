@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
+import { StudioPage, StudioPageHeader } from '@/components/ui/StudioPage';
 import { WorkflowBatchStartPanel } from '@/components/workflow/WorkflowBatchStartPanel';
 import { WorkflowWorkspace } from '@/components/workflow/WorkflowWorkspace';
 import { WorkflowRunStartPanel } from '@/components/workflow/WorkflowRunStartPanel';
@@ -36,11 +37,6 @@ export function WorkflowVersionClient({
   const workflow = workflowQuery.data;
   const purpose = workflow?.workflow_view.metadata.purpose?.trim() || '';
   const shouldCollapsePurpose = purpose.length > 220;
-
-  useEffect(() => {
-    setPurposeExpanded(false);
-    setActivePanel(null);
-  }, [workflowId, version]);
 
   const startRunMutation = useMutation({
     mutationFn: (inputs: Record<string, unknown>) =>
@@ -109,86 +105,89 @@ export function WorkflowVersionClient({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-      <div className="border-b border-stone-200 px-6 py-5">
+    <StudioPage className="flex min-h-full flex-col">
+      <section className="rounded-3xl border border-stone-200 bg-white px-5 py-5">
         <Link
           href={`/workflows/${workflowId}`}
           className="text-sm font-medium text-stone-500 transition hover:text-stone-900"
         >
           ← {t('backToVersions')}
         </Link>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{t('workspace')}</p>
-              <HelpTooltip content={t('iterateHint')} label={t('workspace')} />
-            </div>
-            <h1 className="mt-2 text-3xl font-semibold text-stone-900">
-              {workflow.workflow_view.metadata.title}
-            </h1>
-            {purpose ? (
-              <div className="mt-2 max-w-5xl">
-                <div className="relative">
-                  <p
-                    data-testid="workflow-purpose"
-                    className={`whitespace-pre-wrap text-sm leading-6 text-stone-600 ${
-                      shouldCollapsePurpose && !purposeExpanded ? 'max-h-24 overflow-hidden' : ''
-                    }`}
-                  >
-                    {purpose}
-                  </p>
-                  {shouldCollapsePurpose && !purposeExpanded ? (
-                    <span className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
+        <StudioPageHeader
+          className="mt-4 mb-0 pb-0"
+          eyebrow={t('workspace')}
+          title={workflow.workflow_view.metadata.title}
+          description={(
+            <div>
+              <span className="inline-flex items-center gap-2 text-xs">
+                <HelpTooltip content={t('iterateHint')} label={t('workspace')} />
+              </span>
+              {purpose ? (
+                <div className="mt-2 max-w-5xl">
+                  <div className="relative">
+                    <p
+                      data-testid="workflow-purpose"
+                      className={`whitespace-pre-wrap text-sm leading-6 text-stone-600 ${
+                        shouldCollapsePurpose && !purposeExpanded ? 'max-h-24 overflow-hidden' : ''
+                      }`}
+                    >
+                      {purpose}
+                    </p>
+                    {shouldCollapsePurpose && !purposeExpanded ? (
+                      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
+                    ) : null}
+                  </div>
+                  {shouldCollapsePurpose ? (
+                    <button
+                      type="button"
+                      aria-expanded={purposeExpanded}
+                      onClick={() => setPurposeExpanded((value) => !value)}
+                      className="mt-2 rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+                    >
+                      {purposeExpanded ? t('collapsePurpose') : t('expandPurpose')}
+                    </button>
                   ) : null}
                 </div>
-                {shouldCollapsePurpose ? (
-                  <button
-                    type="button"
-                    aria-expanded={purposeExpanded}
-                    onClick={() => setPurposeExpanded((value) => !value)}
-                    className="mt-2 rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
-                  >
-                    {purposeExpanded ? t('collapsePurpose') : t('expandPurpose')}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
-            <div className="rounded-full bg-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
-              {workflow.version}
+              ) : null}
             </div>
-            <button
-              type="button"
-              onClick={() => iterateMutation.mutate()}
-              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-amber-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
-            >
-              <AdaptiveButtonLabel text={t('iterate')} maxFontSize={12} />
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadTemplateMutation.mutate()}
-              disabled={downloadTemplateMutation.isPending}
-              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
-            >
-              <AdaptiveButtonLabel text={t('downloadTemplate')} maxFontSize={12} />
-            </button>
-            <button
-              type="button"
-              onClick={() => togglePanel('batch')}
-              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
-            >
-              <AdaptiveButtonLabel text={t('batchStart')} maxFontSize={12} />
-            </button>
-            <button
-              type="button"
-              onClick={() => togglePanel('run')}
-              className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
-            >
-              <AdaptiveButtonLabel text={t('startRun')} maxFontSize={12} />
-            </button>
-          </div>
-        </div>
+          )}
+          actions={(
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+              <div className="rounded-full bg-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
+                {workflow.version}
+              </div>
+              <button
+                type="button"
+                onClick={() => iterateMutation.mutate()}
+                className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-amber-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-amber-900 transition hover:border-amber-400"
+              >
+                <AdaptiveButtonLabel text={t('iterate')} maxFontSize={12} />
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadTemplateMutation.mutate()}
+                disabled={downloadTemplateMutation.isPending}
+                className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-400"
+              >
+                <AdaptiveButtonLabel text={t('downloadTemplate')} maxFontSize={12} />
+              </button>
+              <button
+                type="button"
+                onClick={() => togglePanel('batch')}
+                className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+              >
+                <AdaptiveButtonLabel text={t('batchStart')} maxFontSize={12} />
+              </button>
+              <button
+                type="button"
+                onClick={() => togglePanel('run')}
+                className="inline-flex min-w-0 max-w-full items-center justify-center overflow-hidden rounded-full border border-stone-300 px-4 py-2 font-semibold uppercase tracking-[0.18em] text-stone-700 transition hover:border-stone-900"
+              >
+                <AdaptiveButtonLabel text={t('startRun')} maxFontSize={12} />
+              </button>
+            </div>
+          )}
+        />
         {iterationError ? <p className="mt-2 text-xs text-rose-700">{iterationError}</p> : null}
         {activePanel === 'run' ? (
           <WorkflowRunStartPanel
@@ -213,9 +212,9 @@ export function WorkflowVersionClient({
             }}
           />
         ) : null}
-      </div>
+      </section>
 
-      <div className="min-h-[28rem] flex-1">
+      <div className="mt-4 min-h-[30rem] flex-1 overflow-hidden rounded-3xl border border-stone-200 bg-white">
         <WorkflowWorkspace
           spec={workflow.spec}
           cards={workflow.workflow_view.cards}
@@ -225,6 +224,6 @@ export function WorkflowVersionClient({
           lintErrors={workflow.lint_report.errors}
         />
       </div>
-    </div>
+    </StudioPage>
   );
 }

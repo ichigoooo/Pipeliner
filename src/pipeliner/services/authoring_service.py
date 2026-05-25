@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
+from datetime import datetime, timezone
 from typing import Any
 
-from pipeliner.persistence.models import AuthoringDraftModel, AuthoringMessageModel, AuthoringSessionModel
+from pipeliner.persistence.models import (
+    AuthoringDraftModel,
+    AuthoringMessageModel,
+    AuthoringSessionModel,
+)
 from pipeliner.persistence.repositories import AuthoringRepository
 from pipeliner.services.authoring_agent import AuthoringAgent, AuthoringAgentError
-from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.errors import NotFoundError, ValidationError
+from pipeliner.services.project_initializer import ProjectInitializer
 from pipeliner.services.workflow_service import WorkflowService
 
 
@@ -86,11 +90,7 @@ class AuthoringService:
     ) -> AuthoringDraftModel:
         session = self.get_session(session_id)
         metadata = raw_spec.get("metadata", {}) if isinstance(raw_spec, dict) else {}
-        workflow_id = (
-            metadata.get("workflow_id")
-            or session.published_workflow_id
-            or session_id
-        )
+        workflow_id = metadata.get("workflow_id") or session.published_workflow_id or session_id
         raw_spec = self.project_initializer.ensure_node_skills(workflow_id, raw_spec)
         self.project_initializer.ensure_project(
             workflow_id,
@@ -100,13 +100,14 @@ class AuthoringService:
         )
 
         try:
-            # We attempt to validate to get lint warnings, but we still save it even if it has errors.
+            # Validate for lint warnings, but still save temporarily invalid drafts.
             # Drafts are allowed to be temporarily invalid.
             spec, warnings = self.workflow_service.validate_spec(raw_spec)
         except Exception as e:
             # If validation fails completely (e.g. pydantic error, or our custom WorkflowLintError),
             # we extract the messages.
             from pipeliner.services.workflow_service import WorkflowLintError
+
             if isinstance(e, WorkflowLintError):
                 warnings = [f"[{issue.code}] {issue.message}" for issue in e.issues]
             else:
@@ -116,7 +117,9 @@ class AuthoringService:
         latest_draft = self.repo.get_latest_draft(session_id)
         next_revision = (latest_draft.revision + 1) if latest_draft else 1
         if instruction:
-            self.repo.add_message(session.id, role="user", content=instruction, revision=next_revision)
+            self.repo.add_message(
+                session.id, role="user", content=instruction, revision=next_revision
+            )
 
         return self.repo.create_draft(
             session_id=session.id,

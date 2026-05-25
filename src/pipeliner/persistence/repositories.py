@@ -8,14 +8,14 @@ from pipeliner.persistence.models import (
     AuthoringDraftModel,
     AuthoringGenerationLogModel,
     AuthoringMessageModel,
-    CallbackEventModel,
+    AuthoringSessionModel,
     BatchRunItemModel,
     BatchRunModel,
+    CallbackEventModel,
     NodeRunModel,
     RunModel,
     WorkflowDefinitionModel,
     WorkflowVersionModel,
-    AuthoringSessionModel,
 )
 
 
@@ -137,9 +137,8 @@ class RunRepository:
     def list_batch_ids(self, run_ids: list[str]) -> dict[str, str]:
         if not run_ids:
             return {}
-        stmt = (
-            select(BatchRunItemModel.run_id, BatchRunItemModel.batch_id)
-            .where(BatchRunItemModel.run_id.in_(run_ids))
+        stmt = select(BatchRunItemModel.run_id, BatchRunItemModel.batch_id).where(
+            BatchRunItemModel.run_id.in_(run_ids)
         )
         return {run_id: batch_id for run_id, batch_id in self.session.execute(stmt).all()}
 
@@ -461,15 +460,21 @@ class AuthoringRepository:
         stmt = (
             select(AuthoringGenerationLogModel)
             .where(AuthoringGenerationLogModel.session_id == session_id)
-            .order_by(AuthoringGenerationLogModel.created_at.desc(), AuthoringGenerationLogModel.id.desc())
+            .order_by(
+                AuthoringGenerationLogModel.created_at.desc(), AuthoringGenerationLogModel.id.desc()
+            )
         )
         return list(self.session.scalars(stmt))
 
-    def get_generation_log(self, session_id: str, revision: int) -> AuthoringGenerationLogModel | None:
+    def get_generation_log(
+        self, session_id: str, revision: int
+    ) -> AuthoringGenerationLogModel | None:
         stmt = (
             select(AuthoringGenerationLogModel)
             .where(AuthoringGenerationLogModel.session_id == session_id)
             .where(AuthoringGenerationLogModel.revision == revision)
-            .order_by(AuthoringGenerationLogModel.created_at.desc(), AuthoringGenerationLogModel.id.desc())
+            .order_by(
+                AuthoringGenerationLogModel.created_at.desc(), AuthoringGenerationLogModel.id.desc()
+            )
         )
         return self.session.scalars(stmt).first()

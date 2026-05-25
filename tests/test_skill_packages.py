@@ -29,9 +29,7 @@ def _spec_missing_skills() -> dict:
                 "archetype": "draft-content",
                 "depends_on": [],
                 "inputs": [],
-                "outputs": [
-                    {"name": "draft_text", "shape": "markdown", "summary": "Draft output"}
-                ],
+                "outputs": [{"name": "draft_text", "shape": "markdown", "summary": "Draft output"}],
                 "executor": {},
                 "validators": [{"validator_id": "review"}],
                 "acceptance": {"done_means": "Draft ready", "pass_condition": ["Readable"]},

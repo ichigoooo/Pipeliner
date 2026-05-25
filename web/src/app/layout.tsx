@@ -20,7 +20,7 @@ export default function RootLayout({
         <Providers>
           <div className="flex h-full overflow-hidden">
             <Sidebar />
-            <main className="flex-1 overflow-auto">
+            <main className="flex-1 overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.08),transparent_30%),linear-gradient(180deg,#f8f7f4_0%,#f4f3ef_100%)]">
               {children}
             </main>
           </div>

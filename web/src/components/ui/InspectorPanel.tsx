@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 
 interface InspectorPanelProps {
     title: string;
-    data: any;
+    data: unknown;
     onClose?: () => void;
 }
 

@@ -24,7 +24,9 @@ class AuthoringSessionModel(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     title: Mapped[str] = mapped_column(String(255))
     intent_brief: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(64), index=True, default="active")  # active, published, discarded
+    status: Mapped[str] = mapped_column(
+        String(64), index=True, default="active"
+    )  # active, published, discarded
     published_workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     published_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     published_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -40,23 +42,30 @@ class AuthoringSessionModel(Base):
     )
 
     drafts: Mapped[list[AuthoringDraftModel]] = relationship(
-        back_populates="session", cascade="all, delete-orphan", order_by="AuthoringDraftModel.revision"
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="AuthoringDraftModel.revision",
     )
     messages: Mapped[list[AuthoringMessageModel]] = relationship(
-        back_populates="session", cascade="all, delete-orphan", order_by="AuthoringMessageModel.created_at"
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="AuthoringMessageModel.created_at",
     )
     generation_logs: Mapped[list[AuthoringGenerationLogModel]] = relationship(
-        back_populates="session", cascade="all, delete-orphan", order_by="AuthoringGenerationLogModel.created_at"
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="AuthoringGenerationLogModel.created_at",
     )
+
 
 class AuthoringDraftModel(Base):
     __tablename__ = "authoring_drafts"
-    __table_args__ = (
-        UniqueConstraint("session_id", "revision", name="uq_session_revision"),
-    )
+    __table_args__ = (UniqueConstraint("session_id", "revision", name="uq_session_revision"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(ForeignKey("authoring_sessions.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("authoring_sessions.id", ondelete="CASCADE"), index=True
+    )
     revision: Mapped[int] = mapped_column(Integer)
     spec_json: Mapped[dict[str, Any]] = mapped_column(JSON)
     workflow_view_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -111,6 +120,7 @@ class AuthoringGenerationLogModel(Base):
 
     session: Mapped[AuthoringSessionModel] = relationship(back_populates="generation_logs")
 
+
 class WorkflowDefinitionModel(Base):
     __tablename__ = "workflow_definitions"
 
@@ -151,9 +161,7 @@ class WorkflowVersionModel(Base):
         server_default=func.now(),
     )
 
-    workflow_definition: Mapped[WorkflowDefinitionModel] = relationship(
-        back_populates="versions"
-    )
+    workflow_definition: Mapped[WorkflowDefinitionModel] = relationship(back_populates="versions")
     runs: Mapped[list[RunModel]] = relationship(back_populates="workflow_version_rel")
 
 
@@ -221,12 +229,12 @@ class BatchRunModel(Base):
 
 class BatchRunItemModel(Base):
     __tablename__ = "batch_run_items"
-    __table_args__ = (
-        UniqueConstraint("batch_id", "row_index", name="uq_batch_row"),
-    )
+    __table_args__ = (UniqueConstraint("batch_id", "row_index", name="uq_batch_row"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    batch_id: Mapped[str] = mapped_column(ForeignKey("batch_runs.id", ondelete="CASCADE"), index=True)
+    batch_id: Mapped[str] = mapped_column(
+        ForeignKey("batch_runs.id", ondelete="CASCADE"), index=True
+    )
     row_index: Mapped[int] = mapped_column(Integer)
     inputs_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     run_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
@@ -247,9 +255,7 @@ class BatchRunItemModel(Base):
 
 class NodeRunModel(Base):
     __tablename__ = "node_runs"
-    __table_args__ = (
-        UniqueConstraint("run_id", "node_id", "round_no", name="uq_node_round"),
-    )
+    __table_args__ = (UniqueConstraint("run_id", "node_id", "round_no", name="uq_node_round"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)

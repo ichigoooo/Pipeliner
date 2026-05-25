@@ -67,10 +67,14 @@ class NodeCallbackPayload(BaseModel):
         if self.actor.role == ActorRole.VALIDATOR:
             if not self.actor.validator_id:
                 raise ValueError("validator callback 必须包含 validator_id")
-            if self.verdict is None:
-                raise ValueError("validator callback 必须包含 verdict")
             if self.submission is not None:
                 raise ValueError("validator callback 不应包含 submission")
+            if self.execution.status == ExecutionStatus.COMPLETED and self.verdict is None:
+                raise ValueError("validator completed callback 必须包含 verdict")
+            if self.verdict is None:
+                if self.rework_brief is not None:
+                    raise ValueError("validator 非完成态 callback 不应包含 rework_brief")
+                return self
             if self.verdict.status == VerdictStatus.REVISE:
                 if self.rework_brief is None or not self.rework_brief.must_fix:
                     raise ValueError("revise verdict 必须携带非空 must_fix")

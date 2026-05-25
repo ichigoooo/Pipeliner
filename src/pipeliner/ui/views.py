@@ -82,13 +82,13 @@ def render_workflow_view(workflow: dict[str, Any]) -> str:
         for node in nodes
     ]
     body = f"""
-    <h1>{escape(workflow['workflow_id'])}@{escape(workflow['version'])}</h1>
-    <p>{escape(workflow['title'])}</p>
+    <h1>{escape(workflow["workflow_id"])}@{escape(workflow["version"])}</h1>
+    <p>{escape(workflow["title"])}</p>
     <p>此页面仅为从 <code>workflow spec</code> 派生的只读视图，机器真源仍是注册的 spec JSON。</p>
     <h2>Nodes</h2>
     {_table(["Node", "Title", "Depends On", "Executor Skill"], rows)}
     <h2>Lint Warnings</h2>
-    <pre>{escape(workflow['warnings'])}</pre>
+    <pre>{escape(workflow["warnings"])}</pre>
     """
     return _page(f"Workflow {workflow['workflow_id']}", body)
 
@@ -121,9 +121,7 @@ def render_run_view(detail: dict[str, Any], callbacks: list[dict[str, Any]]) -> 
         ]
         for item in callbacks
     ]
-    workflow_label = (
-        f"{detail['workflow']['workflow_id']}@{detail['workflow']['version']}"
-    )
+    workflow_label = f"{detail['workflow']['workflow_id']}@{detail['workflow']['version']}"
     status_class = "attention" if run["status"] == "needs_attention" else ""
     artifact_section = (
         _table(["Artifact", "Version", "Kind", "Storage URI"], artifact_rows)
@@ -136,12 +134,12 @@ def render_run_view(detail: dict[str, Any], callbacks: list[dict[str, Any]]) -> 
         else "<p>暂无 callback。</p>"
     )
     body = f"""
-    <h1>Run {escape(run['id'])}</h1>
+    <h1>Run {escape(run["id"])}</h1>
     <p>
-      <span class=\"badge {status_class}\">{escape(run['status'])}</span>
+      <span class=\"badge {status_class}\">{escape(run["status"])}</span>
       Workflow: <code>{escape(workflow_label)}</code>
     </p>
-    <p>Workspace: <code>{escape(run['workspace_root'])}</code></p>
+    <p>Workspace: <code>{escape(run["workspace_root"])}</code></p>
     <h2>Nodes</h2>
     {_table(["Node", "Round", "Status", "Waiting For", "Stop Reason"], node_rows)}
     <h2>Artifacts</h2>

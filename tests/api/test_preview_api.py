@@ -24,13 +24,13 @@ def _start_run(client: TestClient, workflow_id: str, version: str) -> dict:
     return response.json()
 
 
-def test_artifact_and_log_preview(client: TestClient, workflow_fixture, settings, workspace_manager, monkeypatch) -> None:
+def test_artifact_and_log_preview(
+    client: TestClient, workflow_fixture, settings, workspace_manager, monkeypatch
+) -> None:
     _register_workflow(client, workflow_fixture)
     run_info = _start_run(client, "mvp-review-loop", "0.1.0")
 
-    artifact_rel = (
-        f"{run_info['workspace_root']}/artifacts/article_draft@v1/payload/article.md"
-    )
+    artifact_rel = f"{run_info['workspace_root']}/artifacts/article_draft@v1/payload/article.md"
     artifact_path = settings.data_dir / artifact_rel
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text("preview content", encoding="utf-8")

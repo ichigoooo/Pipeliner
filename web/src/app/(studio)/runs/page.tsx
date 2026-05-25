@@ -11,6 +11,7 @@ import { formatTimestamp } from '@/lib/format';
 import { formatRunStopReason } from '@/lib/run-stop-reason';
 import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
+import { StudioPage, StudioPageHeader } from '@/components/ui/StudioPage';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 const ACTIVE_BATCH_STATUSES = new Set(['pending', 'running']);
@@ -32,8 +33,8 @@ export default function RunsPage() {
     refetchInterval: (query) => (query.state.error ? false : 8_000),
   });
 
-  const runs = runsQuery.data?.runs ?? [];
-  const batches = batchesQuery.data?.batches ?? [];
+  const runs = runsQuery.data?.runs;
+  const batches = batchesQuery.data?.batches;
   const [statusFilter, setStatusFilter] = useState('all');
   const [workflowFilter, setWorkflowFilter] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -115,12 +116,13 @@ export default function RunsPage() {
   });
 
   const statusOptions = useMemo(() => {
-    const values = Array.from(new Set(runs.map((item) => item.status)));
+    const values = Array.from(new Set((runs ?? []).map((item) => item.status)));
     return ['all', ...values];
   }, [runs]);
 
   const filteredRuns = useMemo(() => {
-    return runs.filter((run) => {
+    const source = runs ?? [];
+    return source.filter((run) => {
       if (statusFilter !== 'all' && run.status !== statusFilter) {
         return false;
       }
@@ -154,7 +156,7 @@ export default function RunsPage() {
 
   const sortedBatches = useMemo(() => {
     const parseTime = (value: string | null) => (value ? Date.parse(value) : 0);
-    return [...batches].sort((left, right) => {
+    return [...(batches ?? [])].sort((left, right) => {
       const leftActive = ACTIVE_BATCH_STATUSES.has(left.status);
       const rightActive = ACTIVE_BATCH_STATUSES.has(right.status);
       if (leftActive !== rightActive) {
@@ -197,7 +199,7 @@ export default function RunsPage() {
     return (
       <div
         key={run.run_id}
-        className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm transition hover:border-amber-500 hover:shadow-md"
+        className="rounded-3xl border border-stone-200 bg-white p-5 transition hover:border-amber-500 hover:bg-stone-50"
       >
         <div className="flex items-start justify-between gap-4">
           <Link href={`/runs/${run.run_id}`} className="min-w-0 flex-1">
@@ -278,7 +280,7 @@ export default function RunsPage() {
     return (
       <div
         key={batch.batch_id}
-        className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm transition hover:border-amber-500 hover:shadow-md"
+        className="rounded-3xl border border-stone-200 bg-white p-5 transition hover:border-amber-500 hover:bg-stone-50"
       >
         <div className="flex items-start justify-between gap-4">
           <button
@@ -353,17 +355,20 @@ export default function RunsPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8">
-      <div className="mb-8">
-        <div className="flex items-center gap-2">
-          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
-          <HelpTooltip content={t('listDescription')} label={t('title')} />
-        </div>
-        <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('list')}</h1>
-      </div>
+    <StudioPage>
+      <StudioPageHeader
+        eyebrow={t('title')}
+        title={t('list')}
+        description={(
+          <span className="inline-flex items-center gap-2">
+            {t('listDescription')}
+            <HelpTooltip content={t('listDescription')} label={t('title')} />
+          </span>
+        )}
+      />
 
       {runsQuery.error ? (
-        <div className="mb-6 rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm">
+        <div className="mb-6 rounded-3xl border border-rose-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
             {t('connectionIssueTitle')}
           </p>
@@ -375,7 +380,7 @@ export default function RunsPage() {
       ) : null}
 
       {deleteError ? (
-        <div className="mb-6 rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm">
+        <div className="mb-6 rounded-3xl border border-rose-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
             {t('deleteFailed')}
           </p>
@@ -386,7 +391,7 @@ export default function RunsPage() {
       ) : null}
 
       {batchDeleteError ? (
-        <div className="mb-6 rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm">
+        <div className="mb-6 rounded-3xl border border-rose-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
             {t('deleteBatchFailed')}
           </p>
@@ -397,7 +402,7 @@ export default function RunsPage() {
       ) : null}
 
       {batchesQuery.error ? (
-        <div className="mb-6 rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm">
+        <div className="mb-6 rounded-3xl border border-rose-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
             {t('batchConnectionIssueTitle')}
           </p>
@@ -408,7 +413,7 @@ export default function RunsPage() {
         </div>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-[2rem] border border-stone-200 bg-white p-4 shadow-sm">
+      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-3xl border border-stone-200 bg-white p-4">
         <label className="min-w-[220px] flex-1 text-xs uppercase tracking-[0.2em] text-stone-500">
           {t('workflowFilter')}
           <input
@@ -470,7 +475,7 @@ export default function RunsPage() {
             </div>
           </div>
           {sortedBatches.length === 0 ? (
-            <div className="rounded-[2rem] border border-dashed border-stone-300 bg-white p-8 text-sm text-stone-500">
+            <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-8 text-sm text-stone-500">
               {t('empty.batch')}
             </div>
           ) : (
@@ -516,7 +521,7 @@ export default function RunsPage() {
             </div>
           </div>
           {groupedRuns.actionable.length === 0 ? (
-            <div className="rounded-[2rem] border border-dashed border-stone-300 bg-white p-8 text-sm text-stone-500">
+            <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-8 text-sm text-stone-500">
               {t('empty.actionable')}
             </div>
           ) : (
@@ -535,7 +540,7 @@ export default function RunsPage() {
             </span>
           </div>
           {groupedRuns.active.length === 0 ? (
-            <div className="rounded-[2rem] border border-dashed border-stone-300 bg-white p-8 text-sm text-stone-500">
+            <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-8 text-sm text-stone-500">
               {t('empty.active')}
             </div>
           ) : (
@@ -546,7 +551,7 @@ export default function RunsPage() {
         <details
           open={showArchived}
           onToggle={(event) => setShowArchived((event.target as HTMLDetailsElement).open)}
-          className="rounded-[2rem] border border-stone-200 bg-white shadow-sm"
+          className="rounded-3xl border border-stone-200 bg-white"
         >
           <summary className="cursor-pointer px-5 py-4">
             <div className="flex items-center justify-between gap-3">
@@ -566,7 +571,7 @@ export default function RunsPage() {
           </summary>
           <div className="border-t border-stone-200 px-5 py-5">
             {groupedRuns.archived.length === 0 ? (
-              <div className="rounded-[2rem] border border-dashed border-stone-300 bg-stone-50 p-8 text-sm text-stone-500">
+              <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-8 text-sm text-stone-500">
                 {t('empty.archived')}
               </div>
             ) : (
@@ -575,6 +580,6 @@ export default function RunsPage() {
           </div>
         </details>
       </div>
-    </div>
+    </StudioPage>
   );
 }

@@ -27,6 +27,24 @@ def test_validator_revise_requires_non_empty_must_fix() -> None:
         )
 
 
+def test_validator_failure_callback_can_omit_verdict() -> None:
+    payload = NodeCallbackPayload.model_validate(
+        {
+            "schema_version": "pipeliner.callback/v1alpha1",
+            "event_id": "evt_fail",
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "run_1",
+            "node_id": "draft_article",
+            "round_no": 1,
+            "actor": {"role": "validator", "validator_id": "reviewer"},
+            "execution": {"status": "failed", "message": "boom"},
+            "verdict": None,
+        }
+    )
+
+    assert payload.verdict is None
+
+
 def test_workflow_cycle_detection(client, workflow_fixture) -> None:
     with client.app.state.db.session() as session:
         service = WorkflowService(WorkflowRepository(session))
@@ -81,7 +99,9 @@ def test_reject_duplicate_skill_names(client, workflow_fixture) -> None:
             service.validate_spec(workflow_fixture)
 
 
-def test_workflow_input_form_metadata_supports_defaults_and_validation(client, workflow_fixture) -> None:
+def test_workflow_input_form_metadata_supports_defaults_and_validation(
+    client, workflow_fixture
+) -> None:
     with client.app.state.db.session() as session:
         service = WorkflowService(WorkflowRepository(session))
         workflow_fixture["inputs"] = [
@@ -128,7 +148,9 @@ def test_workflow_input_form_metadata_supports_defaults_and_validation(client, w
         assert descriptor.source == "explicit"
 
 
-def test_workflow_input_form_metadata_rejects_invalid_enum_and_default(client, workflow_fixture) -> None:
+def test_workflow_input_form_metadata_rejects_invalid_enum_and_default(
+    client, workflow_fixture
+) -> None:
     with client.app.state.db.session() as session:
         service = WorkflowService(WorkflowRepository(session))
         workflow_fixture["inputs"][0]["form"] = {

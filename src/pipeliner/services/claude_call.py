@@ -300,7 +300,9 @@ class ClaudeCallStore:
             {
                 "status": "failed",
                 "ended_at": datetime.now(timezone.utc).isoformat(),
-                "exit_code": payload.get("exit_code") if payload.get("exit_code") is not None else -2,
+                "exit_code": payload.get("exit_code")
+                if payload.get("exit_code") is not None
+                else -2,
                 "error_message": payload.get("error_message") or error_message,
             }
         )
@@ -321,7 +323,11 @@ class ClaudeCallStore:
         return datetime.now(timezone.utc) - started > timeout
 
     def _role_timeout(self, role: Any):
-        raw = self.settings.authoring_timeout if role == "authoring" else self.settings.default_timeout
+        raw = (
+            self.settings.authoring_timeout
+            if role == "authoring"
+            else self.settings.default_timeout
+        )
         try:
             return parse_duration(raw)
         except Exception:
@@ -380,7 +386,9 @@ def run_streamed_command(
         message = str(exc).encode("utf-8", errors="replace")
         output_session.append(message)
         if trace_recorder is not None:
-            trace_recorder.log("process_spawn_failed", error=str(exc), command=command, cwd=str(cwd))
+            trace_recorder.log(
+                "process_spawn_failed", error=str(exc), command=command, cwd=str(cwd)
+            )
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         stderr_path.parent.mkdir(parents=True, exist_ok=True)
         stdout_path.write_bytes(b"")

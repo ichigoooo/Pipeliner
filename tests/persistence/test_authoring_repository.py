@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from pipeliner.db import Database
-from pipeliner.persistence.models import AuthoringSessionModel, AuthoringDraftModel
 from pipeliner.persistence.repositories import AuthoringRepository
 
 
@@ -11,12 +10,14 @@ from pipeliner.persistence.repositories import AuthoringRepository
 def repository(settings) -> AuthoringRepository:
     # Use real db for integration test
     from pathlib import Path
+
     Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
     db = Database(settings)
     db.create_all()
     session = db.session_factory()
     yield AuthoringRepository(session)
     session.close()
+
 
 def test_authoring_repository_session_lifecycle(repository: AuthoringRepository):
     # 1. Create a session
@@ -38,6 +39,7 @@ def test_authoring_repository_session_lifecycle(repository: AuthoringRepository)
     sessions = repository.list_sessions(status="active")
     assert len(sessions) == 1
     assert sessions[0].id == "session-123"
+
 
 def test_authoring_repository_draft_lifecycle(repository: AuthoringRepository):
     # Setup session

@@ -55,7 +55,8 @@ class WorkflowService:
             if existing.spec_json == canonical_spec:
                 return existing
             raise ConflictError(
-                f"workflow {spec.metadata.workflow_id}@{spec.metadata.version} 已存在，请更新 spec.metadata.version 后再发布"
+                f"workflow {spec.metadata.workflow_id}@{spec.metadata.version} 已存在，"
+                "请更新 spec.metadata.version 后再发布"
             )
         definition = self.repo.create_or_update_definition(
             workflow_id=spec.metadata.workflow_id,
@@ -132,9 +133,14 @@ class WorkflowService:
 
         spec_data = canonical_spec if isinstance(canonical_spec, dict) else raw_spec
         metadata = spec_data.get("metadata", {})
-        raw_nodes = spec_data.get("nodes", []) if isinstance(spec_data.get("nodes", []), list) else []
+        raw_nodes = (
+            spec_data.get("nodes", []) if isinstance(spec_data.get("nodes", []), list) else []
+        )
         input_descriptors = (
-            [item.normalized_descriptor().model_dump(by_alias=True, mode="json") for item in validated_spec.inputs]
+            [
+                item.normalized_descriptor().model_dump(by_alias=True, mode="json")
+                for item in validated_spec.inputs
+            ]
             if validated_spec is not None
             else []
         )

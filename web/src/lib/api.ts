@@ -275,6 +275,30 @@ export interface RunWorkspaceOpenResult {
   opened_path: string;
 }
 
+export interface RunPreviewPayload {
+  kind: string;
+  content?: unknown;
+  entries?: string[];
+  truncated?: boolean;
+  size_bytes?: number;
+  limit_bytes?: number;
+  path?: string | null;
+}
+
+export interface RunArtifactPreviewResult {
+  artifact_id: string;
+  version: string;
+  kind: string;
+  storage_uri: string;
+  manifest: Record<string, unknown> | null;
+  preview: RunPreviewPayload | null;
+}
+
+export interface RunLogPreviewResult {
+  path: string;
+  preview: RunPreviewPayload | null;
+}
+
 export interface RunOverview {
   run_id: string;
   status: string;
@@ -731,7 +755,7 @@ export const api = {
       }
     ),
   previewRunArtifact: async (runId: string, artifactId: string, version: string) =>
-    request<any>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/preview`),
+    request<RunArtifactPreviewResult>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/preview`),
   openRunArtifactFolder: async (runId: string, artifactId: string, version: string) =>
     request<RunArtifactFolderOpenResult>(`runs/${runId}/artifacts/${artifactId}/versions/${version}/open-folder`, {
       method: 'POST',
@@ -741,6 +765,6 @@ export const api = {
       method: 'POST',
     }),
   previewRunLog: async (runId: string, path: string) =>
-    request<any>(`runs/${runId}/logs/preview?path=${encodeURIComponent(path)}`),
+    request<RunLogPreviewResult>(`runs/${runId}/logs/preview?path=${encodeURIComponent(path)}`),
   getSettings: async () => request<{ settings: SettingsSnapshot }>('settings'),
 };

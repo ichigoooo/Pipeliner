@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from pipeliner.config import get_settings
 from pipeliner.db import Base
 from pipeliner.persistence import models  # noqa: F401
@@ -25,7 +25,6 @@ def run_migrations_offline() -> None:
 
     with context.begin_transaction():
         context.run_migrations()
-
 
 
 def run_migrations_online() -> None:

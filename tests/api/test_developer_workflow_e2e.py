@@ -143,9 +143,7 @@ def test_developer_workflow_end_to_end(client: TestClient, settings) -> None:
     node_id = timeline[0]["node_id"]
     round_no = timeline[0]["round_no"]
 
-    round_response = client.get(
-        f"/api/runs/{run_id}/debug/nodes/{node_id}/rounds/{round_no}"
-    )
+    round_response = client.get(f"/api/runs/{run_id}/debug/nodes/{node_id}/rounds/{round_no}")
     assert round_response.status_code == 200
     assert round_response.json()["node_id"] == node_id
 

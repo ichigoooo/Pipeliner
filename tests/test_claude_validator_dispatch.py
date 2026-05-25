@@ -10,6 +10,7 @@ from pipeliner.persistence.repositories import (
     RunRepository,
     WorkflowRepository,
 )
+from pipeliner.services.run_service import AUTO_RETRY_DELAYS_SECONDS
 
 
 def _register_workflow(client, workflow_fixture) -> None:
@@ -76,9 +77,7 @@ def test_dispatch_validator_pass_activates_downstream(client, workflow_fixture, 
 
     detail = client.get(f"/api/runs/{run['run_id']}")
     assert detail.status_code == 200
-    draft_rounds = [
-        item for item in detail.json()["nodes"] if item["node_id"] == "draft_article"
-    ]
+    draft_rounds = [item for item in detail.json()["nodes"] if item["node_id"] == "draft_article"]
     assert draft_rounds[-1]["status"] == "passed"
     final_review = next(
         item for item in detail.json()["nodes"] if item["node_id"] == "final_review"
@@ -86,7 +85,9 @@ def test_dispatch_validator_pass_activates_downstream(client, workflow_fixture, 
     assert final_review["status"] == "waiting_executor"
 
 
-def test_dispatch_validator_pass_with_versioned_target_artifact(client, workflow_fixture, settings) -> None:
+def test_dispatch_validator_pass_with_versioned_target_artifact(
+    client, workflow_fixture, settings
+) -> None:
     _register_workflow(client, workflow_fixture)
     run = _start_run(client, "mvp-review-loop", "0.1.0")
     _dispatch_executor(client, settings, run["run_id"])
@@ -112,9 +113,7 @@ def test_dispatch_validator_pass_with_versioned_target_artifact(client, workflow
 
     detail = client.get(f"/api/runs/{run['run_id']}")
     assert detail.status_code == 200
-    draft_rounds = [
-        item for item in detail.json()["nodes"] if item["node_id"] == "draft_article"
-    ]
+    draft_rounds = [item for item in detail.json()["nodes"] if item["node_id"] == "draft_article"]
     assert draft_rounds[-1]["status"] == "passed"
     final_review = next(
         item for item in detail.json()["nodes"] if item["node_id"] == "final_review"
@@ -155,7 +154,7 @@ def test_dispatch_validator_revise_creates_next_round(client, workflow_fixture, 
     assert draft_rounds[1]["round_no"] == 2
 
 
-def test_dispatch_validator_missing_result_marks_attention(
+def test_dispatch_validator_missing_result_keeps_round_retryable(
     client,
     workflow_fixture,
     settings,
@@ -183,6 +182,55 @@ def test_dispatch_validator_missing_result_marks_attention(
         assert result["status"] == "failed"
         assert result["runtime"]["duplicate"] is False
 
+        pass_command = f"{sys.executable} {script} pass"
+        retry = dispatcher.dispatch(
+            run_id=run["run_id"],
+            node_id="draft_article",
+            validator_id="content-review",
+            command_template=pass_command,
+        )
+        assert retry["status"] == "pass"
+        assert retry["runtime"]["duplicate"] is False
+
+    detail = client.get(f"/api/runs/{run['run_id']}")
+    assert detail.status_code == 200
+    assert detail.json()["run"]["status"] == "running"
+    draft_round = next(
+        item for item in detail.json()["nodes"] if item["node_id"] == "draft_article"
+    )
+    assert draft_round["status"] == "passed"
+    assert draft_round["round_no"] == 1
+
+
+def test_dispatch_validator_repeated_failures_exhaust_retry_budget(
+    client,
+    workflow_fixture,
+    settings,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    run = _start_run(client, "mvp-review-loop", "0.1.0")
+    _dispatch_executor(client, settings, run["run_id"])
+
+    script = Path("tests/fixtures/mock_claude_validator.py").resolve()
+    command = f"{sys.executable} {script} none"
+    with client.app.state.db.session() as session:
+        dispatcher = ClaudeValidatorDispatcher(
+            RunRepository(session),
+            WorkflowRepository(session),
+            CallbackRepository(session),
+            ArtifactRepository(session),
+            settings,
+        )
+        for _ in range(len(AUTO_RETRY_DELAYS_SECONDS) + 1):
+            result = dispatcher.dispatch(
+                run_id=run["run_id"],
+                node_id="draft_article",
+                validator_id="content-review",
+                command_template=command,
+            )
+            assert result["status"] == "failed"
+            assert result["runtime"]["duplicate"] is False
+
     detail = client.get(f"/api/runs/{run['run_id']}")
     assert detail.status_code == 200
     assert detail.json()["run"]["status"] == "needs_attention"
@@ -190,3 +238,4 @@ def test_dispatch_validator_missing_result_marks_attention(
         item for item in detail.json()["nodes"] if item["node_id"] == "draft_article"
     )
     assert draft_round["status"] == "failed"
+    assert draft_round["round_no"] == 1

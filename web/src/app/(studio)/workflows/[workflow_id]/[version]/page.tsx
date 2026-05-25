@@ -6,5 +6,5 @@ export default async function WorkflowVersionPage({
   params: Promise<{ workflow_id: string; version: string }>;
 }) {
   const { workflow_id: workflowId, version } = await params;
-  return <WorkflowVersionClient workflowId={workflowId} version={version} />;
+  return <WorkflowVersionClient key={`${workflowId}:${version}`} workflowId={workflowId} version={version} />;
 }

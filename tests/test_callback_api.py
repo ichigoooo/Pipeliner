@@ -32,8 +32,7 @@ def _publish_draft_artifact(
     round_no: int,
 ) -> None:
     artifact_rel = (
-        f"{run_info['workspace_root']}/artifacts/"
-        f"article_draft@{version}/payload/article.md"
+        f"{run_info['workspace_root']}/artifacts/article_draft@{version}/payload/article.md"
     )
     artifact_path = settings.data_dir / artifact_rel
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,9 +78,7 @@ def test_callback_event_id_is_idempotent(
         "round_no": 1,
         "actor": {"role": "executor"},
         "execution": {"status": "completed"},
-        "submission": {
-            "artifacts": [{"artifact_id": "article_draft", "version": "v1"}]
-        },
+        "submission": {"artifacts": [{"artifact_id": "article_draft", "version": "v1"}]},
     }
 
     first = client.post("/api/callbacks", json=payload)

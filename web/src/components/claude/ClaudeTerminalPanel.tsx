@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { formatStatusLabel } from '@/lib/status';
@@ -25,7 +25,11 @@ type ClaudeCallPayload = {
 const POLL_INTERVAL_MS = 1500;
 const POLL_LIMIT = 20000;
 
-export function ClaudeTerminalPanel({
+export function ClaudeTerminalPanel(props: ClaudeTerminalPanelProps) {
+  return <ClaudeTerminalPanelInner key={props.callId ?? 'empty'} {...props} />;
+}
+
+function ClaudeTerminalPanelInner({
   callId,
   title,
   defaultOpen = false,
@@ -44,7 +48,7 @@ export function ClaudeTerminalPanel({
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollTimerRef = useRef<number | null>(null);
 
-  const stopStreaming = () => {
+  const stopStreaming = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -53,9 +57,9 @@ export function ClaudeTerminalPanel({
       window.clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const appendPayload = (payload: ClaudeCallPayload) => {
+  const appendPayload = useCallback((payload: ClaudeCallPayload) => {
     setStatus(payload.status || 'unknown');
     setRedacted(Boolean(payload.redacted));
     setTruncated(Boolean(payload.truncated));
@@ -63,9 +67,9 @@ export function ClaudeTerminalPanel({
       setContent((prev) => prev + payload.chunk);
     }
     offsetRef.current = payload.offset;
-  };
+  }, []);
 
-  const pollOnce = async () => {
+  const pollOnce = useCallback(async () => {
     if (!callId) {
       return;
     }
@@ -82,9 +86,9 @@ export function ClaudeTerminalPanel({
     if (payload.done && !hasMore) {
       stopStreaming();
     }
-  };
+  }, [appendPayload, callId, stopStreaming, t]);
 
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     if (pollTimerRef.current) {
       return;
     }
@@ -92,9 +96,9 @@ export function ClaudeTerminalPanel({
     pollTimerRef.current = window.setInterval(() => {
       pollOnce().catch((err) => setError((err as Error).message));
     }, POLL_INTERVAL_MS);
-  };
+  }, [pollOnce]);
 
-  const startEventSource = () => {
+  const startEventSource = useCallback(() => {
     if (!callId || eventSourceRef.current) {
       return;
     }
@@ -118,17 +122,7 @@ export function ClaudeTerminalPanel({
       eventSourceRef.current = null;
       startPolling();
     };
-  };
-
-  useEffect(() => {
-    setContent('');
-    setStatus('unknown');
-    setRedacted(false);
-    setTruncated(false);
-    setError(null);
-    offsetRef.current = 0;
-    stopStreaming();
-  }, [callId]);
+  }, [appendPayload, callId, startPolling, stopStreaming]);
 
   useEffect(() => {
     if (!open || !callId) {
@@ -144,7 +138,7 @@ export function ClaudeTerminalPanel({
     return () => {
       stopStreaming();
     };
-  }, [callId, open]);
+  }, [callId, open, pollOnce, startEventSource, startPolling, stopStreaming]);
 
   useEffect(() => {
     if (!open || !outputRef.current) {

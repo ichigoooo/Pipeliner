@@ -316,7 +316,7 @@ class ProjectInitializer:
             "--input workflow.json --output workflow.json\n"
             "4. 运行回调脚本上报结果：\n"
             "   python scripts/authoring/report_callback.py "
-            "--suggestion \"...\" --explanation \"...\" --risk \"...\"\n"
+            '--suggestion "..." --explanation "..." --risk "..."\n'
             "5. 输出更新后的 spec 与简短变更摘要。\n\n"
             "结构要求：\n"
             "- inputs/outputs/nodes/validators 必须是对象数组。\n"
@@ -341,7 +341,7 @@ class ProjectInitializer:
             "--input workflow.json --output workflow.json\n"
             "4. 运行回调脚本上报结果：\n"
             "   python scripts/authoring/report_callback.py "
-            "--suggestion \"...\" --explanation \"...\" --risk \"...\"\n"
+            '--suggestion "..." --explanation "..." --risk "..."\n'
             "5. 输出更新后的 spec 与迭代摘要（列出关键变更）。\n"
         )
 
@@ -361,7 +361,7 @@ class ProjectInitializer:
             "--input workflow.json\n"
             "3. 运行回调脚本上报结果：\n"
             "   python scripts/authoring/report_callback.py "
-            "--suggestion \"...\" --explanation \"...\" --risk \"...\"\n"
+            '--suggestion "..." --explanation "..." --risk "..."\n'
             "3. 输出错误/警告清单与修复建议。\n"
         )
 

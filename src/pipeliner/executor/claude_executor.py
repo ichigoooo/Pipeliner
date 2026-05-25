@@ -27,9 +27,6 @@ from pipeliner.protocols.workflow import WorkflowNodeSpec
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.runtime.guards import parse_duration
 from pipeliner.services.artifact_service import ArtifactService
-from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
-from pipeliner.services.project_initializer import ProjectInitializer
-from pipeliner.services.run_service import RunService
 from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
 from pipeliner.services.claude_env import (
     build_claude_env,
@@ -38,7 +35,10 @@ from pipeliner.services.claude_env import (
     preflight_claude_host,
     resolve_claude_api_host,
 )
+from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
 from pipeliner.services.execution_trace import ExecutionTraceRecorder
+from pipeliner.services.project_initializer import ProjectInitializer
+from pipeliner.services.run_service import RunService
 from pipeliner.types import (
     ActorRole,
     ArtifactKind,
@@ -139,7 +139,9 @@ class ClaudeExecutorDispatcher:
             else None
         )
         skill_file = skill_root / "SKILL.md" if skill_root is not None else None
-        skill_reference = skill_root / "references" / "node_context.json" if skill_root is not None else None
+        skill_reference = (
+            skill_root / "references" / "node_context.json" if skill_root is not None else None
+        )
 
         targets = self._build_targets(run, node)
         for target in targets:
@@ -155,7 +157,9 @@ class ClaudeExecutorDispatcher:
             "context_file": str(context_path),
             "executor_skill": skill_name,
             "executor_skill_file": str(skill_file) if skill_file is not None else None,
-            "executor_skill_reference": str(skill_reference) if skill_reference is not None else None,
+            "executor_skill_reference": str(skill_reference)
+            if skill_reference is not None
+            else None,
             "targets": [
                 {
                     "artifact_id": target.artifact_id,
@@ -238,6 +242,7 @@ class ClaudeExecutorDispatcher:
                     run_id=run.id,
                     node_id=node.node_id,
                     round_no=node_run.round_no,
+                    execution_status=ExecutionStatus.FAILED,
                     message=preflight_error,
                 )
                 result = self.runtime.submit_callback(payload)
@@ -293,6 +298,9 @@ class ClaudeExecutorDispatcher:
                 run_id=run.id,
                 node_id=node.node_id,
                 round_no=node_run.round_no,
+                execution_status=(
+                    ExecutionStatus.TIMEOUT if result.timed_out else ExecutionStatus.FAILED
+                ),
                 message=failure_message,
             )
             result = self.runtime.submit_callback(payload)
@@ -314,6 +322,7 @@ class ClaudeExecutorDispatcher:
                 run_id=run.id,
                 node_id=node.node_id,
                 round_no=node_run.round_no,
+                execution_status=ExecutionStatus.FAILED,
                 message=str(exc),
             )
             result = self.runtime.submit_callback(payload)
@@ -399,8 +408,10 @@ class ClaudeExecutorDispatcher:
 
             if kind == ArtifactKind.FILE:
                 suffix = self._shape_to_suffix(output_spec.shape)
+                payload_name = f"{artifact_id}{suffix}"
                 relative_uri = (
-                    f"{run.workspace_root}/artifacts/{artifact_id}@{version}/payload/{artifact_id}{suffix}"
+                    f"{run.workspace_root}/artifacts/{artifact_id}@{version}"
+                    f"/payload/{payload_name}"
                 )
             else:
                 relative_uri = f"{run.workspace_root}/artifacts/{artifact_id}@{version}/payload"
@@ -467,8 +478,7 @@ class ClaudeExecutorDispatcher:
             execution=CallbackExecution(status=ExecutionStatus.COMPLETED),
             submission=CallbackSubmission(
                 artifacts=[
-                    {"artifact_id": item.artifact_id, "version": item.version}
-                    for item in manifests
+                    {"artifact_id": item.artifact_id, "version": item.version} for item in manifests
                 ]
             ),
         )
@@ -479,6 +489,7 @@ class ClaudeExecutorDispatcher:
         run_id: str,
         node_id: str,
         round_no: int,
+        execution_status: ExecutionStatus,
         message: str,
     ) -> NodeCallbackPayload:
         return NodeCallbackPayload(
@@ -488,7 +499,7 @@ class ClaudeExecutorDispatcher:
             node_id=node_id,
             round_no=round_no,
             actor={"role": "executor"},
-            execution=CallbackExecution(status=ExecutionStatus.FAILED, message=message),
+            execution=CallbackExecution(status=execution_status, message=message),
             submission=CallbackSubmission(artifacts=[]),
         )
 
@@ -506,11 +517,7 @@ class ClaudeExecutorDispatcher:
             work_dir=str(executor_dir),
         )
         command = shlex.split(formatted)
-        if (
-            "{prompt_file}" not in template
-            and "{task_file}" not in template
-            and len(command) == 1
-        ):
+        if "{prompt_file}" not in template and "{task_file}" not in template and len(command) == 1:
             command.append(str(prompt_path))
         return command
 
@@ -565,7 +572,9 @@ class ClaudeExecutorDispatcher:
 
     def _first_byte_timeout_seconds(self, spec) -> float | None:
         try:
-            return parse_duration(spec.runtime_guards_or_default().first_byte_timeout).total_seconds()
+            return parse_duration(
+                spec.runtime_guards_or_default().first_byte_timeout
+            ).total_seconds()
         except Exception:
             return None
 

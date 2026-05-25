@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useTranslations } from 'next-intl';
+import { StudioPage, StudioPageHeader } from '@/components/ui/StudioPage';
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
@@ -54,42 +55,51 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.18),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#f5f5f4_100%)] p-6 lg:p-8">
-      <section className="rounded-[2.5rem] border border-stone-200 bg-white/90 p-8 shadow-xl backdrop-blur">
-        <p className="text-xs uppercase tracking-[0.3em] text-stone-500">{t('header')}</p>
-        <div className="mt-4 grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_360px]">
-          <div>
-            <h1 className="max-w-3xl text-4xl font-semibold leading-tight text-stone-950">
-              {t('title')}
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-600">
-              {t('subtitle')}
+    <StudioPage>
+      <StudioPageHeader
+        eyebrow={t('header')}
+        title={t('title')}
+        description={t('subtitle')}
+      />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_340px]">
+        <section className="overflow-hidden rounded-3xl border border-stone-200 bg-white">
+          <div className="border-b border-stone-200 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">
+              {t('shortcuts.authoring.eyebrow')}
             </p>
           </div>
-          <div className="grid gap-3">
+          <div className="divide-y divide-stone-100">
+            {shortcuts.map((shortcut) => (
+              <Link
+                key={shortcut.href}
+                href={shortcut.href}
+                className="block px-5 py-4 transition hover:bg-stone-50"
+              >
+                <p className="text-[11px] uppercase tracking-[0.2em] text-stone-500">{shortcut.eyebrow}</p>
+                <h2 className="mt-1 text-xl font-semibold text-stone-900">{shortcut.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-stone-600">{shortcut.body}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <aside className="rounded-3xl border border-stone-200 bg-white">
+          <div className="border-b border-stone-200 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">
+              {t('stats.runs')}
+            </p>
+          </div>
+          <div className="divide-y divide-stone-100 px-5">
             {stats.map((item) => (
-              <div key={item.label} className="rounded-[1.75rem] border border-stone-200 bg-stone-50 px-5 py-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{item.label}</p>
-                <p className="mt-2 text-3xl font-semibold text-stone-950">{item.value}</p>
+              <div key={item.label} className="py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{item.label}</p>
+                <p className="mt-1 text-3xl font-semibold tracking-[-0.03em] text-stone-900">{item.value}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      <section className="mt-8 grid gap-4 xl:grid-cols-2">
-        {shortcuts.map((shortcut) => (
-          <Link
-            key={shortcut.href}
-            href={shortcut.href}
-            className="rounded-[2rem] border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-md"
-          >
-            <p className="text-xs uppercase tracking-[0.24em] text-stone-500">{shortcut.eyebrow}</p>
-            <h2 className="mt-3 text-2xl font-semibold text-stone-950">{shortcut.title}</h2>
-            <p className="mt-4 text-sm leading-7 text-stone-600">{shortcut.body}</p>
-          </Link>
-        ))}
-      </section>
-    </div>
+        </aside>
+      </div>
+    </StudioPage>
   );
 }

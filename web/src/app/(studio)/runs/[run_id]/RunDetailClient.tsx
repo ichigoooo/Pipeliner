@@ -1,17 +1,18 @@
 'use client';
-import type { Node } from '@xyflow/react';
+import type { Edge as FlowEdge, Node } from '@xyflow/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
-import type { RunOverview } from '@/lib/api';
+import type { RunArtifactPreviewResult, RunLogPreviewResult, RunOverview, RunPreviewPayload } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
 import { formatRunStopReason } from '@/lib/run-stop-reason';
 import { formatStatusLabel as formatStatusText } from '@/lib/status';
 import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
+import { StudioPage } from '@/components/ui/StudioPage';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { TabList } from '@/components/ui/TabList';
 import { InspectorPanel } from '@/components/ui/InspectorPanel';
@@ -30,8 +31,8 @@ type DriveResult = {
 };
 
 type PreviewPanelState =
-  | { kind: 'artifact'; data: any }
-  | { kind: 'log'; data: any };
+  | { kind: 'artifact'; data: RunArtifactPreviewResult }
+  | { kind: 'log'; data: RunLogPreviewResult };
 
 type NodeSelection = {
   node_id: string;
@@ -136,22 +137,22 @@ export function RunDetailClient({ runId }: { runId: string }) {
     },
   });
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['run', runId] }),
       queryClient.invalidateQueries({ queryKey: ['run-overview', runId] }),
       queryClient.invalidateQueries({ queryKey: ['run-node-round', runId] }),
     ]);
-  };
+  }, [queryClient, runId]);
 
-  const refetchPage = async () => {
+  const refetchPage = useCallback(async () => {
     await Promise.all([
       runQuery.refetch(),
       overviewQuery.refetch(),
       workflowQuery.refetch(),
       nodeRoundQuery.refetch(),
     ]);
-  };
+  }, [nodeRoundQuery, overviewQuery, runQuery, workflowQuery]);
 
   const stopMutation = useMutation({
     mutationFn: () => api.stopRun(runId),
@@ -329,7 +330,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
     }
   };
 
-  const applyNodeSelection = (
+  const applyNodeSelection = useCallback((
     selection: NodeSelection,
     options?: { resetTab?: boolean; followCurrentFocus?: boolean }
   ) => {
@@ -343,15 +344,15 @@ export function RunDetailClient({ runId }: { runId: string }) {
     if (resetTab) {
       setDetailTabIndex(0);
     }
-  };
+  }, []);
 
-  const selectNodeRound = (selection: NodeSelection, resetTab = true) => {
+  const selectNodeRound = useCallback((selection: NodeSelection, resetTab = true) => {
     applyNodeSelection(selection, { resetTab });
-  };
+  }, [applyNodeSelection]);
 
-  const selectNodeRoundManually = (selection: NodeSelection, resetTab = true) => {
+  const selectNodeRoundManually = useCallback((selection: NodeSelection, resetTab = true) => {
     applyNodeSelection(selection, { resetTab, followCurrentFocus: false });
-  };
+  }, [applyNodeSelection]);
 
   const run = runQuery.data;
   const overview = overviewQuery.data;
@@ -361,6 +362,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
   const validatorCallMeta = validatorCallQuery.data;
   const pageLoadError = (runQuery.error || overviewQuery.error || workflowQuery.error) as Error | null;
   const nodeDetailError = nodeRoundQuery.error as Error | null;
+  const currentFocus = overview?.current_focus ?? null;
   const detailTabKeys = ['overview', 'artifacts'] as const;
   const detailTabs = detailTabKeys.map((key) => t(`detailTabs.${key}`));
   const timelineByNodeId = useMemo(() => {
@@ -385,7 +387,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
       );
     }
     return grouped;
-  }, [overview?.timeline]);
+  }, [overview]);
 
   useEffect(() => {
     if (!overview) {
@@ -423,7 +425,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
         setSelectedNode(null);
       }
     }
-  }, [followCurrentFocus, overview, selectedNode]);
+  }, [applyNodeSelection, followCurrentFocus, overview, selectedNode]);
 
   useEffect(() => {
     if (!overview || focusApplied || focusParam !== 'attention') {
@@ -434,7 +436,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
       selectNodeRoundManually({ node_id: attention[0].node_id, round_no: attention[0].round_no });
       setFocusApplied(true);
     }
-  }, [focusApplied, focusParam, overview]);
+  }, [focusApplied, focusParam, overview, selectNodeRoundManually]);
 
   useEffect(() => {
     if (!executorCallMeta || !nodeRound) {
@@ -459,6 +461,16 @@ export function RunDetailClient({ runId }: { runId: string }) {
       void refresh();
     }
   }, [nodeRound, refresh, validatorCallMeta]);
+
+  const jumpToCurrentFocus = useCallback(() => {
+    if (!currentFocus) {
+      return;
+    }
+    applyNodeSelection(
+      { node_id: currentFocus.node_id, round_no: currentFocus.round_no },
+      { followCurrentFocus: true }
+    );
+  }, [applyNodeSelection, currentFocus]);
 
   if (pageLoadError && (!run || !overview || !workflowDetail)) {
     return (
@@ -490,10 +502,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
     );
   }
 
-  const dispatchable = overview.dispatchable || [];  
-  const summary = overview.summary || { node_counts: {}, attention_nodes: [] };  
-  const attentionNodes = summary.attention_nodes;  
-  const nodeCounts = summary.node_counts;  
+  const dispatchable = overview.dispatchable || [];
+  const summary = overview.summary || { node_counts: {}, attention_nodes: [] };
+  const nodeCounts = summary.node_counts;
 
   const latestByNodeId = new Map(overview.latest_nodes.map((item) => [item.node_id, item]));
   const selectedLatest = selectedNode ? latestByNodeId.get(selectedNode.node_id) : null;
@@ -511,7 +522,6 @@ export function RunDetailClient({ runId }: { runId: string }) {
   );
   const canRetry = selectedLatest ? ATTENTION_STATUSES.has(selectedLatest.status) : false;
   const driverRunning = overview.driver.status === 'running';
-  const currentFocus = overview.current_focus;
   const currentFocusSelected =
     currentFocus?.node_id === selectedNode?.node_id && currentFocus?.round_no === selectedNode?.round_no;
   const canDrive =
@@ -631,16 +641,6 @@ export function RunDetailClient({ runId }: { runId: string }) {
       return;
     }
     selectNodeRoundManually({ node_id: latest.node_id, round_no: latest.round_no });
-  };
-
-  const jumpToCurrentFocus = () => {
-    if (!currentFocus) {
-      return;
-    }
-    applyNodeSelection(
-      { node_id: currentFocus.node_id, round_no: currentFocus.round_no },
-      { followCurrentFocus: true }
-    );
   };
 
   const formattedRunStopReason = formatRunStopReason(run.run.stop_reason, t);
@@ -765,7 +765,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
     claudeCalls?.executor_call_id || validatorCalls.length > 0 || executorTerminalEmptyHint
   );
 
-  const renderPreviewContent = (preview: any) => {
+  const renderPreviewContent = (preview: RunPreviewPayload | null | undefined) => {
     if (!preview) {
       return null;
     }
@@ -777,9 +777,15 @@ export function RunDetailClient({ runId }: { runId: string }) {
       );
     }
     if (preview.kind === 'text') {
+      const content =
+        typeof preview.content === 'string'
+          ? preview.content
+          : preview.content == null
+            ? ''
+            : String(preview.content);
       return (
         <pre className="whitespace-pre-wrap break-all text-xs leading-6 text-stone-900">
-          {preview.content}
+          {content}
         </pre>
       );
     }
@@ -799,8 +805,8 @@ export function RunDetailClient({ runId }: { runId: string }) {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-stone-200 px-6 py-5">
+    <StudioPage className="flex min-h-full flex-col gap-4">
+      <div className="rounded-3xl border border-stone-200 bg-white px-6 py-5">
         <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
           <Link href="/runs" className="text-stone-500 transition hover:text-stone-900">
             ← {t('backToRuns')}
@@ -826,7 +832,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="grid min-h-0 gap-4 overflow-y-auto">
           <section className="rounded-[2rem] border border-stone-200 bg-stone-950 p-5 text-white shadow-sm">
             <p className="text-xs uppercase tracking-[0.24em] text-stone-400">{t('summary.title')}</p>
@@ -1120,7 +1126,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
 
               {nodeRound && detailTabIndex === 0 && (
                 <div className="space-y-4">
-                  {showJumpToCurrentFocus ? (
+                  {showJumpToCurrentFocus && currentFocus ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] border border-stone-200 bg-stone-50 p-5">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
@@ -1363,7 +1369,7 @@ export function RunDetailClient({ runId }: { runId: string }) {
             <div className="h-[360px] border-t border-stone-200 bg-stone-50 xl:h-[420px]">
               <WorkflowGraph
                 initialNodes={graphNodes}
-                initialEdges={workflowDetail.graph.edges as any}
+                initialEdges={workflowDetail.graph.edges as FlowEdge[]}
                 onNodeClick={(_event, node) => selectNode(node.id)}
               />
             </div>
@@ -1395,7 +1401,9 @@ export function RunDetailClient({ runId }: { runId: string }) {
                 <div className="mt-4 space-y-4">
                   {previewPayload?.truncated ? (
                     <p className="text-xs text-amber-700">
-                      {t('preview.truncated', { limit: previewPayload.limit_bytes })}
+                      {t('preview.truncated', {
+                        limit: previewPayload.limit_bytes ?? previewPayload.size_bytes ?? 0,
+                      })}
                     </p>
                   ) : null}
                   <div className="rounded-[1.5rem] border border-stone-200 bg-stone-50 p-4">
@@ -1432,6 +1440,6 @@ export function RunDetailClient({ runId }: { runId: string }) {
           onClose={() => setInspectorData(null)}
         />
       )}
-    </div>
+    </StudioPage>
   );
 }

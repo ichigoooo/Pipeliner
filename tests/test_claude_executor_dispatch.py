@@ -10,6 +10,7 @@ from pipeliner.persistence.repositories import (
     RunRepository,
     WorkflowRepository,
 )
+from pipeliner.services.run_service import AUTO_RETRY_DELAYS_SECONDS
 
 
 def _register_workflow(client, workflow_fixture) -> None:
@@ -65,7 +66,9 @@ def test_dispatch_executor_success(client, workflow_fixture, settings) -> None:
     assert callbacks.json()["events"][0]["actor_role"] == "executor"
 
 
-def test_dispatch_executor_failure_marks_attention(client, workflow_fixture, settings) -> None:
+def test_dispatch_executor_failure_keeps_round_retryable(
+    client, workflow_fixture, settings
+) -> None:
     _register_workflow(client, workflow_fixture)
     run = _start_run(client, "mvp-review-loop", "0.1.0")
 
@@ -85,11 +88,21 @@ def test_dispatch_executor_failure_marks_attention(client, workflow_fixture, set
         assert result["status"] == "failed"
         assert result["runtime"]["duplicate"] is False
 
+        script = Path("tests/fixtures/mock_claude_executor.py").resolve()
+        command = f"{sys.executable} {script} {{task_file}}"
+        retry = dispatcher.dispatch(
+            run_id=run["run_id"],
+            node_id="draft_article",
+            command_template=command,
+        )
+        assert retry["status"] == "completed"
+
     detail = client.get(f"/api/runs/{run['run_id']}")
     assert detail.status_code == 200
-    assert detail.json()["run"]["status"] == "needs_attention"
+    assert detail.json()["run"]["status"] == "running"
     node = next(item for item in detail.json()["nodes"] if item["node_id"] == "draft_article")
-    assert node["status"] == "failed"
+    assert node["status"] == "waiting_validator"
+    assert node["round_no"] == 1
 
 
 def test_dispatch_executor_default_command_reads_prompt_stdin(
@@ -120,7 +133,40 @@ def test_dispatch_executor_default_command_reads_prompt_stdin(
     assert node["status"] == "waiting_validator"
 
 
-def test_dispatch_executor_missing_artifact_marks_attention(
+def test_dispatch_executor_repeated_failures_exhaust_retry_budget(
+    client,
+    workflow_fixture,
+    settings,
+) -> None:
+    _register_workflow(client, workflow_fixture)
+    run = _start_run(client, "mvp-review-loop", "0.1.0")
+
+    with client.app.state.db.session() as session:
+        dispatcher = ClaudeExecutorDispatcher(
+            RunRepository(session),
+            WorkflowRepository(session),
+            CallbackRepository(session),
+            ArtifactRepository(session),
+            settings,
+        )
+        for _ in range(len(AUTO_RETRY_DELAYS_SECONDS) + 1):
+            result = dispatcher.dispatch(
+                run_id=run["run_id"],
+                node_id="draft_article",
+                command_template="definitely_not_existing_command",
+            )
+            assert result["status"] == "failed"
+            assert result["runtime"]["duplicate"] is False
+
+    detail = client.get(f"/api/runs/{run['run_id']}")
+    assert detail.status_code == 200
+    assert detail.json()["run"]["status"] == "needs_attention"
+    node = next(item for item in detail.json()["nodes"] if item["node_id"] == "draft_article")
+    assert node["status"] == "failed"
+    assert node["round_no"] == 1
+
+
+def test_dispatch_executor_missing_artifact_keeps_round_retryable(
     client,
     workflow_fixture,
     settings,
@@ -148,6 +194,6 @@ def test_dispatch_executor_missing_artifact_marks_attention(
 
     detail = client.get(f"/api/runs/{run['run_id']}")
     assert detail.status_code == 200
-    assert detail.json()["run"]["status"] == "needs_attention"
+    assert detail.json()["run"]["status"] == "running"
     node = next(item for item in detail.json()["nodes"] if item["node_id"] == "draft_article")
-    assert node["status"] == "failed"
+    assert node["status"] == "waiting_executor"

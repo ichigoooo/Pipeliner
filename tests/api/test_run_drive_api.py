@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-import time
 
 from fastapi.testclient import TestClient
 
@@ -138,8 +138,7 @@ def test_auto_drive_commits_progress_before_driver_finishes(
         if overview["driver"]["status"] != "running":
             break
         latest_nodes = {
-            (item["node_id"], item["round_no"]): item
-            for item in overview["latest_nodes"]
+            (item["node_id"], item["round_no"]): item for item in overview["latest_nodes"]
         }
         if ("draft_article", 2) in latest_nodes:
             observed_round_two = True
@@ -452,8 +451,8 @@ def test_executor_first_byte_timeout_warns_but_waits_for_real_timeout(
     overview_response = client.get(f"/api/runs/{run['run_id']}/debug/overview")
     assert overview_response.status_code == 200
     overview = overview_response.json()
-    assert overview["status"] == "needs_attention"
-    assert overview["latest_nodes"][0]["status"] == "failed"
+    assert overview["status"] == "running"
+    assert overview["latest_nodes"][0]["status"] == "waiting_executor"
     assert overview["latest_nodes"][0]["stop_reason"] == "executor command timeout"
 
 
@@ -481,3 +480,9 @@ def test_executor_preflight_failure_records_diagnostics(
     assert metadata["preflight_host"] == "definitely.invalid"
     assert "域名解析失败" in metadata["preflight_error"]
     assert metadata["exit_code"] == -2
+
+    overview_response = client.get(f"/api/runs/{run['run_id']}/debug/overview")
+    assert overview_response.status_code == 200
+    overview = overview_response.json()
+    assert overview["status"] == "running"
+    assert overview["latest_nodes"][0]["status"] == "waiting_executor"

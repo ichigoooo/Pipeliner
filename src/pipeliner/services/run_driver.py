@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from pipeliner.config import Settings, get_settings
 from pipeliner.executor import ClaudeExecutorDispatcher, ClaudeValidatorDispatcher
 from pipeliner.persistence.repositories import (
@@ -9,7 +11,7 @@ from pipeliner.persistence.repositories import (
     WorkflowRepository,
 )
 from pipeliner.services.run_service import RunService
-from pipeliner.types import NodeRunStatus, RunStatus
+from pipeliner.types import ActorRole, NodeRunStatus, RunStatus
 
 
 class RunDriver:
@@ -83,6 +85,9 @@ class RunDriver:
                     command_template=validator_command_template,
                 )
             actions.append(result)
+            retry_delay = self._retry_delay_for_action(run_id, action, result)
+            if retry_delay is not None:
+                time.sleep(retry_delay)
         else:
             stop_reason = "max_steps_exceeded"
 
@@ -111,7 +116,7 @@ class RunDriver:
                 }
             if node_run.status == NodeRunStatus.WAITING_VALIDATOR.value:
                 for validator in node.validators:
-                    existing = self.callback_repo.get_validator_round_event(
+                    existing = self.run_service.get_validator_completed_event(
                         run.id,
                         node.node_id,
                         node_run.round_no,
@@ -124,4 +129,47 @@ class RunDriver:
                             "round_no": node_run.round_no,
                             "validator_id": validator.validator_id,
                         }
+        return None
+
+    def _retry_delay_for_action(
+        self,
+        run_id: str,
+        action: dict[str, str | int],
+        result: dict,
+    ) -> int | None:
+        if result.get("status") != "failed":
+            return None
+
+        run = self.run_service.get_run(run_id)
+        if run.status != RunStatus.RUNNING.value:
+            return None
+
+        node_run = self.run_repo.get_node_run(
+            run_id,
+            str(action["node_id"]),
+            int(action["round_no"]),
+        )
+        if node_run is None:
+            return None
+
+        if action["kind"] == "executor" and node_run.status == NodeRunStatus.WAITING_EXECUTOR.value:
+            return self.run_service.get_retry_delay_seconds(
+                run_id,
+                node_run.node_id,
+                node_run.round_no,
+                actor_role=ActorRole.EXECUTOR,
+            )
+
+        if (
+            action["kind"] == "validator"
+            and node_run.status == NodeRunStatus.WAITING_VALIDATOR.value
+        ):
+            return self.run_service.get_retry_delay_seconds(
+                run_id,
+                node_run.node_id,
+                node_run.round_no,
+                actor_role=ActorRole.VALIDATOR,
+                validator_id=str(action["validator_id"]),
+            )
+
         return None

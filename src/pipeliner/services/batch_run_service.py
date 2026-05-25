@@ -109,7 +109,9 @@ class BatchRunService:
 
         return rows
 
-    def create_batch(self, workflow_id: str, version: str, rows: list[BatchRunRow]) -> BatchRunModel:
+    def create_batch(
+        self, workflow_id: str, version: str, rows: list[BatchRunRow]
+    ) -> BatchRunModel:
         batch_id = self._generate_batch_id()
         failed_count = sum(1 for row in rows if row.error)
         batch = BatchRunModel(

@@ -56,7 +56,12 @@ class AuthoringAgent:
         stdout_path = work_dir / "authoring_stdout.log"
         stderr_path = work_dir / "authoring_stderr.log"
         mirror_dir = (
-            project_dir / ".pipeliner" / "logs" / "authoring" / session_id / (claude_call_id or "latest")
+            project_dir
+            / ".pipeliner"
+            / "logs"
+            / "authoring"
+            / session_id
+            / (claude_call_id or "latest")
             if project_dir
             else None
         )
@@ -206,7 +211,10 @@ class AuthoringAgent:
         )
 
         if exit_code and exit_code != 0:
-            trace_recorder.log("authoring_failed", reason=error_message or f"authoring command failed(exit={exit_code})")
+            trace_recorder.log(
+                "authoring_failed",
+                reason=error_message or f"authoring command failed(exit={exit_code})",
+            )
             raise AuthoringAgentError(
                 error_message or f"authoring command failed(exit={exit_code})",
                 metadata,
@@ -219,7 +227,9 @@ class AuthoringAgent:
             trace_recorder.log("result_loading_failed", error=str(exc))
             raise AuthoringAgentError(f"authoring result invalid: {exc}", metadata) from exc
         if not isinstance(spec_payload, dict):
-            trace_recorder.log("result_loading_failed", error="authoring result must be a JSON object")
+            trace_recorder.log(
+                "result_loading_failed", error="authoring result must be a JSON object"
+            )
             raise AuthoringAgentError("authoring result must be a JSON object", metadata)
 
         trace_recorder.log("result_loaded")
@@ -254,11 +264,7 @@ class AuthoringAgent:
             work_dir=str(work_dir),
         )
         command = [self._resolve_repo_relative_path(part) for part in shlex.split(formatted)]
-        if (
-            "{prompt_file}" not in template
-            and "{task_file}" not in template
-            and len(command) == 1
-        ):
+        if "{prompt_file}" not in template and "{task_file}" not in template and len(command) == 1:
             command.append(str(prompt_path))
         return command
 
@@ -306,7 +312,7 @@ class AuthoringAgent:
             start = content.find("{")
             end = content.rfind("}")
             if start == -1 or end == -1 or end <= start:
-                raise ValueError("authoring output is not valid JSON")
+                raise ValueError("authoring output is not valid JSON") from None
             return json.loads(content[start : end + 1])
 
     def _render_prompt(
@@ -319,11 +325,14 @@ class AuthoringAgent:
     ) -> str:
         spec_text = json.dumps(base_spec, ensure_ascii=False, indent=2)
         project_hint = (
-            f"项目目录：{project_dir}\n" if project_dir else "项目目录：未指定（使用当前工作目录）\n"
+            f"项目目录：{project_dir}\n"
+            if project_dir
+            else "项目目录：未指定（使用当前工作目录）\n"
         )
         return (
             "# Pipeliner Authoring Task\n\n"
-            "你是 workflow authoring agent。基于 intent brief 与 instruction 生成新的 workflow spec。\n\n"
+            "你是 workflow authoring agent。"
+            "基于 intent brief 与 instruction 生成新的 workflow spec。\n\n"
             f"- intent brief: {intent_brief}\n"
             f"- instruction: {instruction}\n"
             f"- result file: {result_path}\n\n"
@@ -342,7 +351,7 @@ class AuthoringAgent:
             "回调要求：\n"
             "- 生成完成后必须运行脚本执行回调：\n"
             "  python scripts/authoring/report_callback.py "
-            "--suggestion \"...\" --explanation \"...\" --risk \"...\"\n"
+            '--suggestion "..." --explanation "..." --risk "..."\n'
             "- suggestion/explanation/risk 必须与本次工作结果相关。\n\n"
             "基础 spec（JSON）：\n"
             f"{spec_text}\n\n"

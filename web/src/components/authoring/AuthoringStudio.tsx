@@ -15,8 +15,7 @@ import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { useToast } from '@/components/ui/toast';
 
-const PANEL_CLASS =
-  'rounded-[2rem] border border-stone-200/70 bg-white/88 p-5 shadow-[0_24px_70px_-36px_rgba(68,64,60,0.4)] backdrop-blur';
+const PANEL_CLASS = 'rounded-3xl border border-stone-200 bg-white p-5';
 
 type ActionButtonProps = {
   children: ReactNode;
@@ -135,6 +134,7 @@ export function AuthoringStudio() {
   const [instruction, setInstruction] = useState(
     'Refine the workflow while keeping workflow spec as the only canonical source.'
   );
+  const [specPreviewTab, setSpecPreviewTab] = useState<'spec' | 'preview'>('spec');
   const [rawSpecBuffer, setRawSpecBuffer] = useState<RawSpecBuffer>({
     sessionId: null,
     value: '{}',
@@ -440,13 +440,10 @@ export function AuthoringStudio() {
   };
 
   return (
-    <div className="relative min-h-full overflow-hidden bg-[#f4efe6]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_58%),radial-gradient(circle_at_top_right,rgba(120,113,108,0.14),transparent_44%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(120,113,108,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(120,113,108,0.06)_1px,transparent_1px)] [background-size:26px_26px]" />
-
-      <div className="relative mx-auto flex min-h-full max-w-[1820px] flex-col gap-5 p-4 lg:p-6">
-        <section className="overflow-hidden rounded-[2.2rem] border border-stone-200/80 bg-[linear-gradient(135deg,rgba(255,252,247,0.96),rgba(246,240,231,0.92))] p-5 shadow-[0_24px_70px_-42px_rgba(68,64,60,0.42)]">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
+    <div className="min-h-full px-4 py-5 md:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-full max-w-[1560px] flex-col gap-4">
+        <section className="rounded-3xl border border-stone-200 bg-white p-5">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
             <div>
               <div className="flex items-center gap-2">
                 <p className="text-[0.72rem] font-semibold tracking-[0.26em] text-stone-500">
@@ -473,11 +470,11 @@ export function AuthoringStudio() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-3">
+            <div className="self-center grid grid-cols-3 gap-3">
               {summary.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-[1.45rem] border border-stone-200/80 bg-white/82 px-4 py-4 shadow-[0_18px_32px_-28px_rgba(68,64,60,0.4)]"
+                  className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4"
                 >
                   <p className="text-xs font-medium tracking-[0.12em] text-stone-500">
                     {item.label}
@@ -491,7 +488,7 @@ export function AuthoringStudio() {
           </div>
         </section>
 
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1.55fr)_360px]">
+        <div className="grid min-h-0 flex-1 items-start gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="flex min-h-0 flex-col gap-5">
             <section className={classNames(PANEL_CLASS, 'flex min-h-0 flex-col overflow-hidden')}>
               <div className="flex items-start justify-between gap-3">
@@ -595,14 +592,11 @@ export function AuthoringStudio() {
               </div>
             </section>
 
-            <section className={classNames(PANEL_CLASS, 'bg-[linear-gradient(180deg,rgba(255,251,244,0.95),rgba(250,247,241,0.92))]')}>
-              <div className="flex items-center gap-2">
-                <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
-                  {t('newSession')}
-                </p>
+            <details className={classNames(PANEL_CLASS)}>
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
+                <span>{t('newSession')}</span>
                 <HelpTooltip content={t('help.newSession')} label={t('newSession')} />
-              </div>
-
+              </summary>
               <form className="mt-5 space-y-4" onSubmit={submitCreateSession}>
                 <label className="block space-y-2">
                   <span className="text-xs font-medium tracking-[0.12em] text-stone-600">
@@ -636,7 +630,7 @@ export function AuthoringStudio() {
                   {t('createSession')}
                 </ActionButton>
               </form>
-            </section>
+            </details>
           </aside>
 
           <section className="flex min-h-0 flex-col gap-5">
@@ -714,7 +708,7 @@ export function AuthoringStudio() {
                     placeholder={t('placeholder.instruction')}
                   />
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                     <ActionButton
                       onClick={() => submitDraft('save')}
                       disabled={!selectedSessionId || saveDraftMutation.isPending}
@@ -759,87 +753,107 @@ export function AuthoringStudio() {
               </div>
             </section>
 
-            <div className="grid min-h-0 flex-1 gap-5 2xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-              <section className={classNames(PANEL_CLASS, 'flex min-h-[34rem] flex-col')}>
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
-                      {t('latestDraft')}
-                    </p>
-                    <HelpTooltip content={t('latestDraftHint')} label={t('latestDraft')} />
-                  </div>
-                  <div className="rounded-[1.2rem] border border-stone-200 bg-stone-50 px-4 py-3 text-right text-xs text-stone-600">
-                    <p className="font-medium tracking-[0.12em] text-stone-500">
-                      {t('revisionInfo', {
-                        revision: activeDraft?.revision ?? '-',
-                        time: formatTimestamp(activeDraft?.created_at),
-                      })}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-[1.75rem] border border-stone-200/80 bg-[#f7f3ec]">
-                  <CodeMirror
-                    value={rawSpec}
-                    extensions={[json()]}
-                    basicSetup={{ lineNumbers: true }}
-                    height="100%"
-                    onChange={handleRawSpecChange}
-                    className="h-full text-xs"
-                  />
-                </div>
-              </section>
-
-              <section className={classNames(PANEL_CLASS, 'flex min-h-[34rem] flex-col overflow-hidden')}>
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
-                      {t('workflowPreview')}
-                    </p>
-                    <HelpTooltip content={t('workflowPreviewHint')} label={t('workflowPreview')} />
-                  </div>
-                  <div
+            <section className={classNames(PANEL_CLASS, 'flex flex-col')}>
+              {/* Tab bar */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-1 rounded-[1rem] border border-stone-200/80 bg-stone-100/80 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSpecPreviewTab('spec')}
                     className={classNames(
-                      'rounded-full px-3 py-1.5 text-xs font-medium',
-                      canPublish ? 'bg-amber-100 text-amber-950' : 'bg-stone-100 text-stone-700'
+                      'rounded-[0.75rem] px-4 py-2 text-xs font-medium transition-colors',
+                      specPreviewTab === 'spec'
+                        ? 'bg-white text-stone-950 shadow-sm'
+                        : 'text-stone-600 hover:text-stone-900'
                     )}
                   >
-                    {publishLabel}
-                  </div>
+                    {t('latestDraft')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpecPreviewTab('preview')}
+                    className={classNames(
+                      'rounded-[0.75rem] px-4 py-2 text-xs font-medium transition-colors',
+                      specPreviewTab === 'preview'
+                        ? 'bg-white text-stone-950 shadow-sm'
+                        : 'text-stone-600 hover:text-stone-900'
+                    )}
+                  >
+                    {t('workflowPreview')}
+                  </button>
                 </div>
-
-                <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-[1.75rem] border border-stone-200/80 bg-white">
-                  {activeDraft ? (
-                    <WorkflowWorkspace
-                      spec={activeDraft.spec_json}
-                      cards={activeDraft.workflow_view.cards}
-                      nodes={activeDraft.graph.nodes as never[]}
-                      edges={activeDraft.graph.edges as never[]}
-                      lintWarnings={activeDraft.lint_report.warnings}
-                      lintErrors={activeDraft.lint_report.errors}
-                      inputEditor={
-                        <WorkflowInputEditor
-                          rawSpec={rawSpec}
-                          onChange={handleRawSpecChange}
-                          compact
-                        />
-                      }
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center px-6 text-center text-sm leading-6 text-stone-500">
-                      {t('empty.workspaceHint')}
+                <div className="flex items-center gap-3">
+                  {specPreviewTab === 'spec' && (
+                    <div className="rounded-[1.2rem] border border-stone-200 bg-stone-50 px-4 py-3 text-right text-xs text-stone-600">
+                      <p className="font-medium tracking-[0.12em] text-stone-500">
+                        {t('revisionInfo', {
+                          revision: activeDraft?.revision ?? '-',
+                          time: formatTimestamp(activeDraft?.created_at),
+                        })}
+                      </p>
                     </div>
                   )}
+                  {specPreviewTab === 'preview' && (
+                    <span
+                      className={classNames(
+                        'rounded-full px-3 py-1.5 text-xs font-medium',
+                        canPublish ? 'bg-amber-100 text-amber-950' : 'bg-stone-100 text-stone-700'
+                      )}
+                    >
+                      {publishLabel}
+                    </span>
+                  )}
                 </div>
-              </section>
-            </div>
+              </div>
+
+              {/* Content area with max-height and internal scrolling */}
+              <div className="mt-5 max-h-[40rem] min-h-0 overflow-y-auto rounded-[1.75rem] border border-stone-200/80 bg-[#f7f3ec]">
+                {specPreviewTab === 'spec' ? (
+                  <div className="min-h-full">
+                    <CodeMirror
+                      value={rawSpec}
+                      extensions={[json()]}
+                      basicSetup={{ lineNumbers: true }}
+                      height="100%"
+                      onChange={handleRawSpecChange}
+                      className="h-full text-xs"
+                    />
+                  </div>
+                ) : (
+                  <div className="min-h-full bg-white">
+                    {activeDraft ? (
+                      <WorkflowWorkspace
+                        spec={activeDraft.spec_json}
+                        cards={activeDraft.workflow_view.cards}
+                        nodes={activeDraft.graph.nodes as never[]}
+                        edges={activeDraft.graph.edges as never[]}
+                        lintWarnings={activeDraft.lint_report.warnings}
+                        lintErrors={activeDraft.lint_report.errors}
+                        defaultTab="cards"
+                        inputEditor={
+                          <WorkflowInputEditor
+                            rawSpec={rawSpec}
+                            onChange={handleRawSpecChange}
+                            compact
+                          />
+                        }
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-6 text-center text-sm leading-6 text-stone-500">
+                        {t('empty.workspaceHint')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
           </section>
 
-          <aside className="flex min-h-0 flex-col gap-5">
+          <aside className="flex min-h-0 flex-col gap-5 xl:col-span-2">
             <section
               className={classNames(
                 PANEL_CLASS,
-                'bg-[linear-gradient(180deg,rgba(255,251,244,0.95),rgba(255,255,255,0.92))]'
+                'bg-stone-50'
               )}
             >
               <div className="flex items-start justify-between gap-3">
@@ -862,7 +876,7 @@ export function AuthoringStudio() {
                 </span>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="mt-5 grid grid-cols-3 gap-3">
                 <div className="rounded-[1.4rem] border border-stone-200/80 bg-white/85 px-4 py-4">
                   <p className="text-[11px] font-medium tracking-[0.12em] text-stone-500">
                     {t('summary.blockingIssues')}
@@ -900,8 +914,8 @@ export function AuthoringStudio() {
               </div>
             </section>
 
-            <section className={classNames(PANEL_CLASS, 'flex min-h-0 flex-col overflow-hidden')}>
-              <div className="flex items-start justify-between gap-3">
+            <details className={classNames(PANEL_CLASS, 'min-h-0')}>
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                     {t('revisionHistory')}
@@ -914,7 +928,7 @@ export function AuthoringStudio() {
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-600">
                   {draftList.length}
                 </span>
-              </div>
+              </summary>
 
               <div className="mt-5 min-h-0 flex-1 space-y-3 overflow-auto pr-1">
                 {draftList.length === 0 ? (
@@ -962,10 +976,9 @@ export function AuthoringStudio() {
                   ))
                 )}
               </div>
-            </section>
-
-            <section className={classNames(PANEL_CLASS, 'flex min-h-0 flex-col overflow-hidden')}>
-              <div className="flex items-start justify-between gap-3">
+            </details>
+            <details className={classNames(PANEL_CLASS, 'min-h-0')}>
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <p className="text-[0.72rem] font-semibold tracking-[0.18em] text-stone-500">
                     {t('messages')}
@@ -975,7 +988,7 @@ export function AuthoringStudio() {
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-600">
                   {messages.length}
                 </span>
-              </div>
+              </summary>
 
               <div className="mt-5 min-h-0 flex-1 space-y-3 overflow-auto pr-1">
                 {messages.length === 0 ? (
@@ -1002,7 +1015,7 @@ export function AuthoringStudio() {
                   ))
                 )}
               </div>
-            </section>
+            </details>
 
             <ClaudeTerminalPanel
               callId={effectiveClaudeCallId}

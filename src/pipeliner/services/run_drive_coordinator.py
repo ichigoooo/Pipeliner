@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import threading
 from typing import Any
 
 from pipeliner.config import Settings, get_settings
@@ -67,7 +67,9 @@ class RunDriveCoordinator:
         validator_command_template: str | None = None,
         max_steps: int | None = None,
     ) -> dict[str, Any]:
-        record = self._begin_run(run_id, mode="auto", max_steps=max_steps or self.default_auto_max_steps)
+        record = self._begin_run(
+            run_id, mode="auto", max_steps=max_steps or self.default_auto_max_steps
+        )
         thread = threading.Thread(
             target=self._run_in_thread,
             kwargs={
@@ -128,7 +130,9 @@ class RunDriveCoordinator:
 
     def shutdown(self, timeout: float = 0.2) -> None:
         with self._lock:
-            threads = [record.thread for record in self._records.values() if record.thread is not None]
+            threads = [
+                record.thread for record in self._records.values() if record.thread is not None
+            ]
         for thread in threads:
             if thread and thread.is_alive():
                 thread.join(timeout=timeout)
@@ -196,7 +200,9 @@ class RunDriveCoordinator:
             self._records[run_id] = record
             return record
 
-    def _finish_success(self, run_id: str, *, stop_reason: str | None, result_status: str | None) -> None:
+    def _finish_success(
+        self, run_id: str, *, stop_reason: str | None, result_status: str | None
+    ) -> None:
         with self._lock:
             record = self._records.get(run_id)
             if record is None:

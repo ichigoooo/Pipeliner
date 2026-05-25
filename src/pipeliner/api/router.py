@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import io
 import json
 import time
@@ -17,37 +16,36 @@ from pipeliner.db import Database
 from pipeliner.executor import ClaudeExecutorDispatcher, ClaudeValidatorDispatcher
 from pipeliner.persistence.repositories import (
     ArtifactRepository,
+    AuthoringRepository,
+    BatchRunRepository,
     CallbackRepository,
     RunRepository,
     WorkflowRepository,
-    AuthoringRepository,
-    BatchRunRepository,
 )
 from pipeliner.protocols.artifact import ArtifactManifest
 from pipeliner.protocols.callback import NodeCallbackPayload
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.services.artifact_service import ArtifactService
+from pipeliner.services.authoring_agent import AuthoringAgent
+from pipeliner.services.authoring_service import AuthoringService
+from pipeliner.services.batch_run_coordinator import BatchRunCoordinator
 from pipeliner.services.batch_run_service import BatchRunService
+from pipeliner.services.claude_call import ClaudeCallStore
 from pipeliner.services.errors import (
     ConflictError,
     InvalidStateError,
     NotFoundError,
     ValidationError,
 )
-from pipeliner.config import get_settings
-from pipeliner.services.run_driver import RunDriver
-from pipeliner.services.run_service import RunService
-from pipeliner.services.workflow_service import WorkflowService
-from pipeliner.services.authoring_agent import AuthoringAgent
-from pipeliner.services.authoring_service import AuthoringService
-from pipeliner.services.claude_call import ClaudeCallStore
-from pipeliner.services.settings_service import SettingsService
 from pipeliner.services.preview_service import PreviewService
-from pipeliner.services.project_service import ProjectService
 from pipeliner.services.project_initializer import ProjectInitializer
+from pipeliner.services.project_service import ProjectService
 from pipeliner.services.report_service import ReportService
 from pipeliner.services.run_drive_coordinator import RunDriveCoordinator
-from pipeliner.services.batch_run_coordinator import BatchRunCoordinator
+from pipeliner.services.run_driver import RunDriver
+from pipeliner.services.run_service import RunService
+from pipeliner.services.settings_service import SettingsService
+from pipeliner.services.workflow_service import WorkflowService
 from pipeliner.ui.views import render_index, render_run_view, render_workflow_view
 
 router = APIRouter()
@@ -531,12 +529,13 @@ def get_authoring_session(
         "published_version": authoring_session.published_version,
         "published_revision": authoring_session.published_revision,
         "published_at": (
-            authoring_session.published_at.isoformat()
-            if authoring_session.published_at
-            else None
+            authoring_session.published_at.isoformat() if authoring_session.published_at else None
         ),
         "source": (
-            {"type": authoring_session.source_type, "payload": authoring_session.source_payload_json}
+            {
+                "type": authoring_session.source_type,
+                "payload": authoring_session.source_payload_json,
+            }
             if authoring_session.source_type or authoring_session.source_payload_json
             else None
         ),
@@ -667,10 +666,7 @@ def list_authoring_drafts(
     repo = AuthoringRepository(session)
     call_map = _build_generation_call_map(repo, session_id)
     return {
-        "drafts": [
-            _authoring_draft_payload(item, call_map.get(item.revision))
-            for item in drafts
-        ]
+        "drafts": [_authoring_draft_payload(item, call_map.get(item.revision)) for item in drafts]
     }
 
 
@@ -697,9 +693,6 @@ def list_authoring_messages(
     }
 
 
-
-
-
 @router.post("/api/authoring/sessions/{session_id}/publish")
 def publish_authoring_session(
     session_id: str,
@@ -713,6 +706,7 @@ def publish_authoring_session(
         revision = latest.revision
     result = service.publish(session_id, revision)
     return result
+
 
 @router.get("/api/authoring/sessions/{session_id}/drafts/{revision}/derive")
 def derive_draft_graph_projection(
@@ -857,7 +851,7 @@ def create_batch_run(
     version: str,
     request: Request,
     session: SessionDep,
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File(...)],
 ) -> dict[str, Any]:
     raw = file.file.read()
     try:
@@ -1209,7 +1203,9 @@ def get_run_node_debug_details(
                         "path": str(file_path.relative_to(workspace.root)),
                         "kind": "file",
                         "size_bytes": stat.st_size,
-                        "updated_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                        "updated_at": datetime.fromtimestamp(
+                            stat.st_mtime, timezone.utc
+                        ).isoformat(),
                     }
                 )
 

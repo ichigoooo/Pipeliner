@@ -59,12 +59,11 @@ class RuntimeCoordinator:
         node_run = self.run_repo.get_node_run(run.id, payload.node_id, payload.round_no)
         if node_run is None:
             raise NotFoundError(
-                "未找到 node round: "
-                f"run={run.id} node={payload.node_id} round={payload.round_no}"
+                f"未找到 node round: run={run.id} node={payload.node_id} round={payload.round_no}"
             )
 
         if payload.actor.role == ActorRole.VALIDATOR and payload.actor.validator_id:
-            duplicate_validator_event = self.callback_repo.get_validator_round_event(
+            duplicate_validator_event = self.run_service.get_validator_completed_event(
                 run.id,
                 payload.node_id,
                 payload.round_no,
@@ -231,12 +230,11 @@ class RuntimeCoordinator:
             expected_outputs = set(node.handoff.outputs or [item.name for item in node.outputs])
             submitted_outputs = {item.artifact_id for item in submission.artifacts}
             if not expected_outputs.issubset(submitted_outputs):
-                raise ValidationError(
-                    "executor callback 缺少节点 handoff.outputs 对应的 artifact"
-                )
+                raise ValidationError("executor callback 缺少节点 handoff.outputs 对应的 artifact")
             for artifact_ref in submission.artifacts:
                 self.artifact_service.resolve_ref(run.id, artifact_ref)
             node_run.status = NodeRunStatus.WAITING_VALIDATOR.value
+            node_run.stop_reason = None
             node_run.waiting_for_role = "validator"
             validator_context = self.run_service.build_validator_context(
                 run,
@@ -258,16 +256,28 @@ class RuntimeCoordinator:
                 )
             return
         if payload.execution.status == ExecutionStatus.FAILED:
-            node_run.status = NodeRunStatus.FAILED.value
-            node_run.stop_reason = payload.execution.message or "executor failed"
-            node_run.waiting_for_role = None
-            run.status = RunStatus.NEEDS_ATTENTION.value
+            self._handle_retryable_failure(
+                run,
+                node_run,
+                actor_role=ActorRole.EXECUTOR,
+                validator_id=None,
+                message=payload.execution.message or "executor failed",
+                terminal_status=NodeRunStatus.FAILED,
+                waiting_status=NodeRunStatus.WAITING_EXECUTOR,
+                waiting_for_role="executor",
+            )
             return
         if payload.execution.status == ExecutionStatus.TIMEOUT:
-            node_run.status = NodeRunStatus.TIMED_OUT.value
-            node_run.stop_reason = payload.execution.message or "executor timeout"
-            node_run.waiting_for_role = None
-            run.status = RunStatus.NEEDS_ATTENTION.value
+            self._handle_retryable_failure(
+                run,
+                node_run,
+                actor_role=ActorRole.EXECUTOR,
+                validator_id=None,
+                message=payload.execution.message or "executor timeout",
+                terminal_status=NodeRunStatus.TIMED_OUT,
+                waiting_status=NodeRunStatus.WAITING_EXECUTOR,
+                waiting_for_role="executor",
+            )
             return
 
     def _handle_validator_callback(
@@ -281,16 +291,28 @@ class RuntimeCoordinator:
         if node_run.status != NodeRunStatus.WAITING_VALIDATOR.value:
             raise InvalidStateError("当前节点轮次不在等待 validator 状态")
         if payload.execution.status == ExecutionStatus.FAILED:
-            node_run.status = NodeRunStatus.FAILED.value
-            node_run.stop_reason = payload.execution.message or "validator failed"
-            node_run.waiting_for_role = None
-            run.status = RunStatus.NEEDS_ATTENTION.value
+            self._handle_retryable_failure(
+                run,
+                node_run,
+                actor_role=ActorRole.VALIDATOR,
+                validator_id=payload.actor.validator_id,
+                message=payload.execution.message or "validator failed",
+                terminal_status=NodeRunStatus.FAILED,
+                waiting_status=NodeRunStatus.WAITING_VALIDATOR,
+                waiting_for_role="validator",
+            )
             return
         if payload.execution.status == ExecutionStatus.TIMEOUT:
-            node_run.status = NodeRunStatus.TIMED_OUT.value
-            node_run.stop_reason = payload.execution.message or "validator timeout"
-            node_run.waiting_for_role = None
-            run.status = RunStatus.NEEDS_ATTENTION.value
+            self._handle_retryable_failure(
+                run,
+                node_run,
+                actor_role=ActorRole.VALIDATOR,
+                validator_id=payload.actor.validator_id,
+                message=payload.execution.message or "validator timeout",
+                terminal_status=NodeRunStatus.TIMED_OUT,
+                waiting_status=NodeRunStatus.WAITING_VALIDATOR,
+                waiting_for_role="validator",
+            )
             return
 
         verdict = payload.verdict
@@ -326,9 +348,7 @@ class RuntimeCoordinator:
                 next_round,
                 workspace,
                 rework_brief=(
-                    payload.rework_brief.model_dump(mode="json")
-                    if payload.rework_brief
-                    else None
+                    payload.rework_brief.model_dump(mode="json") if payload.rework_brief else None
                 ),
             )
             return
@@ -345,6 +365,7 @@ class RuntimeCoordinator:
         expected = {validator.validator_id for validator in node.validators}
         if expected.issubset(validator_passes):
             node_run.status = NodeRunStatus.PASSED.value
+            node_run.stop_reason = None
             node_run.waiting_for_role = None
             self.run_service.activate_ready_nodes(run.id)
 
@@ -383,6 +404,39 @@ class RuntimeCoordinator:
             return sent_at
         return path.name
 
+    def _handle_retryable_failure(
+        self,
+        run: RunModel,
+        node_run: NodeRunModel,
+        *,
+        actor_role: ActorRole,
+        validator_id: str | None,
+        message: str,
+        terminal_status: NodeRunStatus,
+        waiting_status: NodeRunStatus,
+        waiting_for_role: str,
+    ) -> None:
+        delay = self.run_service.get_retry_delay_seconds(
+            run.id,
+            node_run.node_id,
+            node_run.round_no,
+            actor_role=actor_role,
+            validator_id=validator_id,
+        )
+        if delay is not None:
+            node_run.status = waiting_status.value
+            node_run.stop_reason = message
+            node_run.waiting_for_role = waiting_for_role
+            run.status = RunStatus.RUNNING.value
+            run.stop_reason = None
+            return
+
+        node_run.status = terminal_status.value
+        node_run.stop_reason = message
+        node_run.waiting_for_role = None
+        run.status = RunStatus.NEEDS_ATTENTION.value
+        run.stop_reason = message
+
     def _reconcile_executor_call_issue(
         self,
         run: RunModel,
@@ -395,6 +449,16 @@ class RuntimeCoordinator:
             return None
         status = call_meta.get("status")
         if status == "failed":
+            if (
+                self.run_service.count_retryable_failures(
+                    run.id,
+                    node_run.node_id,
+                    node_run.round_no,
+                    actor_role=ActorRole.EXECUTOR,
+                )
+                > 0
+            ):
+                return None
             message = str(call_meta.get("error_message") or "executor call failed")
             node_run.status = NodeRunStatus.FAILED.value
             node_run.waiting_for_role = None
@@ -425,6 +489,17 @@ class RuntimeCoordinator:
                 validator_id,
             )
             if existing is not None:
+                continue
+            if (
+                self.run_service.count_retryable_failures(
+                    run.id,
+                    node_run.node_id,
+                    node_run.round_no,
+                    actor_role=ActorRole.VALIDATOR,
+                    validator_id=validator_id,
+                )
+                > 0
+            ):
                 continue
             call_meta = validator_call.get("meta")
             if not isinstance(call_meta, dict):

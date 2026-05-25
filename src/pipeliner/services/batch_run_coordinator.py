@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import threading
 import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from pipeliner.config import Settings, get_settings
@@ -53,7 +53,9 @@ class BatchRunCoordinator:
         self._lock = threading.Lock()
         self._records: dict[str, BatchRecord] = {}
 
-    def start_batch(self, batch_id: str, run_drive_coordinator: RunDriveCoordinator) -> dict[str, Any]:
+    def start_batch(
+        self, batch_id: str, run_drive_coordinator: RunDriveCoordinator
+    ) -> dict[str, Any]:
         record = self._begin_batch(batch_id)
         thread = threading.Thread(
             target=self._run_in_thread,
@@ -154,7 +156,9 @@ class BatchRunCoordinator:
 
     def shutdown(self, timeout: float = 0.2) -> None:
         with self._lock:
-            threads = [record.thread for record in self._records.values() if record.thread is not None]
+            threads = [
+                record.thread for record in self._records.values() if record.thread is not None
+            ]
         for thread in threads:
             if thread and thread.is_alive():
                 thread.join(timeout=timeout)

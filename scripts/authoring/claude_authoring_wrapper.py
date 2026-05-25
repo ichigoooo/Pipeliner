@@ -30,7 +30,7 @@ def _parse_json_from_text(text: str) -> dict[str, Any]:
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end == -1 or end <= start:
-            raise ValueError("authoring output is not valid JSON")
+            raise ValueError("authoring output is not valid JSON") from None
         snippet = content[start : end + 1]
         try:
             return json.loads(snippet)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections import Counter
 import re
+from collections import Counter
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -137,7 +137,11 @@ class WorkflowInputFormSpec(BaseModel):
         if self.minimum is not None or self.maximum is not None:
             if self.input_type != "number":
                 raise ValueError("只有 number workflow input 支持 minimum / maximum")
-            if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+            if (
+                self.minimum is not None
+                and self.maximum is not None
+                and self.minimum > self.maximum
+            ):
                 raise ValueError("workflow input 的 minimum 不能大于 maximum")
 
         if self.min_length is not None or self.max_length is not None or self.pattern is not None:

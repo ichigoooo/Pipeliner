@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { api, SettingValue } from '@/lib/api';
 import { prettyJson } from '@/lib/format';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
+import { StudioPage, StudioPageHeader } from '@/components/ui/StudioPage';
 import { LanguageSelector } from './components/LanguageSelector';
 
 function SettingRow<T>({
@@ -31,7 +32,7 @@ function SettingRow<T>({
 
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="rounded-3xl border border-stone-200 bg-white p-5">
       <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">{title}</h2>
       <div className="mt-4 space-y-3">{children}</div>
     </section>
@@ -40,147 +41,177 @@ function SettingsSection({ title, children }: { title: string; children: React.R
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const settingsQuery = useQuery({
     queryKey: ['settings'],
     queryFn: api.getSettings,
   });
 
   const settings = settingsQuery.data?.settings;
-
-  if (!settings) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-stone-500">
-        {t('loading')}
-      </div>
-    );
-  }
+  const errorMessage =
+    settingsQuery.error instanceof Error ? settingsQuery.error.message : tc('error');
 
   return (
-    <div className="p-6 lg:p-8">
-      <div className="mb-8">
-        <div className="flex items-center gap-2">
-          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
-          <HelpTooltip content={t('description')} label={t('title')} />
-        </div>
-        <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('subtitle')}</h1>
-      </div>
+    <StudioPage>
+      <StudioPageHeader
+        eyebrow={t('title')}
+        title={t('subtitle')}
+        description={(
+          <span className="inline-flex items-center gap-2">
+            {t('description')}
+            <HelpTooltip content={t('description')} label={t('title')} />
+          </span>
+        )}
+      />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
-          <SettingsSection title={t('sections.commandTemplates')}>
-            <SettingRow label={t('labels.executor')} setting={settings.executor_command} />
-            <SettingRow label={t('labels.validator')} setting={settings.validator_command} />
-          </SettingsSection>
+      {settingsQuery.isError && !settings ? (
+        <section className="rounded-3xl border border-rose-200 bg-rose-50 p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
+            {tc('error')}
+          </p>
+          <p className="mt-3 text-sm leading-6 text-rose-900">{errorMessage}</p>
+          <button
+            type="button"
+            onClick={() => void settingsQuery.refetch()}
+            className="mt-4 rounded-full border border-rose-300 px-4 py-2 text-sm font-medium text-rose-900 transition hover:border-rose-400"
+          >
+            {tc('retry')}
+          </button>
+        </section>
+      ) : null}
 
-          <SettingsSection title={t('sections.storageDatabase')}>
-            <SettingRow label={t('labels.storageBackend')} setting={settings.storage.backend} />
-            <SettingRow label={t('labels.dataDir')} setting={settings.storage.data_dir} />
-            <SettingRow label={t('labels.runRoot')} setting={settings.storage.run_root} />
-            <SettingRow label={t('labels.databaseUrl')} setting={settings.database.url} />
-            <SettingRow label={t('labels.databasePath')} setting={settings.database.path} />
-          </SettingsSection>
+      {settingsQuery.isLoading && !settings ? (
+        <section className="rounded-3xl border border-stone-200 bg-white p-5">
+          <p className="text-sm text-stone-500">{t('loading')}</p>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={`settings-loading-${index}`}
+                className="h-24 animate-pulse rounded-3xl border border-stone-200 bg-stone-100"
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-          <SettingsSection title={t('sections.observability')}>
-            <SettingRow
-              label={t('labels.claudeTrace')}
-              help={t('labels.claudeTraceHint')}
-              setting={settings.observability.claude_trace_enabled}
-            />
-          </SettingsSection>
+      {settings ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            <SettingsSection title={t('sections.commandTemplates')}>
+              <SettingRow label={t('labels.executor')} setting={settings.executor_command} />
+              <SettingRow label={t('labels.validator')} setting={settings.validator_command} />
+            </SettingsSection>
 
-          <SettingsSection title={t('sections.runtimeGuards')}>
-            <SettingRow label={t('labels.defaultTimeout')} setting={settings.runtime_guards.default_timeout} />
-            <SettingRow
-              label={t('labels.maxReworkRounds')}
-              setting={settings.runtime_guards.default_max_rework_rounds}
-            />
-            <SettingRow
-              label={t('labels.blockedRequiresManual')}
-              setting={settings.runtime_guards.blocked_requires_manual}
-            />
-            <SettingRow
-              label={t('labels.failureRequiresManual')}
-              setting={settings.runtime_guards.failure_requires_manual}
-            />
-          </SettingsSection>
+            <SettingsSection title={t('sections.storageDatabase')}>
+              <SettingRow label={t('labels.storageBackend')} setting={settings.storage.backend} />
+              <SettingRow label={t('labels.dataDir')} setting={settings.storage.data_dir} />
+              <SettingRow label={t('labels.runRoot')} setting={settings.storage.run_root} />
+              <SettingRow label={t('labels.databaseUrl')} setting={settings.database.url} />
+              <SettingRow label={t('labels.databasePath')} setting={settings.database.path} />
+            </SettingsSection>
 
-          <SettingsSection title={t('language.title')}>
-            <LanguageSelector />
-          </SettingsSection>
-        </div>
+            <SettingsSection title={t('sections.observability')}>
+              <SettingRow
+                label={t('labels.claudeTrace')}
+                help={t('labels.claudeTraceHint')}
+                setting={settings.observability.claude_trace_enabled}
+              />
+            </SettingsSection>
 
-        <div className="space-y-4">
-          <SettingsSection title={t('sections.claudeDiagnostics')}>
-            <div className="space-y-3 text-sm text-stone-700">
-              <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeBaseUrl')}</p>
-                <p className="mt-2 break-all text-stone-900">{settings.claude_diagnostics?.base_url?.value}</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-400">
-                  {settings.claude_diagnostics?.base_url?.source}
-                </p>
-              </div>
-              <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeApiHost')}</p>
-                <p className="mt-2 break-all text-stone-900">{settings.claude_diagnostics?.api_host?.value}</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-400">
-                  {settings.claude_diagnostics?.api_host?.source}
-                </p>
-              </div>
-              <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
-                <div className="flex items-center gap-2">
-                  <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeProxy')}</p>
-                  <HelpTooltip
-                    content={t('labels.proxyMissingHint')}
-                    label={t('labels.claudeProxy')}
-                  />
-                </div>
-                <p className="mt-2 text-stone-900">
-                  {settings.claude_diagnostics?.proxy?.missing ? t('labels.proxyMissing') : t('labels.proxyPresent')}
-                </p>
-                {settings.claude_diagnostics?.proxy?.missing ? (
-                  <p className="mt-2 text-xs text-red-600">{t('labels.proxyMissing')}</p>
-                ) : (
-                  <p className="mt-2 text-xs text-stone-500">
-                    {t('labels.proxyKeys')}:{' '}
-                    {(settings.claude_diagnostics?.proxy?.effective_keys || []).join(', ')}
+            <SettingsSection title={t('sections.runtimeGuards')}>
+              <SettingRow label={t('labels.defaultTimeout')} setting={settings.runtime_guards.default_timeout} />
+              <SettingRow
+                label={t('labels.maxReworkRounds')}
+                setting={settings.runtime_guards.default_max_rework_rounds}
+              />
+              <SettingRow
+                label={t('labels.blockedRequiresManual')}
+                setting={settings.runtime_guards.blocked_requires_manual}
+              />
+              <SettingRow
+                label={t('labels.failureRequiresManual')}
+                setting={settings.runtime_guards.failure_requires_manual}
+              />
+            </SettingsSection>
+
+            <SettingsSection title={t('language.title')}>
+              <LanguageSelector />
+            </SettingsSection>
+          </div>
+
+          <div className="space-y-4">
+            <SettingsSection title={t('sections.claudeDiagnostics')}>
+              <div className="space-y-3 text-sm text-stone-700">
+                <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeBaseUrl')}</p>
+                  <p className="mt-2 break-all text-stone-900">{settings.claude_diagnostics?.base_url?.value}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-400">
+                    {settings.claude_diagnostics?.base_url?.source}
                   </p>
-                )}
+                </div>
+                <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeApiHost')}</p>
+                  <p className="mt-2 break-all text-stone-900">{settings.claude_diagnostics?.api_host?.value}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-400">
+                    {settings.claude_diagnostics?.api_host?.source}
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-4">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{t('labels.claudeProxy')}</p>
+                    <HelpTooltip
+                      content={t('labels.proxyMissingHint')}
+                      label={t('labels.claudeProxy')}
+                    />
+                  </div>
+                  <p className="mt-2 text-stone-900">
+                    {settings.claude_diagnostics?.proxy?.missing ? t('labels.proxyMissing') : t('labels.proxyPresent')}
+                  </p>
+                  {settings.claude_diagnostics?.proxy?.missing ? (
+                    <p className="mt-2 text-xs text-red-600">{t('labels.proxyMissing')}</p>
+                  ) : (
+                    <p className="mt-2 text-xs text-stone-500">
+                      {t('labels.proxyKeys')}:{' '}
+                      {(settings.claude_diagnostics?.proxy?.effective_keys || []).join(', ')}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          </SettingsSection>
-          <SettingsSection title={t('sections.providerBindings')}>
-            {settings.providers.map((provider) => (
-              <div key={`${provider.provider}-${provider.role}`} className="rounded-3xl bg-stone-50 p-4 text-sm">
-                <p className="font-medium text-stone-900">
-                  {provider.provider} / {provider.role}
-                </p>
-                <p className="mt-2 break-all text-stone-600">{provider.command_template.value}</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-500">
-                  {provider.command_template.source}
-                </p>
-              </div>
-            ))}
-          </SettingsSection>
+            </SettingsSection>
+            <SettingsSection title={t('sections.providerBindings')}>
+              {settings.providers.map((provider) => (
+                <div key={`${provider.provider}-${provider.role}`} className="rounded-3xl bg-stone-50 p-4 text-sm">
+                  <p className="font-medium text-stone-900">
+                    {provider.provider} / {provider.role}
+                  </p>
+                  <p className="mt-2 break-all text-stone-600">{provider.command_template.value}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-500">
+                    {provider.command_template.source}
+                  </p>
+                </div>
+              ))}
+            </SettingsSection>
 
-          <SettingsSection title={t('sections.observedSkills')}>
-            {settings.skills.map((skill) => (
-              <div key={skill.skill} className="rounded-3xl border border-stone-200 px-4 py-3 text-sm">
-                <p className="font-medium text-stone-900">{skill.skill}</p>
-                <p className="mt-2 text-stone-600">{skill.used_by.join(', ')}</p>
-              </div>
-            ))}
-          </SettingsSection>
+            <SettingsSection title={t('sections.observedSkills')}>
+              {settings.skills.map((skill) => (
+                <div key={skill.skill} className="rounded-3xl border border-stone-200 px-4 py-3 text-sm">
+                  <p className="font-medium text-stone-900">{skill.skill}</p>
+                  <p className="mt-2 text-stone-600">{skill.used_by.join(', ')}</p>
+                </div>
+              ))}
+            </SettingsSection>
 
-          <section className="rounded-[2rem] border border-stone-200 bg-stone-950 p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-400">
-              {t('sections.rawSnapshot')}
-            </h2>
-            <pre className="mt-4 overflow-auto text-xs leading-6 text-stone-100">
-              {prettyJson(settings)}
-            </pre>
-          </section>
+            <section className="rounded-3xl border border-stone-200 bg-stone-950 p-5">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-stone-400">
+                {t('sections.rawSnapshot')}
+              </h2>
+              <pre className="mt-4 overflow-auto text-xs leading-6 text-stone-100">
+                {prettyJson(settings)}
+              </pre>
+            </section>
+          </div>
         </div>
-      </div>
-    </div>
+      ) : null}
+    </StudioPage>
   );
 }

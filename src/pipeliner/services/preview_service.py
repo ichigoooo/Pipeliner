@@ -91,7 +91,9 @@ class PreviewService:
             raise ValidationError("artifact 必须位于当前 run workspace 下")
         return resolved
 
-    def _resolve_artifact_path(self, run_id: str, artifact_id: str, version: str) -> tuple[Any, Any, Path]:
+    def _resolve_artifact_path(
+        self, run_id: str, artifact_id: str, version: str
+    ) -> tuple[Any, Any, Path]:
         run = self.run_repo.get_run(run_id)
         if run is None:
             raise NotFoundError(f"未找到 run: {run_id}")

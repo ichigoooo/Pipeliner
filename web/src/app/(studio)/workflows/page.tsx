@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
+import { StudioPage, StudioPageHeader } from '@/components/ui/StudioPage';
 
 const MAX_PREVIEW_LENGTH = 120;
 
@@ -49,24 +50,27 @@ export default function WorkflowsPage() {
   const workflows = workflowsQuery.data?.workflows ?? [];
 
   return (
-    <div className="p-6 lg:p-8">
-      <div className="mb-8 flex items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('title')}</p>
+    <StudioPage>
+      <StudioPageHeader
+        eyebrow={t('title')}
+        title={t('list')}
+        description={(
+          <span className="inline-flex items-center gap-2">
+            {t('description')}
             <HelpTooltip content={t('description')} label={t('title')} />
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold text-stone-900">{t('list')}</h1>
-        </div>
-        <Link
-          href="/authoring"
-          className="rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
-        >
-          {tc('open')}
-        </Link>
-      </div>
+          </span>
+        )}
+        actions={(
+          <Link
+            href="/authoring"
+            className="rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
+          >
+            {tc('open')}
+          </Link>
+        )}
+      />
 
-      <div className="overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white">
         <table className="min-w-full divide-y divide-stone-200">
           <thead className="bg-stone-50">
             <tr className="text-left text-xs uppercase tracking-[0.22em] text-stone-500">
@@ -112,6 +116,6 @@ export default function WorkflowsPage() {
           </tbody>
         </table>
       </div>
-    </div>
+    </StudioPage>
   );
 }

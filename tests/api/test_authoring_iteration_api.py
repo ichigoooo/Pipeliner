@@ -33,7 +33,9 @@ def _valid_authoring_spec(version: str = "v1.0.0") -> dict:
                     }
                 ],
                 "executor": {"skill": "draft-wechat-article"},
-                "validators": [{"validator_id": "content-review", "skill": "review-wechat-article"}],
+                "validators": [
+                    {"validator_id": "content-review", "skill": "review-wechat-article"}
+                ],
                 "acceptance": {
                     "done_means": "Produce a coherent draft",
                     "pass_condition": ["Clear structure"],
@@ -62,9 +64,7 @@ def test_iteration_from_version_and_run(client: TestClient) -> None:
     payload = from_version.json()
     assert payload["source"]["type"] == "workflow_version"
     project_root = client.app.state.settings.projects_root / "iteration_flow"
-    assert (
-        project_root / ".claude" / "skills" / "draft-wechat-article" / "SKILL.md"
-    ).exists()
+    assert (project_root / ".claude" / "skills" / "draft-wechat-article" / "SKILL.md").exists()
     assert (
         project_root
         / ".claude"
@@ -76,7 +76,12 @@ def test_iteration_from_version_and_run(client: TestClient) -> None:
 
     run_response = client.post(
         "/api/runs",
-        json={"workflow_id": "iteration_flow", "version": "v1.0.0", "inputs": {}, "auto_drive": False},
+        json={
+            "workflow_id": "iteration_flow",
+            "version": "v1.0.0",
+            "inputs": {},
+            "auto_drive": False,
+        },
     )
     assert run_response.status_code == 200
     run_id = run_response.json()["run_id"]
@@ -97,6 +102,4 @@ def test_iteration_from_version_and_run(client: TestClient) -> None:
     run_payload = from_run.json()
     assert run_payload["source"]["type"] == "attention_run"
     assert run_payload["source"]["payload"]["run_id"] == run_id
-    assert (
-        project_root / ".claude" / "skills" / "draft-wechat-article" / "SKILL.md"
-    ).exists()
+    assert (project_root / ".claude" / "skills" / "draft-wechat-article" / "SKILL.md").exists()

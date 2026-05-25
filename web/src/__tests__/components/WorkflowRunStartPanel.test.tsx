@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import { NextIntlClientProvider } from 'next-intl';
 import { WorkflowRunStartPanel } from '@/components/workflow/WorkflowRunStartPanel';
 import enMessages from '@/i18n/messages/en.json';
+import type { WorkflowInputDescriptor } from '@/lib/workflow-inputs';
 
 const renderWithI18n = (ui: React.ReactElement) =>
   render(
@@ -131,7 +132,7 @@ describe('WorkflowRunStartPanel', () => {
             max_length: null,
             pattern: null,
             source: 'explicit',
-          } as any,
+          } as unknown as WorkflowInputDescriptor,
         ]}
         error={null}
         isSubmitting={false}

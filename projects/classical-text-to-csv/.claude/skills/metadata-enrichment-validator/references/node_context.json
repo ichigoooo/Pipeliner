@@ -1,0 +1,170 @@
+{
+  "workflow": {
+    "workflow_id": "classical-text-to-csv",
+    "title": "古籍文本整理自动工作流",
+    "version": "0.7.0"
+  },
+  "skill": {
+    "name": "metadata-enrichment-validator",
+    "role": "validator",
+    "validator_id": "metadata-enrichment-check"
+  },
+  "node_id": "chapter_metadata_enrichment",
+  "node_spec": {
+    "node_id": "chapter_metadata_enrichment",
+    "title": "篇章元数据丰富",
+    "purpose": "对分段后的篇章文档进行元数据丰富处理，包括篇章类型识别、创作年份提取、译文生成、注释识别和解析撰写，为 CSV 生成准备完整的元数据字段。译文和解析必须是真实、准确、有效的内容，严禁使用任何占位文本（如「【译文】第 xx 段」等格式）",
+    "archetype": "analyze-structure",
+    "depends_on": [
+      "chapter_batch_segmentation",
+      "chapter_structure_finalize"
+    ],
+    "inputs": [
+      {
+        "name": "segmented_chapters_dir",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "chapter_batch_segmentation",
+          "output": "segmented_chapters_dir"
+        },
+        "shape": "directory",
+        "required": true,
+        "summary": "语义分段后的篇章文档目录"
+      },
+      {
+        "name": "chapters_structure",
+        "from": {
+          "kind": "node_output",
+          "name": null,
+          "node_id": "chapter_structure_finalize",
+          "output": "chapters_structure"
+        },
+        "shape": "structured_data",
+        "required": true,
+        "summary": "篇章结构信息，包含篇章标题"
+      },
+      {
+        "name": "work_title",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_title",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": true,
+        "summary": "著作标题"
+      },
+      {
+        "name": "author",
+        "from": {
+          "kind": "workflow_input",
+          "name": "author",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "作者"
+      },
+      {
+        "name": "work_type",
+        "from": {
+          "kind": "workflow_input",
+          "name": "work_type",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "著作类型"
+      },
+      {
+        "name": "category",
+        "from": {
+          "kind": "workflow_input",
+          "name": "category",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "内容分类"
+      },
+      {
+        "name": "era",
+        "from": {
+          "kind": "workflow_input",
+          "name": "era",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "朝代"
+      },
+      {
+        "name": "description",
+        "from": {
+          "kind": "workflow_input",
+          "name": "description",
+          "node_id": null,
+          "output": null
+        },
+        "shape": "string",
+        "required": false,
+        "summary": "著作简介"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "enriched_chapters_dir",
+        "shape": "directory",
+        "summary": "元数据丰富后的篇章文档目录，每篇章包含完整的元数据（篇章类型、创作年份、真实译文、注释、实质性解析）"
+      },
+      {
+        "name": "metadata_enrichment_manifest",
+        "shape": "structured_data",
+        "summary": "元数据丰富处理清单，记录每个篇章的处理结果"
+      }
+    ],
+    "executor": {
+      "skill": "chapter-metadata-enrichment"
+    },
+    "validators": [
+      {
+        "validator_id": "metadata-enrichment-check",
+        "skill": "metadata-enrichment-validator"
+      },
+      {
+        "validator_id": "metadata-completeness-check",
+        "skill": "metadata-completeness-validator"
+      }
+    ],
+    "acceptance": {
+      "done_means": "已对所有篇章文档完成元数据丰富，译文和解析均为真实有效内容，无占位文本",
+      "pass_condition": [
+        "每篇章已识别篇章类型（诗/词/文/赋/论）",
+        "每篇章已提取或估算创作年份",
+        "每段落已生成真实的现代汉语译文，严禁使用「【译文】第 xx 段」等占位文本",
+        "诗词类每段落译文不得为空字符串",
+        "每段落的译文内容不得与原文段落内容完全相同（即未翻译）",
+        "每篇章已撰写实质性解析内容（不得为空，不得为占位文本，至少 100 字）",
+        "每段落已识别注释（词语:解释格式）或留空字符串",
+        "名句和背景字段已留空",
+        "所有篇章文档都已处理完成"
+      ]
+    },
+    "gate": {
+      "mode": "all_validators_pass"
+    },
+    "handoff": {
+      "outputs": [
+        "enriched_chapters_dir",
+        "metadata_enrichment_manifest"
+      ]
+    }
+  },
+  "updated_at": "2026-03-27T10:31:01.503227+00:00"
+}

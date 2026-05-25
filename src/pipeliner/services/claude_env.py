@@ -85,7 +85,9 @@ def resolve_claude_api_host_with_source(
     return host, "derived" if source != "default" else "default"
 
 
-def preflight_claude_host(host: str, trace_recorder: ExecutionTraceRecorder | None = None) -> str | None:
+def preflight_claude_host(
+    host: str, trace_recorder: ExecutionTraceRecorder | None = None
+) -> str | None:
     try:
         socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
         return None
@@ -269,16 +271,16 @@ def _build_shell_env_command(shell: str) -> list[str]:
     if name == "zsh":
         command = (
             "set -a; "
-            "[ -f \"$HOME/.zprofile\" ] && source \"$HOME/.zprofile\"; "
-            "[ -f \"$HOME/.zshrc\" ] && source \"$HOME/.zshrc\"; "
+            '[ -f "$HOME/.zprofile" ] && source "$HOME/.zprofile"; '
+            '[ -f "$HOME/.zshrc" ] && source "$HOME/.zshrc"; '
             "env"
         )
         return [shell, "-lc", command]
     if name == "bash":
         command = (
             "set -a; "
-            "[ -f \"$HOME/.bash_profile\" ] && source \"$HOME/.bash_profile\"; "
-            "[ -f \"$HOME/.bashrc\" ] && source \"$HOME/.bashrc\"; "
+            '[ -f "$HOME/.bash_profile" ] && source "$HOME/.bash_profile"; '
+            '[ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"; '
             "env"
         )
         return [shell, "-lc", command]
@@ -349,7 +351,12 @@ def _load_settings_env(allowlist: Iterable[str]) -> dict[str, str]:
     parsed: dict[str, str] = {}
     rules = list(allowlist)
     for key, value in raw_env.items():
-        if isinstance(key, str) and isinstance(value, str) and value and _is_allowed_env(key, rules):
+        if (
+            isinstance(key, str)
+            and isinstance(value, str)
+            and value
+            and _is_allowed_env(key, rules)
+        ):
             parsed[key] = value
     return parsed
 

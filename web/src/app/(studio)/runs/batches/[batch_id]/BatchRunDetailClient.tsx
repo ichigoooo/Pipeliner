@@ -5,6 +5,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AdaptiveButtonLabel } from '@/components/ui/AdaptiveButtonLabel';
+import { StudioPage, StudioPageHeader } from '@/components/ui/StudioPage';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api } from '@/lib/api';
 import { formatTimestamp, prettyJson } from '@/lib/format';
@@ -67,7 +68,7 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
   }
 
   return (
-    <div className="p-6 lg:p-8">
+    <StudioPage>
       <Link
         href="/runs"
         className="text-sm font-medium text-stone-500 transition hover:text-stone-900"
@@ -75,19 +76,18 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
         ← {tRuns('backToRuns')}
       </Link>
 
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('details')}</p>
-          <h1 className="mt-3 text-3xl font-semibold text-stone-900">{batch.batch_id}</h1>
-          <p className="mt-3 text-sm leading-6 text-stone-600">
+      <StudioPageHeader
+        className="mt-4"
+        eyebrow={t('details')}
+        title={batch.batch_id}
+        description={(
+          <span>
             {batch.workflow_id} · {t('version')} {batch.version}
-          </p>
-          {ACTIVE_BATCH_STATUSES.has(batch.status) ? (
-            <p className="mt-2 text-xs text-stone-500">{t('autoRefresh')}</p>
-          ) : null}
-        </div>
-        <StatusBadge value={batch.status} />
-      </div>
+            {ACTIVE_BATCH_STATUSES.has(batch.status) ? ` · ${t('autoRefresh')}` : ''}
+          </span>
+        )}
+        actions={<StatusBadge value={batch.status} />}
+      />
 
       <div className="mt-8 grid gap-4 md:grid-cols-4">
         <SummaryCard label={t('total')} value={String(batch.total_count)} />
@@ -96,7 +96,7 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
         <SummaryCard label={t('status')} value={batch.status} />
       </div>
 
-      <div className="mt-6 grid gap-4 rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm lg:grid-cols-2">
+      <div className="mt-6 grid gap-4 rounded-3xl border border-stone-200 bg-white p-5 lg:grid-cols-2">
         <MetaRow label={t('created')} value={formatTimestamp(batch.created_at)} />
         <MetaRow label={t('updated')} value={formatTimestamp(batch.updated_at)} />
         <MetaRow label={t('started')} value={formatTimestamp(batch.started_at)} />
@@ -119,7 +119,7 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
         </p>
       ) : null}
 
-      <div className="mt-8 overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
+      <div className="mt-8 overflow-hidden rounded-3xl border border-stone-200 bg-white">
         <table className="min-w-full divide-y divide-stone-200">
           <thead className="bg-stone-50">
             <tr className="text-left text-xs uppercase tracking-[0.22em] text-stone-500">
@@ -183,13 +183,13 @@ export function BatchRunDetailClient({ batchId }: { batchId: string }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </StudioPage>
   );
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm">
+    <div className="rounded-3xl border border-stone-200 bg-white p-5">
       <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{label}</p>
       <p className="mt-3 text-3xl font-semibold text-stone-900">{value}</p>
     </div>

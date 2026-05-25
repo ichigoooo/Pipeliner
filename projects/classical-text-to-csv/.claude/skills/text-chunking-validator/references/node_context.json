@@ -2,7 +2,7 @@
   "workflow": {
     "workflow_id": "classical-text-to-csv",
     "title": "古籍文本整理自动工作流",
-    "version": "0.5.2"
+    "version": "0.7.0"
   },
   "skill": {
     "name": "text-chunking-validator",
@@ -86,5 +86,5 @@
       ]
     }
   },
-  "updated_at": "2026-03-20T07:51:46.574860+00:00"
+  "updated_at": "2026-03-27T10:31:01.499888+00:00"
 }

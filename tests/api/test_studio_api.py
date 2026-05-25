@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from pipeliner.persistence.repositories import RunRepository
+from pipeliner.services.run_service import AUTO_RETRY_DELAYS_SECONDS
 
 
 def _register_workflow(client: TestClient, workflow_fixture: dict) -> None:
@@ -53,15 +54,15 @@ def test_workflow_and_run_studio_endpoints(client: TestClient, workflow_fixture:
     assert overview_response.json()["current_focus"]["node_id"] == "draft_article"
     assert overview_response.json()["activity"]
 
-    round_response = client.get(
-        f"/api/runs/{run['run_id']}/debug/nodes/draft_article/rounds/1"
-    )
+    round_response = client.get(f"/api/runs/{run['run_id']}/debug/nodes/draft_article/rounds/1")
     assert round_response.status_code == 200
     assert round_response.json()["context"]["node"]["node_id"] == "draft_article"
     assert round_response.json()["log_refs"]
 
 
-def test_run_creation_validates_typed_workflow_inputs(client: TestClient, workflow_fixture: dict) -> None:
+def test_run_creation_validates_typed_workflow_inputs(
+    client: TestClient, workflow_fixture: dict
+) -> None:
     workflow_fixture["inputs"][0]["form"] = {
         "type": "enum",
         "options": ["science", "history"],
@@ -82,7 +83,9 @@ def test_run_creation_validates_typed_workflow_inputs(client: TestClient, workfl
     assert "必须是以下值之一" in response.json()["detail"]
 
 
-def test_run_creation_accepts_manual_file_path_inputs(client: TestClient, workflow_fixture: dict) -> None:
+def test_run_creation_accepts_manual_file_path_inputs(
+    client: TestClient, workflow_fixture: dict
+) -> None:
     workflow_fixture["inputs"][0] = {
         "name": "source_file",
         "shape": "file",
@@ -122,11 +125,12 @@ def test_attention_retry_and_settings_snapshot(
     _register_workflow(client, workflow_fixture)
     run = _start_run(client)
 
-    dispatch_response = client.post(
-        f"/api/runs/{run['run_id']}/nodes/draft_article/executor/dispatch",
-        json={"command_template": "definitely_not_existing_command"},
-    )
-    assert dispatch_response.status_code == 200
+    for _ in range(len(AUTO_RETRY_DELAYS_SECONDS) + 1):
+        dispatch_response = client.post(
+            f"/api/runs/{run['run_id']}/nodes/draft_article/executor/dispatch",
+            json={"command_template": "definitely_not_existing_command"},
+        )
+        assert dispatch_response.status_code == 200
 
     attention_response = client.get("/api/runs/attention")
     assert attention_response.status_code == 200

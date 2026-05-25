@@ -29,9 +29,6 @@ from pipeliner.protocols.callback import (
 from pipeliner.protocols.workflow import NodeValidatorSpec, WorkflowNodeSpec
 from pipeliner.runtime import RuntimeCoordinator
 from pipeliner.runtime.guards import parse_duration
-from pipeliner.services.errors import ConflictError, InvalidStateError, NotFoundError
-from pipeliner.services.project_initializer import ProjectInitializer
-from pipeliner.services.run_service import RunService
 from pipeliner.services.claude_call import ClaudeCallStore, run_streamed_command
 from pipeliner.services.claude_env import (
     build_claude_env,
@@ -40,7 +37,10 @@ from pipeliner.services.claude_env import (
     preflight_claude_host,
     resolve_claude_api_host,
 )
+from pipeliner.services.errors import ConflictError, InvalidStateError, NotFoundError
 from pipeliner.services.execution_trace import ExecutionTraceRecorder
+from pipeliner.services.project_initializer import ProjectInitializer
+from pipeliner.services.run_service import RunService
 from pipeliner.types import ExecutionStatus, NodeRunStatus, VerdictStatus
 
 
@@ -104,7 +104,7 @@ class ClaudeValidatorDispatcher:
             raise InvalidStateError(
                 f"节点 {node_id} round {node_run.round_no} 当前不是 waiting_validator，无法调度"
             )
-        existing = self.callback_repo.get_validator_round_event(
+        existing = self.run_service.get_validator_completed_event(
             run.id,
             node_id,
             node_run.round_no,
@@ -227,6 +227,7 @@ class ClaudeValidatorDispatcher:
                     node_id=node.node_id,
                     round_no=node_run.round_no,
                     validator_id=validator.validator_id,
+                    execution_status=ExecutionStatus.FAILED,
                     message=preflight_error,
                 )
                 result = self.runtime.submit_callback(payload)
@@ -283,6 +284,9 @@ class ClaudeValidatorDispatcher:
                 node_id=node.node_id,
                 round_no=node_run.round_no,
                 validator_id=validator.validator_id,
+                execution_status=(
+                    ExecutionStatus.TIMEOUT if result.timed_out else ExecutionStatus.FAILED
+                ),
                 message=failure_message,
             )
             result = self.runtime.submit_callback(payload)
@@ -297,6 +301,7 @@ class ClaudeValidatorDispatcher:
                 node_id=node.node_id,
                 round_no=node_run.round_no,
                 validator_id=validator.validator_id,
+                execution_status=ExecutionStatus.FAILED,
                 message=f"validator 未生成结果文件: {result_path}",
             )
             result = self.runtime.submit_callback(payload)
@@ -317,7 +322,9 @@ class ClaudeValidatorDispatcher:
             )
             trace_recorder.log(
                 "validator_result_loaded",
-                verdict_status=callback_payload.verdict.status.value if callback_payload.verdict else None,
+                verdict_status=callback_payload.verdict.status.value
+                if callback_payload.verdict
+                else None,
             )
         except (PydanticValidationError, ValueError) as exc:
             trace_recorder.log("validator_result_invalid", error=str(exc))
@@ -326,6 +333,7 @@ class ClaudeValidatorDispatcher:
                 node_id=node.node_id,
                 round_no=node_run.round_no,
                 validator_id=validator.validator_id,
+                execution_status=ExecutionStatus.FAILED,
                 message=f"validator 结果文件无效: {exc}",
             )
             result = self.runtime.submit_callback(payload)
@@ -348,9 +356,7 @@ class ClaudeValidatorDispatcher:
             "validator_id": validator.validator_id,
             "round_no": node_run.round_no,
             "status": (
-                callback_payload.verdict.status.value
-                if callback_payload.verdict
-                else "completed"
+                callback_payload.verdict.status.value if callback_payload.verdict else "completed"
             ),
             "event_id": callback_payload.event_id,
             "claude_call_id": call_session.call_id,
@@ -359,7 +365,9 @@ class ClaudeValidatorDispatcher:
 
     def _first_byte_timeout_seconds(self, spec) -> float | None:
         try:
-            return parse_duration(spec.runtime_guards_or_default().first_byte_timeout).total_seconds()
+            return parse_duration(
+                spec.runtime_guards_or_default().first_byte_timeout
+            ).total_seconds()
         except Exception:
             return None
 
@@ -412,6 +420,7 @@ class ClaudeValidatorDispatcher:
         node_id: str,
         round_no: int,
         validator_id: str,
+        execution_status: ExecutionStatus,
         message: str,
     ) -> NodeCallbackPayload:
         return NodeCallbackPayload(
@@ -421,8 +430,7 @@ class ClaudeValidatorDispatcher:
             node_id=node_id,
             round_no=round_no,
             actor={"role": "validator", "validator_id": validator_id},
-            execution=CallbackExecution(status=ExecutionStatus.FAILED, message=message),
-            verdict={"status": "blocked", "summary": message, "target_artifacts": []},
+            execution=CallbackExecution(status=execution_status, message=message),
         )
 
     def _build_command(

@@ -5,7 +5,7 @@ import re
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SKILL_NAME_MIN_LEN = 1
 SKILL_NAME_MAX_LEN = 64
-# 注意：新增系统级 skill 时需同步更新该列表。 
+# 注意：新增系统级 skill 时需同步更新该列表。
 RESERVED_SKILL_NAMES = frozenset(
     {
         "workflow-authoring",

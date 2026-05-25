@@ -28,7 +28,9 @@ def _wait_for_batch(client: TestClient, batch_id: str, timeout: float = 2.0) -> 
     raise AssertionError(f"batch {batch_id} did not reach a terminal state")
 
 
-def test_batch_run_template_and_detail(client: TestClient, workflow_fixture: dict, monkeypatch) -> None:
+def test_batch_run_template_and_detail(
+    client: TestClient, workflow_fixture: dict, monkeypatch
+) -> None:
     _register_workflow(client, workflow_fixture)
 
     monkeypatch.setattr(
@@ -42,7 +44,9 @@ def test_batch_run_template_and_detail(client: TestClient, workflow_fixture: dic
         lambda run_id: ("completed", None),
     )
 
-    template_response = client.get("/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv")
+    template_response = client.get(
+        "/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv"
+    )
     assert template_response.status_code == 200
     template_lines = template_response.text.strip().splitlines()
     assert template_lines[0] == "topic"
@@ -136,7 +140,9 @@ def test_batch_detail_marks_deleted_run_history(
         lambda run_id: ("completed", None),
     )
 
-    template_response = client.get("/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv")
+    template_response = client.get(
+        "/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv"
+    )
     template_lines = template_response.text.strip().splitlines()
 
     create_response = client.post(
@@ -190,7 +196,9 @@ def test_delete_completed_batch_removes_batch_and_child_runs(
         lambda run_id: ("completed", None),
     )
 
-    template_response = client.get("/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv")
+    template_response = client.get(
+        "/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv"
+    )
     template_lines = template_response.text.strip().splitlines()
 
     create_response = client.post(
@@ -248,7 +256,9 @@ def test_bulk_delete_batches_removes_multiple_completed_batches(
         lambda run_id: ("completed", None),
     )
 
-    template_response = client.get("/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv")
+    template_response = client.get(
+        "/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv"
+    )
     template_lines = template_response.text.strip().splitlines()
 
     batch_ids: list[str] = []
@@ -309,7 +319,9 @@ def test_delete_running_batch_is_rejected(
         lambda run_id: ("completed", None),
     )
 
-    template_response = client.get("/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv")
+    template_response = client.get(
+        "/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv"
+    )
     template_lines = template_response.text.strip().splitlines()
 
     create_response = client.post(
@@ -337,7 +349,9 @@ def test_batch_list_does_not_reconcile_on_read(
 ) -> None:
     _register_workflow(client, workflow_fixture)
 
-    template_response = client.get("/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv")
+    template_response = client.get(
+        "/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv"
+    )
     template_lines = template_response.text.strip().splitlines()
 
     create_response = client.post(
@@ -372,7 +386,9 @@ def test_batch_detail_does_not_reconcile_on_read(
 ) -> None:
     _register_workflow(client, workflow_fixture)
 
-    template_response = client.get("/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv")
+    template_response = client.get(
+        "/api/workflows/mvp-review-loop/versions/0.1.0/inputs/template.csv"
+    )
     template_lines = template_response.text.strip().splitlines()
 
     create_response = client.post(

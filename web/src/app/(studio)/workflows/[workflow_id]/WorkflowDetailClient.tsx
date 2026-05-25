@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/format';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { StudioPage, StudioPageHeader } from '@/components/ui/StudioPage';
 
 export function WorkflowDetailClient({ workflowId }: { workflowId: string }) {
   const t = useTranslations('workflows');
@@ -18,26 +19,28 @@ export function WorkflowDetailClient({ workflowId }: { workflowId: string }) {
   const versions = versionsQuery.data?.versions ?? [];
 
   return (
-    <div className="p-6 lg:p-8">
+    <StudioPage>
       <Link href="/workflows" className="text-sm font-medium text-stone-500 transition hover:text-stone-900">
         ← {t('backToWorkflows')}
       </Link>
-      <div className="mt-4 flex items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-xs uppercase tracking-[0.26em] text-stone-500">{t('versions')}</p>
+      <StudioPageHeader
+        className="mt-4"
+        eyebrow={t('versions')}
+        title={workflowId}
+        description={(
+          <span className="inline-flex items-center gap-2">
+            {t('selectVersionHint')}
             <HelpTooltip content={t('selectVersionHint')} label={t('versions')} />
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold text-stone-900">{workflowId}</h1>
-        </div>
-      </div>
+          </span>
+        )}
+      />
 
-      <div className="mt-8 grid gap-4">
+      <div className="grid gap-3">
         {versions.map((version) => (
           <Link
             key={version.version}
             href={`/workflows/${workflowId}/${version.version}`}
-            className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm transition hover:border-amber-500 hover:shadow-md"
+            className="rounded-3xl border border-stone-200 bg-white p-5 transition hover:border-amber-500 hover:bg-stone-50"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -58,6 +61,6 @@ export function WorkflowDetailClient({ workflowId }: { workflowId: string }) {
           </Link>
         ))}
       </div>
-    </div>
+    </StudioPage>
   );
 }

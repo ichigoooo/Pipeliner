@@ -15,8 +15,7 @@ def _publish_artifact(
     content,
 ) -> None:
     artifact_rel = (
-        f"{run_info['workspace_root']}/artifacts/"
-        f"{artifact_id}@{version}/payload/{artifact_id}.md"
+        f"{run_info['workspace_root']}/artifacts/{artifact_id}@{version}/payload/{artifact_id}.md"
     )
     artifact_path = settings.data_dir / artifact_rel
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,9 +85,7 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
             "round_no": 1,
             "actor": {"role": "executor"},
             "execution": {"status": "completed"},
-            "submission": {
-                "artifacts": [{"artifact_id": "article_draft", "version": "v1"}]
-            },
+            "submission": {"artifacts": [{"artifact_id": "article_draft", "version": "v1"}]},
         },
     )
     assert exec_round_1.status_code == 200
@@ -127,9 +124,7 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
     run_after_revise = client.get(f"/api/runs/{run_info['run_id']}")
     assert run_after_revise.status_code == 200
     draft_rounds = [
-        node
-        for node in run_after_revise.json()["nodes"]
-        if node["node_id"] == "draft_article"
+        node for node in run_after_revise.json()["nodes"] if node["node_id"] == "draft_article"
     ]
     assert {item["round_no"] for item in draft_rounds} == {1, 2}
     assert any(item["status"] == "waiting_executor" for item in draft_rounds)
@@ -156,9 +151,7 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
             "round_no": 2,
             "actor": {"role": "executor"},
             "execution": {"status": "completed"},
-            "submission": {
-                "artifacts": [{"artifact_id": "article_draft", "version": "v2"}]
-            },
+            "submission": {"artifacts": [{"artifact_id": "article_draft", "version": "v2"}]},
         },
     )
     assert exec_round_2.status_code == 200
@@ -186,8 +179,7 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
     detail_after_pass = client.get(f"/api/runs/{run_info['run_id']}")
     assert detail_after_pass.status_code == 200
     assert any(
-        node["node_id"] == "final_review"
-        and node["status"] == "waiting_executor"
+        node["node_id"] == "final_review" and node["status"] == "waiting_executor"
         for node in detail_after_pass.json()["nodes"]
     )
 
@@ -213,9 +205,7 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
             "round_no": 1,
             "actor": {"role": "executor"},
             "execution": {"status": "completed"},
-            "submission": {
-                "artifacts": [{"artifact_id": "approved_article", "version": "v1"}]
-            },
+            "submission": {"artifacts": [{"artifact_id": "approved_article", "version": "v1"}]},
         },
     )
     assert final_exec.status_code == 200
@@ -244,8 +234,7 @@ def test_mvp_e2e_review_loop_hits_revise_then_blocked(
     assert final_detail.status_code == 200
     assert final_detail.json()["run"]["status"] == "needs_attention"
     assert any(
-        node["node_id"] == "final_review"
-        and node["status"] == "blocked"
+        node["node_id"] == "final_review" and node["status"] == "blocked"
         for node in final_detail.json()["nodes"]
     )
 
@@ -296,9 +285,7 @@ def test_revise_round_limit_uses_global_floor_when_workflow_sets_lower_value(
                 "round_no": round_no,
                 "actor": {"role": "executor"},
                 "execution": {"status": "completed"},
-                "submission": {
-                    "artifacts": [{"artifact_id": "article_draft", "version": version}]
-                },
+                "submission": {"artifacts": [{"artifact_id": "article_draft", "version": version}]},
             },
         )
         assert executor_response.status_code == 200
@@ -337,9 +324,7 @@ def test_revise_round_limit_uses_global_floor_when_workflow_sets_lower_value(
     detail_response = client.get(f"/api/runs/{run_info['run_id']}")
     assert detail_response.status_code == 200
     rounds = [
-        node
-        for node in detail_response.json()["nodes"]
-        if node["node_id"] == "draft_article"
+        node for node in detail_response.json()["nodes"] if node["node_id"] == "draft_article"
     ]
     assert any(item["round_no"] == 4 and item["status"] == "waiting_executor" for item in rounds)
     assert not any(item["round_no"] == 3 and item["status"] == "rework_limit" for item in rounds)

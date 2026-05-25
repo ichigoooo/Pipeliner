@@ -21,7 +21,9 @@ from pipeliner.services.claude_call import ClaudeCallStore
 from pipeliner.services.errors import InvalidStateError, NotFoundError, ValidationError
 from pipeliner.services.workflow_service import WorkflowService
 from pipeliner.storage.local_fs import RunWorkspace, WorkspaceManager
-from pipeliner.types import NodeRunStatus, RunStatus
+from pipeliner.types import ActorRole, ExecutionStatus, NodeRunStatus, RunStatus
+
+AUTO_RETRY_DELAYS_SECONDS = (1, 3, 10)
 
 
 class RunService:
@@ -133,8 +135,7 @@ class RunService:
             run.status = RunStatus.NEEDS_ATTENTION.value
             return run
         if latest and all(
-            latest.get(node.node_id)
-            and latest[node.node_id].status == NodeRunStatus.PASSED.value
+            latest.get(node.node_id) and latest[node.node_id].status == NodeRunStatus.PASSED.value
             for node in spec.nodes
         ):
             run.status = RunStatus.COMPLETED.value
@@ -270,7 +271,9 @@ class RunService:
         ]
         latest = self.run_repo.list_latest_node_runs(run_id)
         call_map = {
-            (item.node_id, item.round_no): self._read_round_claude_calls(workspace, item.node_id, item.round_no)
+            (item.node_id, item.round_no): self._read_round_claude_calls(
+                workspace, item.node_id, item.round_no
+            )
             for item in detail["nodes"]
         }
         current_focus = self._select_current_focus(latest, call_map)
@@ -332,7 +335,7 @@ class RunService:
                 continue
             if node_run.status == NodeRunStatus.WAITING_VALIDATOR.value:
                 for validator in node.validators:
-                    existing = self.callback_repo.get_validator_round_event(
+                    existing = self.get_validator_completed_event(
                         run.id,
                         node.node_id,
                         node_run.round_no,
@@ -414,6 +417,68 @@ class RunService:
         run.status = RunStatus.RUNNING.value
         run.stop_reason = None
         return retried
+
+    def get_validator_completed_event(
+        self,
+        run_id: str,
+        node_id: str,
+        round_no: int,
+        validator_id: str,
+    ) -> Any | None:
+        events = self.callback_repo.list_node_round_events(run_id, node_id, round_no)
+        for event in events:
+            if event.actor_role != ActorRole.VALIDATOR.value:
+                continue
+            if event.validator_id != validator_id:
+                continue
+            if event.execution_status == ExecutionStatus.COMPLETED.value:
+                return event
+        return None
+
+    def count_retryable_failures(
+        self,
+        run_id: str,
+        node_id: str,
+        round_no: int,
+        *,
+        actor_role: ActorRole,
+        validator_id: str | None = None,
+    ) -> int:
+        count = 0
+        events = self.callback_repo.list_node_round_events(run_id, node_id, round_no)
+        for event in events:
+            if event.actor_role != actor_role.value:
+                continue
+            if actor_role == ActorRole.VALIDATOR and event.validator_id != validator_id:
+                continue
+            if event.execution_status in {
+                ExecutionStatus.FAILED.value,
+                ExecutionStatus.TIMEOUT.value,
+            }:
+                count += 1
+        return count
+
+    def get_retry_delay_seconds(
+        self,
+        run_id: str,
+        node_id: str,
+        round_no: int,
+        *,
+        actor_role: ActorRole,
+        validator_id: str | None = None,
+    ) -> int | None:
+        failure_count = self.count_retryable_failures(
+            run_id,
+            node_id,
+            round_no,
+            actor_role=actor_role,
+            validator_id=validator_id,
+        )
+        if failure_count <= 0:
+            return None
+        if failure_count > len(AUTO_RETRY_DELAYS_SECONDS):
+            return None
+        return AUTO_RETRY_DELAYS_SECONDS[failure_count - 1]
 
     def build_executor_context(
         self,
@@ -605,7 +670,8 @@ class RunService:
                         "validator_id": validator_call.get("validator_id"),
                         "status": validator_meta.get("status", node_run.status),
                         "summary": (
-                            f"Validator {validator_call.get('validator_id')} started for {node_run.node_id}"
+                            f"Validator {validator_call.get('validator_id')} "
+                            f"started for {node_run.node_id}"
                         ),
                         "happened_at": validator_meta.get("started_at") or created_at,
                         "call_id": validator_call.get("call_id"),
@@ -625,7 +691,10 @@ class RunService:
                         "actor_role": node_run.waiting_for_role,
                         "validator_id": None,
                         "status": node_run.status,
-                        "summary": f"{node_run.node_id} is waiting for {node_run.waiting_for_role or 'work'}",
+                        "summary": (
+                            f"{node_run.node_id} is waiting for "
+                            f"{node_run.waiting_for_role or 'work'}"
+                        ),
                         "happened_at": updated_at,
                         "call_id": None,
                     }
@@ -666,7 +735,9 @@ class RunService:
                             f"{callback.actor_role} callback reported"
                             + (f" ({callback.validator_id})" if callback.validator_id else "")
                         ),
-                        "happened_at": callback.processed_at.isoformat() if callback.processed_at else None,
+                        "happened_at": callback.processed_at.isoformat()
+                        if callback.processed_at
+                        else None,
                         "call_id": None,
                     }
                 )
@@ -718,11 +789,17 @@ class RunService:
                 priority = 2
             else:
                 priority = 3
-            timestamp = node_run.updated_at or node_run.created_at or datetime.fromtimestamp(0, tz=timezone.utc)
+            timestamp = (
+                node_run.updated_at
+                or node_run.created_at
+                or datetime.fromtimestamp(0, tz=timezone.utc)
+            )
             return (priority, -timestamp.timestamp())
 
         focus = sorted(candidates, key=sort_key)[0]
-        calls = call_map.get((focus.node_id, focus.round_no), {"executor_call_id": None, "validator_calls": []})
+        calls = call_map.get(
+            (focus.node_id, focus.round_no), {"executor_call_id": None, "validator_calls": []}
+        )
         return {
             "node_id": focus.node_id,
             "round_no": focus.round_no,
